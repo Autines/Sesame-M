@@ -61,7 +61,6 @@ import io.github.aw1y2z.sesame.rpc.bridge.RpcVersion;
 import io.github.aw1y2z.sesame.rpc.intervallimit.RpcIntervalLimit;
 import io.github.aw1y2z.sesame.util.ClassUtil;
 import io.github.aw1y2z.sesame.util.FileUtil;
-import io.github.lazyimmortal.sesame.util.LibraryUtil;
 import io.github.aw1y2z.sesame.util.Log;
 import io.github.aw1y2z.sesame.util.NotificationUtil;
 import io.github.aw1y2z.sesame.util.PermissionUtil;
@@ -291,7 +290,6 @@ public class ApplicationHook extends XposedModule {
 
                         Log.i(TAG, "Service onCreate");
                         context = appService.getApplicationContext();
-                        System.load(LibraryUtil.getLibSesamePath(context));
                         service = appService;
                         mainHandler = new Handler(Looper.getMainLooper());
                         mainTask = BaseTask.newInstance("MAIN_TASK", new Runnable() {
@@ -304,7 +302,7 @@ public class ApplicationHook extends XposedModule {
                                     return;
                                 }
                                 Log.record("应用版本：" + alipayVersion.getVersionString());
-                                Log.record("模块版本：" + modelVersion + "（交流更新QQ群：694474777）");
+                                Log.record("模块版本：" + modelVersion);
                                 Log.record("开始执行");
                                 try {
                                     int checkInterval = BaseModel.getCheckInterval().getValue();

@@ -62,17 +62,9 @@ android {
             universalApk true
         }
     }
-    sourceSets {
-        main {
-            jniLibs.srcDirs = ['src/main/jniLibs']
-        }
-    }
     packaging {
         resources {
             merges += "META-INF/xposed/**"
-        }
-        jniLibs {
-            useLegacyPackaging = true
         }
     }
     compileOptions {

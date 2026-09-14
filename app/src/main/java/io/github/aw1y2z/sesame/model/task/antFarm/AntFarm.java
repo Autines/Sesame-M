@@ -1838,13 +1838,6 @@ public class AntFarm extends ModelTask {
             } else if (Objects.equals(title, "庄园小课堂")) {
                 isDoTask = doAnswerTask();
             } else {
-                // 检查library是否可用
-                /*try {
-                    isDoTask = LibraryUtil.doFarmTask(task);
-                } catch (UnsatisfiedLinkError e) {
-                    Log.record("Native库不可用，跳过任务: " + title);
-                    isDoTask = false;
-                }*/
                 JSONObject jodoFarmTask = new JSONObject(AntFarmRpcCall.doFarmTask(bizKey));
                 //检查并标记黑名单任务（此处是庄园饲料任务，应写入饲料黑名单而非抽抽乐）
                 MessageUtil.checkResultCodeAndMarkTaskBlackList("AntFarmDoFarmTaskList", title, jodoFarmTask);

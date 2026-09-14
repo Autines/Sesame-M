@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -111,8 +112,15 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     val context = LocalContext.current
     val file = logType.file
     var entries by remember(logType) { mutableStateOf(loadLogEntries(file)) }
+    val listState = remember(entries.size) { LazyListState(0) }
     LaunchedEffect(file) {
         entries = loadLogEntries(file)
+    }
+    // 默认滚动到最新一行(列表底部)
+    LaunchedEffect(entries.size) {
+        if (entries.isNotEmpty()) {
+            listState.scrollToItem(entries.size - 1)
+        }
     }
 
     Scaffold(
@@ -154,6 +162,7 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
