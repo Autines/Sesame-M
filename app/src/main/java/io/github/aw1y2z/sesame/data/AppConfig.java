@@ -35,6 +35,7 @@ public class AppConfig {
     private Boolean enableDebugLog = false;
     private Boolean enableViewErrorLog = true;
     private Boolean enableViewRuntimeLog = true;
+    private Boolean batteryPerm = true;
 
     public Boolean getLanguageSimplifiedChinese() {
         return languageSimplifiedChinese;
@@ -80,6 +81,9 @@ public class AppConfig {
 
     public Boolean getEnableViewRuntimeLog() { return enableViewRuntimeLog; }
     public void setEnableViewRuntimeLog(Boolean value) { enableViewRuntimeLog = value; }
+
+    public Boolean getBatteryPerm() { return batteryPerm; }
+    public void setBatteryPerm(Boolean value) { batteryPerm = value; }
 
     public static Boolean save() {
         return FileUtil.write2File(toSaveStr(), new File(APP_CONFIG_DIRECTORY_FILE, "appConfig.json"));

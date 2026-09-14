@@ -192,15 +192,21 @@ public class AntSports extends ModelTask {
                 addChildTask(new ChildModelTask("syncStep", () -> {
                     int step = tmpStepCount();
                     if (stepCount < step) {
+                        // 支付宝 v10.8.60+ 已移除 RpcManager.a() 方法，改用反射调用防止编译报错
+                        // readDailyStep hook 仍正常工作（篡改步数读取），此主动推送机制已废弃
                         try {
                             ClassLoader classLoader = ApplicationHook.getClassLoader();
-                            if ((Boolean) XHelpers.callMethod(XHelpers.callStaticMethod(classLoader.loadClass("com.alibaba.health.pedometer.intergation.rpc.RpcManager"), "a"), "a", new Object[]{step, Boolean.FALSE, "system"})) {
+                            java.lang.reflect.Method m = classLoader.loadClass("com.alibaba.health.pedometer.intergation.rpc.RpcManager").getMethod("a", int.class, boolean.class, String.class);
+                            if ((Boolean) m.invoke(null, step, Boolean.FALSE, "system")) {
                                 Toast.show("同步步数🏃🏻‍♂️[" + step + "步]");
                                 Log.other("同步步数🏃🏻‍♂️[" + step + "步]#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
                                 Status.flagToday("sport::syncStep");
                             } else {
                                 Log.record("同步运动步数失败:" + step);
                             }
+                        } catch (NoSuchMethodException e) {
+                            Log.record("RpcManager.a() 接口已废弃（支付宝新版本不再支持），跳过主动步数推送；hook 注入步数仍正常工作");
+                            Status.flagToday("sport::syncStep");
                         } catch (Throwable t) {
                             Log.printStackTrace(TAG, t);
                         }

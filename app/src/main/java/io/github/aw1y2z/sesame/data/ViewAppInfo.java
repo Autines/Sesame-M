@@ -14,17 +14,12 @@ import io.github.aw1y2z.sesame.util.Log;
 
 public final class ViewAppInfo {
 
-    @Getter
     private static Context context = null;
 
-    @Getter
     private static String appTitle = "";
 
-    @Getter
     private static String appVersion = "";
 
-    @Setter
-    @Getter
     private static RunType runType = RunType.DISABLE;
 
     private static Runnable runTypeListener = null;

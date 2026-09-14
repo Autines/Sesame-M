@@ -57,15 +57,6 @@ public class BaseModel extends Model {
     @Getter
     private static final SelectModelField rpcRequestTaskList= new SelectModelField("rpcRequestTaskList", "RPC可选任务列表(长按列表中的项仅移除用，内容需打开rpcResquest.json文件配置)", new LinkedHashSet<>(), AlipayrpcRequest::getList,"长按删除RPC列表项用");
     @Getter
-    private static final BooleanModelField batteryPerm = new BooleanModelField("batteryPerm", "为支付宝申请后台运行权限", true);
-    @Getter
-    private static final BooleanModelField recordLog = new BooleanModelField("recordLog", "记录日志", true);
-
-    public static BooleanModelField getRecordLog() {
-        return recordLog;
-    }
-
-    @Getter
     private static final BooleanModelField showToast = new BooleanModelField("showToast", "气泡提示", true);
     @Getter
     private static final IntegerModelField toastOffsetY = new IntegerModelField("toastOffsetY", "气泡纵向偏移", 0);
@@ -112,8 +103,6 @@ public class BaseModel extends Model {
         modelFields.addField(debugMode);
         modelFields.addField(rpcRequestList);
         modelFields.addField(rpcRequestTaskList);
-        modelFields.addField(batteryPerm);
-        modelFields.addField(recordLog);
         modelFields.addField(showToast);
         modelFields.addField(enableOnGoing);
         modelFields.addField(toastOffsetY);

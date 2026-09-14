@@ -112,12 +112,10 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     val context = LocalContext.current
     val file = logType.file
     var entries by remember(logType) { mutableStateOf(loadLogEntries(file)) }
-    val listState = remember(entries.size) { LazyListState(0) }
-    LaunchedEffect(file) {
-        entries = loadLogEntries(file)
-    }
-    // 默认滚动到最新一行(列表底部)
-    LaunchedEffect(entries.size) {
+    // 初始位置为 entries.size - 1，确保打开页面时已定位到底部
+    val listState = remember(entries) { LazyListState(firstVisibleItemIndex = entries.size - 1) }
+    // 条目加载完成后滚动到底部
+    LaunchedEffect(entries) {
         if (entries.isNotEmpty()) {
             listState.scrollToItem(entries.size - 1)
         }
