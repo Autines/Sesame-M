@@ -80,13 +80,32 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ steps.ver.outputs.code }}-${{ steps.ver.outputs.name }}"
+
+          # 修复点：sync 作业没有 checkout 主仓库，不能用 git log
+          # 改用 gh api 获取主仓库 Tag 对应的原始提交日期
+          ORIGINAL_DATE=$(gh api repos/$MAIN_REPO/commits/${{ steps.rel.outputs.tag }} \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            --jq '.commit.committer.date')
+
           if gh release view "$TAG" --repo "$XPOSED_REPO" >/dev/null 2>&1; then
             echo "release $TAG already exists, uploading assets"
             gh release upload "$TAG" apks/*.apk --repo "$XPOSED_REPO" --clobber
           else
             echo "creating release $TAG"
-            gh release create "$TAG" apks/*.apk \
+            # 1. 克隆 Xposed 仓库
+            git clone https://x-access-token:${GH_TOKEN}@github.com/${XPOSED_REPO}.git xposed_repo
+            cd xposed_repo
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            # 2. 手动创建附注标签，强制指定原始提交日期
+            GIT_COMMITTER_DATE="$ORIGINAL_DATE" git tag -a "$TAG" -m "Release $TAG" --date="$ORIGINAL_DATE"
+            git push origin "$TAG"
+
+            # 3. 使用 --verify-tag 让 gh 使用刚才手动创建的正确标签
+            gh release create "$TAG" ../apks/*.apk \
               --repo "$XPOSED_REPO" \
+              --verify-tag \
               --title "${{ steps.ver.outputs.name }}" \
               --notes-file notes.md
           fi
