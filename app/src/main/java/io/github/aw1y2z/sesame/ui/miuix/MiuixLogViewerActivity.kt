@@ -2,7 +2,12 @@ package io.github.aw1y2z.sesame.ui.miuix
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.lifecycle.Lifecycle
 import java.io.RandomAccessFile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -20,9 +25,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.runtime.Composable
@@ -31,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,19 +112,55 @@ class MiuixLogViewerActivity : MiuixBaseActivity() {
 /**
  * 日志详情页:展示指定类目的全部条目卡片。
  * 仿 LSPosed 日志界面:每条目一张卡(标签 + 时间 + 正文)。
+ *
+ * 列表从底部开始排(reverseLayout),而列表初始位置就是最新一条,
+ * 所以一打开页面看到的就是最新日志;之后每 [LOG_REFRESH_INTERVAL_MS] 检查一次日志文件,
+ * 有新内容就刷新并跟到最新;上滑翻历史时暂停跟随(不会被新日志顶跑),滑回最新后自动恢复。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     val context = LocalContext.current
-    val file = logType.file
-    var entries by remember(logType) { mutableStateOf(loadLogEntries(file)) }
-    // 初始位置为 entries.size - 1，确保打开页面时已定位到底部
-    val listState = remember(entries) { LazyListState(firstVisibleItemIndex = entries.size - 1) }
-    // 条目加载完成后滚动到底部
-    LaunchedEffect(entries) {
-        if (entries.isNotEmpty()) {
-            listState.scrollToItem(entries.size - 1)
+    var entries by remember(logType) { mutableStateOf(loadLogEntries(logType.file)) }
+    // 每次刷新到新内容后自增,作为「把视角钉回最新一条」的触发信号
+    var revision by remember(logType) { mutableStateOf(0) }
+    // 用户是否翻到历史里去了:是则不再自动跟随,免得看历史时被新日志顶跑
+    var browsingHistory by remember(logType) { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+
+    // 列表停下时按位置判断是否停在最新(索引 0):还能往回滚就说明用户翻到上面看历史了
+    LaunchedEffect(listState, logType) {
+        snapshotFlow { listState.isScrollInProgress }
+            .filter { !it }
+            .collect { browsingHistory = listState.canScrollBackward }
+    }
+
+    // 定时刷新:文件无变化时只做一次轻量的 length/lastModified 比较,不读盘也不重组
+    LaunchedEffect(logType) {
+        var stamp = logFileStamp(logType.file)
+        while (true) {
+            delay(LOG_REFRESH_INTERVAL_MS)
+            // 页面不在前台时跳过,避免后台无谓读盘
+            if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                continue
+            }
+            // 每次重新取 file,跨天时能自动切到新一天的文件
+            val file = logType.file
+            val newStamp = logFileStamp(file)
+            if (newStamp == null || newStamp == stamp) {
+                continue
+            }
+            stamp = newStamp
+            entries = withContext(Dispatchers.IO) { loadLogEntries(file) }
+            revision++
+        }
+    }
+
+    // 有新日志时把视角钉回最新一条。
+    // 注意滚的是索引 0(最新那条所在位置),它恒定存在,不会像"滚到末尾"那样因列表尚未测量而失效。
+    LaunchedEffect(revision) {
+        if (!browsingHistory && entries.isNotEmpty()) {
+            listState.animateScrollToItem(0)
         }
     }
 
@@ -127,7 +170,7 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                 title = logType.displayName,
                 onBack = { activity.finish() },
                 onExport = {
-                    val exported = FileUtil.exportFile(file)
+                    val exported = FileUtil.exportFile(logType.file)
                     if (exported != null) {
                         ToastUtil.show(context, "已导出: " + exported.path)
                     } else {
@@ -135,8 +178,8 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                     }
                 },
                 onClear = {
-                    if (FileUtil.clearFile(file)) {
-                        entries = loadLogEntries(file)
+                    if (FileUtil.clearFile(logType.file)) {
+                        entries = loadLogEntries(logType.file)
                         ToastUtil.show(context, "已清空")
                     }
                 }
@@ -161,6 +204,9 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
         } else {
             LazyColumn(
                 state = listState,
+                // 从底部开始排:索引 0(最新那条)在屏幕最下方,而列表初始位置就是索引 0,
+                // 所以一打开页面看到的就是最新日志,不依赖任何"滚动到底部"的动作。
+                reverseLayout = true,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
@@ -168,7 +214,11 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                itemsIndexed(entries, key = { _, e -> "${e.lineNumber}-${e.hashCode()}" }) { _, entry ->
+                itemsIndexed(
+                    // 倒序传入(最新在前),配合 reverseLayout 后视觉上仍是"旧的在上面、最新在最下面"
+                    entries.asReversed(),
+                    key = { _, e -> "${e.lineNumber}-${e.hashCode()}" }
+                ) { _, entry ->
                     LogEntryCard(entry)
                 }
             }
@@ -242,7 +292,7 @@ fun LogTopBar(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.Filled.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "返回",
                     tint = MiuixTheme.colorScheme.onBackground
                 )
@@ -318,6 +368,15 @@ private fun readTailText(file: File, maxBytes: Long): String {
         return text
     }
 }
+
+/** 日志自动刷新间隔(毫秒) */
+private const val LOG_REFRESH_INTERVAL_MS = 1000L
+
+/** 日志文件签名:长度 + 修改时间,用于判断文件是否有新内容 */
+private data class LogFileStamp(val length: Long, val modified: Long)
+
+private fun logFileStamp(file: File?): LogFileStamp? =
+    if (file != null && file.exists()) LogFileStamp(file.length(), file.lastModified()) else null
 
 /**
  * 读取日志文件并按行解析为条目;无时间戳的行合并到上一条(多行日志聚合为同一卡片)。
