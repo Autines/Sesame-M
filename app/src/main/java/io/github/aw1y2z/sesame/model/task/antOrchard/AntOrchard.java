@@ -114,7 +114,7 @@ public class AntOrchard extends ModelTask {
         modelFields.addField(orchardSpreadManure = new BooleanModelField("orchardSpreadManure", "农场施肥 | 开启", false));
         modelFields.addField(useBatchSpread = new BooleanModelField("useBatchSpread", "一键施肥5次", false));
         modelFields.addField(orchardSpreadManureSceneList = new SelectModelField("orchardSpreadManureSceneList", "农场施肥 | 场景列表", new LinkedHashSet<>(), AlipayPlantScene::getList));
-        modelFields.addField(orchardSpreadManureCount = new IntegerModelField("orchardSpreadManureCount", "农场施肥 | 每日次数", 3, 1, 100));
+        modelFields.addField(orchardSpreadManureCount = new IntegerModelField("orchardSpreadManureCount", "农场施肥 | 每日次数", 3, 1, 200));
         modelFields.addField(drawGameCenterAward = new BooleanModelField("drawGameCenterAward", "农场乐园 | 游戏宝箱", true));
         //modelFields.addField(driveAnimalType = new ChoiceModelField("driveAnimalType", "驱赶小鸡 | 动作", DriveAnimalType.NONE, DriveAnimalType.nickNames));
         //modelFields.addField(driveAnimalList = new SelectModelField("driveAnimalList", "驱赶小鸡 | 好友列表", new LinkedHashSet<>(), AlipayUser::getList));
