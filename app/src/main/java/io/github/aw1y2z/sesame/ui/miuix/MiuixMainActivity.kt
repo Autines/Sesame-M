@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -201,14 +200,20 @@ class MiuixMainActivity : MiuixBaseActivity() {
             sendQueryBroadcast()
             handler.postDelayed(titleRunner, 3000)
         }
-        // 从系统设置页返回后重新检查权限（Android 10+ 通过系统设置页申请会走此路径）
+        checkPermissionAndRefresh()
+    }
+
+    /** 检查文件权限，若已授权则刷新统计；同时处理首次请求权限的场景 */
+    private fun checkPermissionAndRefresh() {
         if (hasRequestedPermission) {
             hasRequestedPermission = false
             if (PermissionUtil.checkFilePermissions(this)) {
                 hasPermission = true
                 refreshStatistics()
             }
-        } else {
+        } else if (!hasPermission && PermissionUtil.checkFilePermissions(this)) {
+            // 首次进入或权限刚被授予
+            hasPermission = true
             refreshStatistics()
         }
     }
@@ -404,21 +409,6 @@ fun HomeTab(activity: MiuixMainActivity) {
     val activated = activity.uiRunType == RunType.MODEL
     val appTitle = ViewAppInfo.getAppTitle()
     val version = ViewAppInfo.getAppVersion()
-
-    // 进入首页即确认文件权限并加载统计;不依赖 onResume 与权限检查的时序,
-    // 直接进入首页也能正确显示,无需先进入配置再返回
-    DisposableEffect(Unit) {
-        val granted = PermissionUtil.checkFilePermissions(activity)
-        if (granted) {
-            activity.hasPermission = true
-            activity.refreshStatistics()
-        } else {
-            activity.hasPermission = false
-            activity.hasRequestedPermission = true
-            PermissionUtil.checkOrRequestFilePermissions(activity)
-        }
-        onDispose { }
-    }
 
     Text(
         text = "Sesame-M",

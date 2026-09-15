@@ -284,7 +284,7 @@ fun FieldItem(field: ModelField<*>, onSave: () -> Unit) {
             val imf = field as? IntegerModelField
             val maxLimit = imf?.maxLimit
             val lowerLimit = imf?.minLimit
-            val current = field.value as? Int ?: 0
+            val current = (field as? IntegerModelField.MultiplyIntegerModelField)?.getConfigValue()?.toInt() ?: (field.value as? Int ?: 0)
             val limitHint = when {
                 lowerLimit == null && maxLimit == null -> ""
                 lowerLimit != null && lowerLimit < 0 -> "（-1 表示按最大额度）"
@@ -311,7 +311,8 @@ fun FieldItem(field: ModelField<*>, onSave: () -> Unit) {
                         } else if (maxLimit != null && parsed > maxLimit) {
                             ToastUtil.show(context, "最大值为 $maxLimit")
                         } else {
-                            field.setObjectValue(parsed)
+                            // 使用 setConfigValue 而非 setObjectValue，确保经过 multiply 转换
+                            field.setConfigValue(parsed.toString())
                             onSave()
                         }
                         showDialog = false
