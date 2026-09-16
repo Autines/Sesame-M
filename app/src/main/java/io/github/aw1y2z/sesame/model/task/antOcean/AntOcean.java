@@ -636,7 +636,10 @@ public class AntOcean extends ModelTask {
                     JSONObject seaAreaExtraCollectVO = seaAreaVO.getJSONObject("seaAreaExtraCollectVO");
                     String ExtraStatus = seaAreaExtraCollectVO.optString("status");
                     if (!ExtraStatus.equals("FINISHED")) {
-                        JSONArray ExtrafishVOs = seaAreaExtraCollectVO.getJSONArray("fishVO");
+                        JSONArray ExtrafishVOs = seaAreaExtraCollectVO.optJSONArray("fishVO");
+                    if (ExtrafishVOs == null) {
+                        continue;
+                    }
                         for (int j = 0; j < ExtrafishVOs.length(); j++) {
                             JSONObject ExtrafishVO = ExtrafishVOs.getJSONObject(j);
                             if (!ExtrafishVO.getBoolean("unlock") && "COMPLETED".equals(ExtrafishVO.getString("status"))) {

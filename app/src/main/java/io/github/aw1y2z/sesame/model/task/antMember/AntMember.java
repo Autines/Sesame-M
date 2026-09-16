@@ -28,6 +28,7 @@ import io.github.aw1y2z.sesame.util.idMap.PromiseSimpleTemplateIdMap;
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap;
 
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -107,13 +108,11 @@ public class AntMember extends ModelTask {
             
             if (AntMemberTask.getValue()) {
                 queryPointCert(1, 8);
-                //signPageTaskList();
+                signPageTaskList();
                 queryAllStatusTaskList();
             }
             
-            if (memberPointExchangeBenefit.getValue()) {
-                memberPointExchangeBenefit();
-            }
+            memberPointExchangeBenefit();
             if (collectSesame.getValue()) {
                 CheckInTaskRpcManager();
                 collectSesame();
@@ -375,10 +374,12 @@ public class AntMember extends ModelTask {
             JSONObject jo = new JSONObject(AntMemberRpcCall.queryPointCert(page, pageSize));
             TimeUtil.sleep(500);
             if (!MessageUtil.checkResultCode(TAG, jo)) {
+                Log.i(TAG, "queryPointCert page=" + page + " 接口返回失败");
                 return;
             }
             boolean hasNextPage = jo.getBoolean("hasNextPage");
             JSONArray jaCertList = jo.getJSONArray("certList");
+            Log.i(TAG, "queryPointCert page=" + page + " certList.size=" + jaCertList.length() + " hasNextPage=" + hasNextPage);
             for (int i = 0; i < jaCertList.length(); i++) {
                 jo = jaCertList.getJSONObject(i);
                 String bizTitle = jo.getString("bizTitle");
@@ -409,13 +410,15 @@ public class AntMember extends ModelTask {
     private void signPageTaskList() {
         try {
             do {
-                JSONObject jo = new JSONObject(AntMemberRpcCall.signPageTaskList());
+                String rawJson = AntMemberRpcCall.signPageTaskList();
+                JSONObject jo = new JSONObject(rawJson);
                 TimeUtil.sleep(500);
                 boolean doubleCheck = false;
                 if (!MessageUtil.checkResultCode(TAG + " signPageTaskList", jo)) {
                     return;
                 }
                 if (!jo.has("categoryTaskList")) {
+                    Log.i(TAG, "signPageTaskList 无 categoryTaskList 字段");
                     return;
                 }
                 JSONArray categoryTaskList = jo.getJSONArray("categoryTaskList");
@@ -448,9 +451,11 @@ public class AntMember extends ModelTask {
      */
     private void queryAllStatusTaskList() {
         try {
-            JSONObject jo = new JSONObject(AntMemberRpcCall.queryAllStatusTaskList());
+            String rawJson = AntMemberRpcCall.queryAllStatusTaskList();
+            JSONObject jo = new JSONObject(rawJson);
             TimeUtil.sleep(500);
             if (!MessageUtil.checkResultCode(TAG, jo)) {
+                Log.i(TAG, "queryAllStatusTaskList 接口返回失败");
                 return;
             }
             JSONArray availableTaskList = jo.getJSONArray("availableTaskList");
@@ -1091,19 +1096,42 @@ public class AntMember extends ModelTask {
         }
     }
     */
-    // 会员积分兑换
+    // 会员积分兑换 - 获取权益列表（无条件）+ 兑换（受开关控制）
     private void memberPointExchangeBenefit() {
         try {
             String userId = UserIdMap.getCurrentUid();
-            JSONObject jo = new JSONObject(AntMemberRpcCall.queryDeliveryZoneDetail(userId, "94000SR2024011106752003"));
-            if (!MessageUtil.checkResultCode(TAG, jo)) {
+            // 依次尝试多个 deliveryId，找到可用的分类
+            String[] deliveryIds = {"94000SR2023102305988003", "94000SR2024011106752003", "94000SR2024071108523003", "94000SR2024071808609003"};
+            JSONObject jo = null;
+            for (String deliveryId : deliveryIds) {
+                String raw = AntMemberRpcCall.queryDeliveryZoneDetail(userId, deliveryId);
+                jo = new JSONObject(raw);
+                if (MessageUtil.checkResultCode(TAG, jo)) {
+                    JSONArray entityInfoList = jo.optJSONArray("entityInfoList");
+                    if (entityInfoList != null && entityInfoList.length() > 0) {
+                        Log.i(TAG, "queryDeliveryZoneDetail deliveryId=" + deliveryId + " 成功，权益数=" + entityInfoList.length());
+                        break;
+                    }
+                }
+                Log.i(TAG, "queryDeliveryZoneDetail deliveryId=" + deliveryId + " 失败，尝试下一个");
+                jo = null;
+            }
+            if (jo == null) {
+                // 所有 deliveryId 都失败，尝试备用接口
+                Log.i(TAG, "queryDeliveryZoneDetail 全部失败，尝试备用接口");
+                fetchBenefitsFromNavi(userId);
+                MemberBenefitIdMap.save(userId);
                 return;
             }
-            if (!jo.has("entityInfoList")) {
-                Log.record("会员积分[未实名账号无可兑换权益]");
+            JSONArray entityInfoList = jo.optJSONArray("entityInfoList");
+            if (entityInfoList == null || entityInfoList.length() == 0) {
+                Log.record("会员积分[当前分类无可兑换权益，尝试备用接口]");
+                fetchBenefitsFromNavi(userId);
+                MemberBenefitIdMap.save(userId);
                 return;
             }
-            JSONArray entityInfoList = jo.getJSONArray("entityInfoList");
+            // 无条件保存权益列表（供用户勾选）
+            java.util.Set<String> selectedIds = memberPointExchangeBenefitList.getValue();
             for (int i = 0; i < entityInfoList.length(); i++) {
                 JSONObject entityInfo = entityInfoList.getJSONObject(i);
                 JSONObject benefitInfo = entityInfo.getJSONObject("benefitInfo");
@@ -1114,7 +1142,31 @@ public class AntMember extends ModelTask {
                 String name = benefitInfo.getString("name");
                 String benefitId = benefitInfo.getString("benefitId");
                 MemberBenefitIdMap.add(benefitId, name);
-                if (!Status.canMemberPointExchangeBenefitToday(benefitId) || !memberPointExchangeBenefitList.getValue().contains(benefitId)) {
+            }
+            MemberBenefitIdMap.save(userId);
+
+            // 开关关闭则不兑换
+            if (!memberPointExchangeBenefit.getValue()) {
+                Log.i(TAG, "会员积分兑换开关已关闭，仅更新权益列表");
+                return;
+            }
+            if (selectedIds.isEmpty()) {
+                Log.i(TAG, "会员积分兑换已开启，请在列表中选择要兑换的权益");
+            }
+            for (int i = 0; i < entityInfoList.length(); i++) {
+                JSONObject entityInfo = entityInfoList.getJSONObject(i);
+                JSONObject benefitInfo = entityInfo.getJSONObject("benefitInfo");
+                JSONObject pricePresentation = benefitInfo.getJSONObject("pricePresentation");
+                if (!"POINT_PAY".equals(pricePresentation.optString("strategyType"))) {
+                    continue;
+                }
+                String name = benefitInfo.getString("name");
+                String benefitId = benefitInfo.getString("benefitId");
+                // 只兑换用户在列表中勾选的权益
+                if (!selectedIds.contains(benefitId)) {
+                    continue;
+                }
+                if (!Status.canMemberPointExchangeBenefitToday(benefitId)) {
                     continue;
                 }
                 String itemId = benefitInfo.getString("itemId");
@@ -1123,10 +1175,96 @@ public class AntMember extends ModelTask {
                     Log.other("会员积分🎐兑换[" + name + "]#花费[" + point + "积分]");
                 }
             }
-            MemberBenefitIdMap.save(userId);
         }
         catch (Throwable t) {
             Log.i(TAG, "memberPointExchangeBenefit err:");
+            Log.printStackTrace(TAG, t);
+        }
+    }
+
+    // 备用接口：通过导航分类码查询权益列表（支持分页）
+    private void fetchBenefitsFromNavi(String userId) {
+        try {
+            // 依次尝试各导航分类码：特色(14)、出行(1)、美食(11)、日用(12)
+            String[] naviCodes = {"14", "1", "11", "12", "13", "bb82b", ""};
+            for (String naviCode : naviCodes) {
+                int pageNum = 1;
+                int totalPages = 1;
+                Log.i(TAG, "fetchBenefitsFromNavi start naviCode=" + naviCode);
+                do {
+                    String raw = AntMemberRpcCall.queryIndexNaviBenefitFlowV2(userId, naviCode, pageNum);
+                    JSONObject jo = new JSONObject(raw);
+                    if (!MessageUtil.checkResultCode(TAG, jo)) {
+                        Log.i(TAG, "queryIndexNaviBenefitFlowV2 naviCode=" + naviCode + " pageNum=" + pageNum + " resultCode=" + jo.optString("resultCode") + " desc=" + jo.optString("desc"));
+                        break;
+                    }
+                    JSONArray benefitList = jo.optJSONArray("entityInfoList");
+                    if (benefitList == null || benefitList.length() == 0) {
+                        benefitList = jo.optJSONObject("data") != null ? jo.getJSONObject("data").optJSONArray("entityInfoList") : null;
+                    }
+                    if (benefitList == null || benefitList.length() == 0) {
+                        Log.i(TAG, "queryIndexNaviBenefitFlowV2 naviCode=" + naviCode + " pageNum=" + pageNum + " 无权益数据，raw=" + raw.substring(0, Math.min(300, raw.length())));
+                        break;
+                    }
+                    // 获取总页数
+                    if (pageNum == 1) {
+                        int next = jo.optInt("nextPageNum", 0);
+                        int adNext = jo.optInt("nextAdPageNum", 0);
+                        Log.i(TAG, "queryIndexNaviBenefitFlowV2 naviCode=" + naviCode + " pageNum=" + pageNum + " nextPageNum=" + next + " nextAdPageNum=" + adNext);
+                        if (next > 1) {
+                            totalPages = next;
+                        } else if (adNext > 1) {
+                            totalPages = adNext;
+                        }
+                    }
+                    // 从 entityInfoList 解析完整权益信息
+                    int saved = 0, skipped = 0;
+                    for (int i = 0; i < benefitList.length(); i++) {
+                        JSONObject entity = benefitList.getJSONObject(i);
+                        JSONObject benefitInfo = entity.optJSONObject("benefitInfo");
+                        if (benefitInfo == null) { skipped++; continue; }
+                        JSONObject pricePresentation = benefitInfo.optJSONObject("pricePresentation");
+                        if (pricePresentation == null) { skipped++; continue; }
+                        String strategyType = pricePresentation.optString("strategyType");
+                        if (!"POINT_PAY".equals(strategyType)) {
+                            Log.i(TAG, "  跳过[" + benefitInfo.optString("name") + "] strategyType=" + strategyType);
+                            skipped++;
+                            continue;
+                        }
+                        String name = benefitInfo.optString("name");
+                        String benefitId = benefitInfo.optString("benefitId");
+                        if (benefitId.isEmpty()) { skipped++; continue; }
+                        Log.i(TAG, "  保存[" + name + "] benefitId=" + benefitId);
+                        MemberBenefitIdMap.add(benefitId, name);
+                        saved++;
+                    }
+                    // 从 extInfo 补充 entityInfoList 中缺失的 benefitId
+                    JSONObject extInfo = jo.optJSONObject("extInfo");
+                    if (extInfo != null && extInfo.length() > 0) {
+                        int extAdded = 0;
+                        for (Iterator<String> it = extInfo.keys(); it.hasNext(); ) {
+                            String key = it.next();
+                            // 跳过非 benefitId 的元数据 key
+                            if ("promoSceneCode".equals(key) || key.startsWith("AMS") == false && key.length() < 10) {
+                                continue;
+                            }
+                            if (!MemberBenefitIdMap.getMap().containsKey(key)) {
+                                Log.i(TAG, "  补充[extInfo] benefitId=" + key);
+                                MemberBenefitIdMap.add(key, "会员积分权益");
+                                extAdded++;
+                            }
+                        }
+                        if (extAdded > 0) {
+                            Log.i(TAG, "queryIndexNaviBenefitFlowV2 naviCode=" + naviCode + " extInfo补充" + extAdded + "个");
+                        }
+                    }
+                    Log.i(TAG, "queryIndexNaviBenefitFlowV2 naviCode=" + naviCode + " 保存" + saved + "个，补充" + (extInfo != null ? extInfo.length() : 0) + "个，累计" + MemberBenefitIdMap.getMap().size());
+                    pageNum++;
+                } while (pageNum <= totalPages);
+            }
+        }
+        catch (Throwable t) {
+            Log.i(TAG, "fetchBenefitsFromNavi err:");
             Log.printStackTrace(TAG, t);
         }
     }
