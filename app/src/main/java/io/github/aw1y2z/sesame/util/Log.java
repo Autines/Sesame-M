@@ -48,7 +48,41 @@ public class Log {
 
     };
 
+    /** 通用运行日志（用于 system/i 调用），tag 固定为 RUNTIME */
     private static final Logger runtimeLogger = XLog.tag("RUNTIME").printers(
+            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
+                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
+                    .backupStrategy(new NeverBackupStrategy())
+                    .cleanStrategy(new NeverCleanStrategy())
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
+                    .build()).build();
+
+    /** 各模块向 runtime.log 写入时使用的专用 logger（不同 tag，同文件） */
+    private static final Logger runtimeForestLogger = XLog.tag("FOREST").printers(
+            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
+                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
+                    .backupStrategy(new NeverBackupStrategy())
+                    .cleanStrategy(new NeverCleanStrategy())
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
+                    .build()).build();
+
+    private static final Logger runtimeGoldenBeansLogger = XLog.tag("GOLDENBEANS").printers(
+            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
+                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
+                    .backupStrategy(new NeverBackupStrategy())
+                    .cleanStrategy(new NeverCleanStrategy())
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
+                    .build()).build();
+
+    private static final Logger runtimeFarmLogger = XLog.tag("FARM").printers(
+            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
+                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
+                    .backupStrategy(new NeverBackupStrategy())
+                    .cleanStrategy(new NeverCleanStrategy())
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
+                    .build()).build();
+
+    private static final Logger runtimeOtherLogger = XLog.tag("OTHER").printers(
             new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
                     .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
                     .backupStrategy(new NeverBackupStrategy())
@@ -85,7 +119,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("forest"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger goldenBeansLogger = XLog.tag("GOLDENBEANS").printers(
@@ -93,7 +127,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("goldenbeans"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger farmLogger = XLog.tag("FARM").printers(
@@ -101,7 +135,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("farm"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger otherLogger = XLog.tag("OTHER").printers(
@@ -109,7 +143,7 @@ public class Log {
                     .fileNameGenerator(new CustomDateFileNameGenerator("other"))
                     .backupStrategy(new NeverBackupStrategy())
                     .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {m}"))
+                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
     private static final Logger errorLogger = XLog.tag("ERROR").printers(
@@ -179,38 +213,42 @@ public class Log {
 
     public static void forest(String s) {
         countModuleLog();
-        if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog()) {
-            return;
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            runtimeForestLogger.i(s);
         }
-        record(s);
-        forestLogger.i(s);
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog()) {
+            forestLogger.i(s);
+        }
     }
 
     public static void goldenBeans(String s) {
         countModuleLog();
-        if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog()) {
-            return;
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            runtimeGoldenBeansLogger.i(s);
         }
-        record(s);
-        goldenBeansLogger.i(s);
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog()) {
+            goldenBeansLogger.i(s);
+        }
     }
 
     public static void farm(String s) {
         countModuleLog();
-        if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableFarmLog()) {
-            return;
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            runtimeFarmLogger.i(s);
         }
-        record(s);
-        farmLogger.i(s);
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableFarmLog()) {
+            farmLogger.i(s);
+        }
     }
 
     public static void other(String s) {
         countModuleLog();
-        if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableOtherLog()) {
-            return;
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            runtimeOtherLogger.i(s);
         }
-        record(s);
-        otherLogger.i(s);
+        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableOtherLog()) {
+            otherLogger.i(s);
+        }
     }
 
     public static void debug(String s) {

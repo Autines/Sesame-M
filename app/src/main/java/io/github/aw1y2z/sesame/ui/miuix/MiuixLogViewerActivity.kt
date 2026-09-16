@@ -1,7 +1,9 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import java.io.RandomAccessFile
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +13,10 @@ import kotlinx.coroutines.withContext
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -30,6 +37,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,6 +62,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
 
@@ -122,10 +133,13 @@ class MiuixLogViewerActivity : MiuixBaseActivity() {
 fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     val context = LocalContext.current
     var entries by remember(logType) { mutableStateOf(loadLogEntries(logType.file)) }
-    // 每次刷新到新内容后自增,作为「把视角钉回最新一条」的触发信号
     var revision by remember(logType) { mutableStateOf(0) }
-    // 用户是否翻到历史里去了:是则不再自动跟随,免得看历史时被新日志顶跑
     var browsingHistory by remember(logType) { mutableStateOf(false) }
+    // 搜索文本
+    var searchQuery by remember { mutableStateOf("") }
+    // Runtime 页面额外支持 tag 过滤
+    var selectedTag by remember { mutableStateOf<String?>(null) }
+
     val listState = rememberLazyListState()
 
     // 列表停下时按位置判断是否停在最新(索引 0):还能往回滚就说明用户翻到上面看历史了
@@ -140,11 +154,9 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
         var stamp = logFileStamp(logType.file)
         while (true) {
             delay(LOG_REFRESH_INTERVAL_MS)
-            // 页面不在前台时跳过,避免后台无谓读盘
             if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                 continue
             }
-            // 每次重新取 file,跨天时能自动切到新一天的文件
             val file = logType.file
             val newStamp = logFileStamp(file)
             if (newStamp == null || newStamp == stamp) {
@@ -156,12 +168,25 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
         }
     }
 
-    // 有新日志时把视角钉回最新一条。
-    // 注意滚的是索引 0(最新那条所在位置),它恒定存在,不会像"滚到末尾"那样因列表尚未测量而失效。
+    // 有新日志时把视角钉回最新一条
     LaunchedEffect(revision) {
         if (!browsingHistory && entries.isNotEmpty()) {
             listState.animateScrollToItem(0)
         }
+    }
+
+    // 计算可见条目:根据搜索文本和 tag 过滤
+    val filteredEntries = entries.filter { e ->
+        val matchSearch = searchQuery.isBlank() ||
+                (e.tag?.contains(searchQuery, ignoreCase = true) == true) ||
+                e.body.contains(searchQuery, ignoreCase = true)
+        val matchTag = selectedTag == null || e.tag == selectedTag
+        matchSearch && matchTag
+    }
+
+    // Runtime 页面:统计各 tag 出现次数,用于 Chip 显示
+    val tagCounts = remember(entries) {
+        entries.mapNotNull { it.tag }.groupBy { it }.mapValues { it.value.size }
     }
 
     Scaffold(
@@ -180,49 +205,149 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                 onClear = {
                     if (FileUtil.clearFile(logType.file)) {
                         entries = loadLogEntries(logType.file)
+                        searchQuery = ""
+                        selectedTag = null
                         ToastUtil.show(context, "已清空")
                     }
-                }
+                },
+                onShare = if (logType == LogType.RUNTIME) {
+                    {
+                        val file = logType.file
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            file
+                        )
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            putExtra(Intent.EXTRA_SUBJECT, file.name)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        activity.startActivity(Intent.createChooser(shareIntent, "分享日志"))
+                    }
+                } else null
             )
         },
         containerColor = MiuixTheme.colorScheme.surface
     ) { padding ->
-        if (entries.isEmpty()) {
-            Box(
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            // ── 搜索框 ──────────────────────────────────────────────────
+            Row(
                 Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "(空)",
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = "",
+                    modifier = Modifier.weight(1f),
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = "搜索",
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            Text(
+                                "×",
+                                fontSize = 16.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(end = 12.dp).clickable { searchQuery = "" }
+                            )
+                        }
+                    }
                 )
             }
-        } else {
-            LazyColumn(
-                state = listState,
-                // 从底部开始排:索引 0(最新那条)在屏幕最下方,而列表初始位置就是索引 0,
-                // 所以一打开页面看到的就是最新日志,不依赖任何"滚动到底部"的动作。
-                reverseLayout = true,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
-            ) {
-                itemsIndexed(
-                    // 倒序传入(最新在前),配合 reverseLayout 后视觉上仍是"旧的在上面、最新在最下面"
-                    entries.asReversed(),
-                    key = { _, e -> "${e.lineNumber}-${e.hashCode()}" }
-                ) { _, entry ->
-                    LogEntryCard(entry)
+            // ── Runtime tag 过滤条 ──────────────────────────────────────
+            if (logType == LogType.RUNTIME && tagCounts.isNotEmpty()) {
+                val tags = tagCounts.keys.sorted()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // 全部 Chip
+                    TagChip(
+                        label = "全部",
+                        count = entries.size,
+                        selected = selectedTag == null,
+                        onClick = { selectedTag = null }
+                    )
+                    // 各 tag Chip
+                    for (tag in tags) {
+                        TagChip(
+                            label = tag,
+                            count = tagCounts[tag]!!,
+                            selected = selectedTag == tag,
+                            onClick = { selectedTag = if (selectedTag == tag) null else tag }
+                        )
+                    }
+                }
+            }
+            // ── 日志列表 ────────────────────────────────────────────────
+            if (filteredEntries.isEmpty()) {
+                Box(
+                    Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (searchQuery.isNotEmpty() || selectedTag != null) "无匹配日志" else "(空)",
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    reverseLayout = true,
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    itemsIndexed(
+                        filteredEntries.asReversed(),
+                        key = { _, e -> "${e.lineNumber}-${e.hashCode()}" }
+                    ) { _, entry ->
+                        LogEntryCard(entry)
+                    }
                 }
             }
         }
+    }
+}
+
+/** Tag 过滤 Chip:圆角小药片,选中时高亮 */
+@Composable
+private fun TagChip(label: String, count: Int, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) MiuixTheme.colorScheme.primaryContainer
+        else MiuixTheme.colorScheme.surfaceContainer
+    val fg = if (selected) MiuixTheme.colorScheme.onPrimaryContainer
+        else MiuixTheme.colorScheme.onSurfaceVariantSummary
+    Row(
+        Modifier
+            .height(30.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(bg)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = fg)
+        Text(
+            text = count.toString(),
+            fontSize = 11.sp,
+            color = fg.copy(alpha = 0.7f)
+        )
     }
 }
 
@@ -275,7 +400,8 @@ fun LogTopBar(
     onBack: () -> Unit,
     onImport: (() -> Unit)? = null,
     onExport: (() -> Unit)? = null,
-    onClear: (() -> Unit)? = null
+    onClear: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
 ) {
     Column(
         Modifier
@@ -336,6 +462,15 @@ fun LogTopBar(
                     )
                 }
             }
+            if (onShare != null) {
+                IconButton(onClick = onShare) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = "分享",
+                        tint = MiuixTheme.colorScheme.onBackground
+                    )
+                }
+            }
         }
     }
 }
@@ -386,7 +521,10 @@ private fun loadLogEntries(file: File?): List<LogEntry> {
     if (file == null || !file.exists()) {
         return emptyList()
     }
-    val timeRegex = Regex("^(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+(\\w+):\\s*(.*)$")
+    // 两种格式：
+    // runtime/system/debug: 13:34:10.251 RUNTIME: 执行结束-庄园
+    // forest/farm/goldenbeans/other: 19:37:33.150 森林签到...
+    val timeRegex = Regex("^(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+(?:(\\w+):\\s*)?(.*)$")
     val entries = ArrayDeque<LogEntry>()
     return try {
         val text = readTailText(file, MAX_TAIL_BYTES)
@@ -399,7 +537,7 @@ private fun loadLogEntries(file: File?): List<LogEntry> {
                     LogEntry(
                         lineNumber = lineNumber,
                         time = match.groupValues[1],
-                        tag = match.groupValues[2],
+                        tag = match.groupValues[2].takeIf { it.isNotEmpty() },
                         body = match.groupValues[3]
                     )
                 )
