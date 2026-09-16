@@ -41,6 +41,16 @@
             tools:targetApi="n" />
 
         <activity
+            android:name=".ui.miuix.MiuixGroupFieldsActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+
+        <activity
+            android:name=".ui.miuix.MiuixSelectionEditActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+
+        <activity
             android:name=".ui.miuix.MiuixExtensionsActivity"
             android:exported="true"
             android:resizeableActivity="true"
