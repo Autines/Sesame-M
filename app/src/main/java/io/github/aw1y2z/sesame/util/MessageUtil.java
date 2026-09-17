@@ -35,8 +35,63 @@ public class MessageUtil {
         return null;
     }
 
+    /** 服务端繁忙退避：起夜 2s，连续命中翻倍，上限 8s */
+    private static final long SERVER_BUSY_BASE_MS = 2000L;
+    private static final long SERVER_BUSY_MAX_MS = 8000L;
+    private static int serverBusyStreak = 0;
+
+    /**
+     * 是否服务端繁忙：`resultCode=102` 或文案为"服务器正在开小差"。
+     * <p>这类错误是临时性的，既不该拉黑，也不该几秒内连续重试。
+     */
+    private static boolean isServerBusy(JSONObject jo) {
+        if (jo == null) {
+            return false;
+        }
+        if ("102".equals(jo.optString("resultCode", "").trim())) {
+            return true;
+        }
+        return jo.optString("memo", "").contains("服务器正在开小差");
+    }
+
+    /**
+     * 服务端繁忙时退避：命中即 sleep（2s 起、连续命中翻倍、上限 8s），收到非繁忙响应则计数归零。
+     * <p>实测原先会在几秒内连打 3 次（23:59:12/15/19、00:08:26/29），退避后既少发无效请求也少刷日志。
+     *
+     * @return 是否命中服务端繁忙
+     */
+    public static boolean backOffIfServerBusy(JSONObject jo) {
+        long sleepMs;
+        int streak;
+        // 只在锁内更新连续计数，sleep 必须放在锁外——否则一个模块退避会连带卡住其它模块
+        synchronized (MessageUtil.class) {
+            if (!isServerBusy(jo)) {
+                serverBusyStreak = 0;
+                return false;
+            }
+            sleepMs = Math.min(SERVER_BUSY_BASE_MS << Math.min(serverBusyStreak, 2), SERVER_BUSY_MAX_MS);
+            serverBusyStreak++;
+            streak = serverBusyStreak;
+        }
+        Log.i(TAG, "服务端繁忙🌧️退避" + (sleepMs / 1000) + "s后继续(连续第" + streak + "次)");
+        TimeUtil.sleep(sleepMs);
+        return true;
+    }
+
+    /** 在多个文案字段里找关键字（各接口字段不统一，不能只扫 desc） */
+    private static boolean anyFieldContains(JSONObject jo, String keyword) {
+        for (String field : FAIL_TEXT_FIELDS) {
+            if (jo.optString(field, "").contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static void printErrorMessage(String tag, JSONObject jo, String errorMessageField) {
         try {
+            // 服务端繁忙先退避，避免几秒内连续重试（所有失败文案都汇聚到这里）
+            backOffIfServerBusy(jo);
             String errMsg = tag + " error:";
             Log.record(errMsg + jo.getString(errorMessageField));
             Log.i(jo.getString(errorMessageField), jo.toString());
@@ -192,6 +247,34 @@ public class MessageUtil {
                 || "REMOTE_INVOKE_EXCEPTION".equals(code);
     }
 
+    /**
+     * 拉黑判定要扫的文案字段：各接口字段不统一（desc / resultDesc / resultView / memo / errorMsg …），
+     * 原先只扫 desc，会把文案放在其它字段的失败漏掉（表现为"该拉黑却没拉黑、每天白试一次"）。
+     */
+    private static final String[] FAIL_TEXT_FIELDS = {
+            "desc", "resultDesc", "resultView", "memo", "errorMsg", "errorMessage", "resultMsg"
+    };
+
+    /**
+     * 只有"文案含不支持rpc调用"一个判据的列表：listTitle → {ModelFieldsType, 列表中文名}。
+     * <p>用于非 desc 字段命中时的"连续确认"通道（其余带额外判据的列表在各自分支里处理）。
+     */
+    private static final Map<String, String[]> BLACKLIST_LIST_TARGETS = new LinkedHashMap<>();
+
+    static {
+        BLACKLIST_LIST_TARGETS.put("AntForestVitalityTaskList", new String[]{"AntForestV2", "蚂蚁森林活力值任务"});
+        BLACKLIST_LIST_TARGETS.put("AntForestHuntTaskList", new String[]{"AntForestV2", "蚂蚁森林抽抽乐任务"});
+        BLACKLIST_LIST_TARGETS.put("AntFarmDoFarmTaskList", new String[]{"AntFarm", "庄园饲料任务"});
+        BLACKLIST_LIST_TARGETS.put("AntFarmDrawMachineTaskList", new String[]{"AntFarm", "庄园装扮抽抽乐任务"});
+        BLACKLIST_LIST_TARGETS.put("AntDodoTaskList", new String[]{"AntDodo", "神奇物种任务"});
+        BLACKLIST_LIST_TARGETS.put("AntOceanAntiepTaskList", new String[]{"AntOcean", "神奇海洋普通任务"});
+        BLACKLIST_LIST_TARGETS.put("AntOceanFishBlackList", new String[]{"AntOcean", "神奇海洋去摸鱼任务"});
+        BLACKLIST_LIST_TARGETS.put("AntStallTaskList", new String[]{"AntStall", "新村任务"});
+        BLACKLIST_LIST_TARGETS.put("AntMemberTaskList", new String[]{"AntMember", "会员任务"});
+        // 注：GoldenBeansTaskList / AntOrchardTaskList / AntSportsTaskList / MemberCreditSesameTaskList
+        // 有自己的额外判据，在下方分支里处理，不走这张表，避免重复动作
+    }
+
     public static void checkResultCodeAndMarkTaskBlackList(String listTitle, String taskTitle, JSONObject jo) {
         try {
             if (jo == null) {
@@ -202,14 +285,31 @@ public class MessageUtil {
             if (isRetryable(jo)) {
                 return;
             }
-            //标记是否加黑
-            boolean canAddBlackList = false;
+            // 关键字判定：desc 命中沿用原有"立即拉黑"语义；其它字段命中走"连续确认"（字段不统一，
+            // 放宽判定范围必须更保守，避免一次误判就把任务停掉 3 天）
+            boolean strongHit = false;
+            boolean weakHit = false;
+            for (String field : FAIL_TEXT_FIELDS) {
+                String text = jo.optString(field, "");
+                if (text.isEmpty() || !(text.contains("不支持rpc调用") || text.contains("不支持RPC调用"))) {
+                    continue;
+                }
+                if ("desc".equals(field)) {
+                    strongHit = true;
+                } else {
+                    weakHit = true;
+                }
+            }
 
-            //共性返回失败关键字
-            if (jo.has("desc")) {
-                String desc = jo.optString("desc");
-                if (desc.contains("不支持rpc调用") || desc.contains("不支持RPC调用")) {
-                    canAddBlackList = true;
+            //标记是否加黑（保持原有语义：只有 desc 命中才进入各列表的"立即拉黑"分支）
+            boolean canAddBlackList = strongHit;
+
+            // 非 desc 字段命中：原各分支只认 desc 会漏判（文案被放在 memo/resultDesc 等字段），
+            // 这里统一走"连续命中确认"通道；带额外判据的列表由下方各自分支处理
+            if (weakHit && !strongHit) {
+                String[] weakTarget = BLACKLIST_LIST_TARGETS.get(listTitle);
+                if (weakTarget != null) {
+                    MarkTaskBlackListConfirm(weakTarget[0], listTitle, weakTarget[1], taskTitle);
                 }
             }
 
@@ -266,12 +366,11 @@ public class MessageUtil {
 
                 //农场肥料任务AntOrchard
                 case "AntOrchardTaskList":
-                    if (jo.has("desc")) {
-                        String desc = jo.optString("desc");
-                        if (desc.contains("任务全局配置不存在")) {
-                            // 文案模糊（可能只是活动当天未配置），需连续命中确认
-                            MarkTaskBlackListConfirm("AntOrchard", listTitle, "农场肥料任务", taskTitle);
-                        }
+                    if (strongHit) {
+                        MarkTaskBlackList("AntOrchard", listTitle, "农场肥料任务", taskTitle);
+                    } else if (weakHit || anyFieldContains(jo, "任务全局配置不存在")) {
+                        // 关键字落在非 desc 字段 / 文案模糊（可能只是活动当天未配置）→ 连续命中确认
+                        MarkTaskBlackListConfirm("AntOrchard", listTitle, "农场肥料任务", taskTitle);
                     }
                     break;
 
@@ -339,6 +438,9 @@ public class MessageUtil {
                     }
                     if (canAddBlackList) {
                         MarkTaskBlackList("AntSports", listTitle, "运动任务", taskTitle);
+                    } else if (weakHit) {
+                        // 关键字落在非 desc 字段 → 连续命中确认
+                        MarkTaskBlackListConfirm("AntSports", listTitle, "运动任务", taskTitle);
                     }
                     break;
 
@@ -352,12 +454,14 @@ public class MessageUtil {
 
                 //会员芝麻信用任务芝麻粒AntMember
                 case "MemberCreditSesameTaskList":
-                    if (jo.has("resultView")) {
-                        String resultView = jo.optString("resultView");
-                        if (resultView.contains("不是有效的入参") || resultView.contains("存在进行中的生活记录")|| resultView.contains("生活记录模板不存在")) {
-                            // 文案模糊（可能只是当天状态异常），需连续命中确认
-                            MarkTaskBlackListConfirm("AntMember", listTitle, "会员芝麻信用任务芝麻粒", taskTitle);
-                        }
+                    if (strongHit) {
+                        MarkTaskBlackList("AntMember", listTitle, "会员芝麻信用任务芝麻粒", taskTitle);
+                    } else if (weakHit
+                            || anyFieldContains(jo, "不是有效的入参")
+                            || anyFieldContains(jo, "存在进行中的生活记录")
+                            || anyFieldContains(jo, "生活记录模板不存在")) {
+                        // 关键字落在非 desc 字段 / 文案模糊（可能只是当天状态异常）→ 连续命中确认
+                        MarkTaskBlackListConfirm("AntMember", listTitle, "会员芝麻信用任务芝麻粒", taskTitle);
                     }
                     break;
 

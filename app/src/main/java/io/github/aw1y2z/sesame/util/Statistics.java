@@ -173,7 +173,8 @@ public class Statistics {
             Log.system(TAG, "重置 statistics.json");
         }
         else {
-            Log.system(TAG, "保存 statistics.json");
+            // 每次落盘都记一行会淹没有效日志（实测约 75 行/天），降为由「抓包记录」开关控制的调试日志
+            Log.debug(TAG + ", 保存 statistics.json");
         }
         FileUtil.write2File(JsonUtil.toFormatJsonString(INSTANCE), FileUtil.getStatisticsFile());
     }

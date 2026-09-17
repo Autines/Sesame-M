@@ -433,10 +433,11 @@ public class FileUtil {
             statisticsFile.delete();
         }
         if (statisticsFile.exists()) {
-            Log.i(TAG, "[statistics]读:" + statisticsFile.canRead() + ";写:" + statisticsFile.canWrite());
+            // 遗留自检：真正写失败时 write2File 已会 Toast + 打异常日志，这里降为调试日志，避免每次读写都刷一行
+            Log.debug(TAG + ", [statistics]读:" + statisticsFile.canRead() + ";写:" + statisticsFile.canWrite());
         }
         else {
-            Log.i(TAG, "statisticsFile.json文件不存在");
+            Log.debug(TAG + ", statisticsFile.json文件不存在");
         }
         return statisticsFile;
     }
