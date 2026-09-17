@@ -148,7 +148,6 @@ public class ApplicationHook extends XposedModule {
         XHelpers.init(this);
         log(4, TAG, "event=module_loaded api=" + getApiVersion()
                 + " framework=" + getFrameworkName() + " version=" + getFrameworkVersion());
-        markFile("/sdcard/sesame_diag.txt", "onModuleLoaded " + getFrameworkName() + " api=" + getApiVersion());
         try {
             // 读取与 App 共享的日志开关配置，使各分项开关在本进程真正生效
             AppConfig.load();
@@ -167,16 +166,6 @@ public class ApplicationHook extends XposedModule {
         }
     }
 
-    private static void markFile(String path, String line) {
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter(path, true);
-            fw.write(line + " @ " + new java.util.Date() + "\n");
-            fw.close();
-        } catch (Throwable t) {
-            // 诊断文件写不进去(如 /sdcard 权限受限)时，只有这里能提示，否则会让人误以为模块没加载
-            Log.i(TAG, "写入诊断文件失败: " + path + " (" + t + ")");
-        }
-    }
 
     @Override
     public void onPackageReady(@NonNull XposedModuleInterface.PackageReadyParam param) {
@@ -204,7 +193,8 @@ public class ApplicationHook extends XposedModule {
                     try {
                         AlipayMiniMarkHelper.init(classLoader);
                         AuthCodeHelper.init(classLoader);
-                        AuthCodeHelper.getAuthCode("2021005114632037");
+                        // 启动时不再调用 getAuthCode：返回值本就被丢弃，而它在当前支付宝版本上必然失败
+                        //（自建实例未走宿主依赖注入，内部 facade 为 null），只会在日志里留下噪音
                         // ========== 关键改动：异步执行 initSimplePageManager，不阻塞 ==========
                         // 用线程直接执行（项目中大量使用 Thread 方式，贴合风格）
                         //new Thread(() -> {
