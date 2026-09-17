@@ -29,10 +29,6 @@ public enum GameTask {
     Farm_ddply("对对碰乐园", "2021004149679303", "zfb_ddply", "ddply_game_xiaochu_every_5", "zhuangyuan", "1.0.14", 2),
     Forest_slxcc("森林小车车", "2060170000363691", "zfb_slxcc", "slxcc_game_kaiche_every_10", "lianyun_senlin_leyuan", "1.0.1", 3),
     Forest_sljyd("森林救援队(能量雨)", "2021005113684028", "zfb_sljydx", "sljyd_game_xiaochu_every_10", "lianyun_senlin_leyuan", "1.0.1", 3);
-    //Forest_sgbhsd("三国冰河时代", "2021004173661702", "zfb_sgbhsd", "cclyx_sgbhsd_3c_zm10c", "lianyun_senlin_leyuan", "0.94.1", 3);
-
-    //Farm_lhs("灵画师", "2021005122634802", "lhs", "lhs", "lianyun_zhuangyuan_v2", "0.0.89", 3);
-
 
     private final String title;
     private final String appId;
@@ -189,6 +185,17 @@ public enum GameTask {
      * @return 成功上报的次数，失败返回已成功的次数
      */
     public int reportSync(String gameType, int eggCount) {
+        return reportSync(gameType, eggCount, null);
+    }
+
+    /**
+     * 同步执行上报任务，可覆盖上报渠道。
+     * <p>金豆乐园场景必须传 {@code "goldenbean"}，
+     * 否则游戏服接受上报但支付宝侧权益不推进。
+     *
+     * @param channelOverride 非空时覆盖 action_finish_channel；为空用枚举默认渠道
+     */
+    public int reportSync(String gameType, int eggCount, String channelOverride) {
         if (eggCount <= 0) {
             return 0;
         }
@@ -201,7 +208,7 @@ public enum GameTask {
 
         int successfulReports = 0;
         for (int i = 1; i <= requiredSuccesses; i++) {
-            if (!executeSingleReport(gameType, i, requiredSuccesses)) {
+            if (!executeSingleReport(gameType, i, requiredSuccesses, channelOverride)) {
                 break;
             }
             successfulReports++;
@@ -223,7 +230,11 @@ public enum GameTask {
      * @param total 总请求次数
      * @return 是否上报成功
      */
-    private boolean executeSingleReport(String gameType,int current, int total) {
+    private boolean executeSingleReport(String gameType, int current, int total) {
+        return executeSingleReport(gameType, current, total, null);
+    }
+
+    private boolean executeSingleReport(String gameType, int current, int total, String channelOverride) {
         try {
             String mark = getAlipayMiniMark(appId, version);
             String reqId = System.currentTimeMillis() + "_" + (new Random().nextInt(90) + 10); // 10-99随机数
@@ -235,7 +246,8 @@ public enum GameTask {
             bodyJson.put("reqId", reqId);
             bodyJson.put("gid", gid);
             bodyJson.put("action_code", action);
-            bodyJson.put("action_finish_channel", channel);
+            bodyJson.put("action_finish_channel",
+                    channelOverride != null && !channelOverride.isEmpty() ? channelOverride : channel);
             String body = bodyJson.toString();
 
             //Log.other("taskReport 请求体 -> " + body);
