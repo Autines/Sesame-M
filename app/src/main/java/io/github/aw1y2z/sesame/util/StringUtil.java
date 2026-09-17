@@ -108,4 +108,50 @@ public class StringUtil {
         }
     }
 
+    /**
+     * 转义 JSON 字符串里的特殊字符（配合手工拼请求体使用）。
+     * <p>请求体由各 RpcCall 手写拼接、桥接层原样透传，服务端文案或 AI 回答里只要出现
+     * 引号、反斜杠或换行，拼出来的就不是合法 JSON，整次调用直接失败；拼入前统一走这里。
+     * <p>只转义必要字符（引号、反斜杠、控制字符），不改动其它内容与普通字符。
+     */
+    public static String escapeJson(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(text.length() + 8);
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            switch (c) {
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\t':
+                    sb.append("\\t");
+                    break;
+                case '\b':
+                    sb.append("\\b");
+                    break;
+                case '\f':
+                    sb.append("\\f");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.toString();
+    }
+
 }
