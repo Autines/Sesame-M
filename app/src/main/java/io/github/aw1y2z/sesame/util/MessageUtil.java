@@ -5,6 +5,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.aw1y2z.sesame.data.ConfigV2;
@@ -263,8 +264,11 @@ public class MessageUtil {
     };
 
     /**
-     * 只有"文案含不支持rpc调用"一个判据的列表：listTitle → {ModelFieldsType, 列表中文名}。
-     * <p>用于非 desc 字段命中时的"连续确认"通道（其余带额外判据的列表在各自分支里处理）。
+     * 拉黑目标表：listTitle → {ModelFieldsType, 列表中文名}。
+     * <p>决定"拉黑写进哪个模块的哪个字段、日志里怎么称呼这个列表"。
+     * <p>**新增任务列表只需在这里加一行**：判据绝大多数走默认
+     * （desc 字段命中"不支持rpc调用"＝立即拉黑，其它字段命中＝连续确认），
+     * 只有少数列表有额外错误码/文案判据时才需要在 {@link #checkResultCodeAndMarkTaskBlackList} 里加分支。
      */
     private static final Map<String, String[]> BLACKLIST_LIST_TARGETS = new LinkedHashMap<>();
 
@@ -276,10 +280,12 @@ public class MessageUtil {
         BLACKLIST_LIST_TARGETS.put("AntDodoTaskList", new String[]{"AntDodo", "神奇物种任务"});
         BLACKLIST_LIST_TARGETS.put("AntOceanAntiepTaskList", new String[]{"AntOcean", "神奇海洋普通任务"});
         BLACKLIST_LIST_TARGETS.put("AntOceanFishBlackList", new String[]{"AntOcean", "神奇海洋去摸鱼任务"});
+        BLACKLIST_LIST_TARGETS.put("AntOrchardTaskList", new String[]{"AntOrchard", "农场肥料任务"});
+        BLACKLIST_LIST_TARGETS.put("GoldenBeansTaskList", new String[]{"goldenbeans", "金豆夺宝任务"});
         BLACKLIST_LIST_TARGETS.put("AntStallTaskList", new String[]{"AntStall", "新村任务"});
+        BLACKLIST_LIST_TARGETS.put("AntSportsTaskList", new String[]{"AntSports", "运动任务"});
         BLACKLIST_LIST_TARGETS.put("AntMemberTaskList", new String[]{"AntMember", "会员任务"});
-        // 注：GoldenBeansTaskList / AntOrchardTaskList / AntSportsTaskList / MemberCreditSesameTaskList
-        // 有自己的额外判据，在下方分支里处理，不走这张表，避免重复动作
+        BLACKLIST_LIST_TARGETS.put("MemberCreditSesameTaskList", new String[]{"AntMember", "会员芝麻信用任务芝麻粒"});
     }
 
     public static void checkResultCodeAndMarkTaskBlackList(String listTitle, String taskTitle, JSONObject jo) {
@@ -308,82 +314,47 @@ public class MessageUtil {
                 }
             }
 
-            //标记是否加黑（保持原有语义：只有 desc 命中才进入各列表的"立即拉黑"分支）
-            boolean canAddBlackList = strongHit;
-
-            // 非 desc 字段命中：原各分支只认 desc 会漏判（文案被放在 memo/resultDesc 等字段），
-            // 这里统一走"连续命中确认"通道；带额外判据的列表由下方各自分支处理
-            if (weakHit && !strongHit) {
-                String[] weakTarget = BLACKLIST_LIST_TARGETS.get(listTitle);
-                if (weakTarget != null) {
-                    MarkTaskBlackListConfirm(weakTarget[0], listTitle, weakTarget[1], taskTitle);
-                }
+            String[] target = BLACKLIST_LIST_TARGETS.get(listTitle);
+            if (target == null) {
+                // 未登记的列表不做拉黑（原先 switch 无匹配分支时也是什么都不做）
+                Log.i(listTitle, "未登记拉黑目标，跳过");
+                return;
             }
 
-            //这里根据对应任务返回异常的值精准设置拉黑条件
+            // 判据：desc 命中"不支持rpc调用"＝立即拉黑；其它字段命中＝只作为"连续命中确认"的依据
+            // （字段不统一，放宽判定范围必须更保守，避免一次误判就把任务停掉 3 天）
+            boolean canAddBlackList = strongHit;
+            boolean needConfirm = weakHit && !strongHit;
+            // 少数列表有自己的额外判据（服务端错误码、特有文案），其余列表走上面的默认判据
             switch (listTitle) {
-                //蚂蚁森林活力值任务AntForestV2
-                case "AntForestVitalityTaskList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntForestV2", listTitle, "蚂蚁森林活力值任务", taskTitle);
+                // 运动任务：错误码/文案指明任务 id 非法时可直接拉黑
+                case "AntSportsTaskList":
+                    if (jo.has("errorCode") && jo.optString("errorCode").contains("TASK_ID_INVALID")) {
+                        // {"ariverRpcTraceId":"...","errorCode":"TASK_ID_INVALID","errorMsg":"海豚任务id非法","retryable":false,"success":false}
+                        canAddBlackList = true;
                     }
+                    if (jo.has("errorMsg") && jo.optString("errorMsg").contains("海豚活动触发不可重试错误")) {
+                        canAddBlackList = true;
+                    }
+                    needConfirm = weakHit;
                     break;
 
-                //蚂蚁森林抽抽乐任务AntForestV2
-                case "AntForestHuntTaskList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntForestV2", listTitle, "蚂蚁森林抽抽乐任务", taskTitle);
-                    }
-                    break;
-
-                //庄园饲料任务AntFarm
-                case "AntFarmDoFarmTaskList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntFarm", listTitle, "庄园饲料任务", taskTitle);
-                    }
-                    break;
-
-                //庄园装扮抽抽乐任务AntFarm
-                case "AntFarmDrawMachineTaskList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntFarm", listTitle, "庄园装扮抽抽乐任务", taskTitle);
-                    }
-                    break;
-
-                //神奇物种任务AntDodo
-                case "AntDodoTaskList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntDodo", listTitle, "神奇物种任务", taskTitle);
-                    }
-                    break;
-
-                //神奇海洋普通任务AntOcean
-                case "AntOceanAntiepTaskList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntOcean", listTitle, "神奇海洋普通任务", taskTitle);
-                    }
-                    break;
-
-                //神奇海洋去摸鱼任务AntOcean
-                case "AntOceanFishBlackList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntOcean", listTitle, "神奇海洋去摸鱼任务", taskTitle);
-                    }
-                    break;
-
-                //农场肥料任务AntOrchard
+                // 农场肥料任务：文案模糊（可能只是活动当天未配置）也算待确认
                 case "AntOrchardTaskList":
-                    if (strongHit) {
-                        MarkTaskBlackList("AntOrchard", listTitle, "农场肥料任务", taskTitle);
-                    } else if (weakHit || anyFieldContains(jo, "任务全局配置不存在")) {
-                        // 关键字落在非 desc 字段 / 文案模糊（可能只是活动当天未配置）→ 连续命中确认
-                        MarkTaskBlackListConfirm("AntOrchard", listTitle, "农场肥料任务", taskTitle);
-                    }
+                    needConfirm = weakHit || anyFieldContains(jo, "任务全局配置不存在");
                     break;
 
-                //金豆夺宝任务goldenbeans
+                // 会员芝麻信用任务：另有三种模糊文案同样走连续确认
+                case "MemberCreditSesameTaskList":
+                    needConfirm = weakHit
+                            || anyFieldContains(jo, "不是有效的入参")
+                            || anyFieldContains(jo, "存在进行中的生活记录")
+                            || anyFieldContains(jo, "生活记录模板不存在");
+                    break;
+
+                // 金豆夺宝任务：错误码/文案（code 或 resultCode 或 errorCode + desc/resultDesc/memo）
+                // 明确不可恢复时可直接拉黑（可重试错误已在入口统一拦截）
                 case "GoldenBeansTaskList": {
-                    // 错误码依次取 code / resultCode / errorCode（不同接口字段不统一）
                     String code = jo.optString("code", "").trim();
                     if (code.isEmpty()) {
                         code = jo.optString("resultCode", "").trim();
@@ -391,7 +362,6 @@ public class MessageUtil {
                     if (code.isEmpty()) {
                         code = jo.optString("errorCode", "").trim();
                     }
-                    // 错误文案依次取 desc / resultDesc / memo
                     String message = jo.optString("desc", "");
                     if (message.isEmpty()) {
                         message = jo.optString("resultDesc", "");
@@ -399,9 +369,7 @@ public class MessageUtil {
                     if (message.isEmpty()) {
                         message = jo.optString("memo", "");
                     }
-                    // 确定性不可恢复错误（可重试错误已在入口统一拦截）：
-                    // 1) 任务Id非法、入参非法等不可恢复错误码；
-                    // 2) 服务端明确不支持 rpc 调用。
+                    // 任务Id非法、入参非法等不可恢复错误码；或服务端明确不支持 rpc 调用
                     boolean unsupported = code.contains("400000040");
                     boolean invalid = code.contains("20020012")
                             || code.contains("TASK_ID_INVALID")
@@ -410,68 +378,21 @@ public class MessageUtil {
                             || message.contains("不支持RPC调用");
                     if (unsupported || invalid) {
                         canAddBlackList = true;
-                    } else if (message.contains("任务全局配置不存在")) {
-                        // 文案模糊（可能只是活动当天未配置），需连续命中确认
-                        MarkTaskBlackListConfirm("goldenbeans", listTitle, "金豆夺宝任务", taskTitle);
                     }
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("goldenbeans", listTitle, "金豆夺宝任务", taskTitle);
-                    }
+                    needConfirm = message.contains("任务全局配置不存在");
                     break;
                 }
 
-                //新村任务AntStall
-                case "AntStallTaskList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntStall", listTitle, "新村任务", taskTitle);
-                    }
+                default:
+                    // 其余列表（森林活力值/抽抽乐、庄园饲料/装扮抽抽乐、物种、海洋普通/摸鱼、新村、会员）
+                    // 都只用默认判据，无需分支
                     break;
+            }
 
-                //运动任务AntSports
-                case "AntSportsTaskList":
-                    if (jo.has("errorCode")) {
-                        String errorCode = jo.optString("errorCode");
-                        // {"ariverRpcTraceId":"21a4804717677001946607240e1734","errorCode":"TASK_ID_INVALID","errorMsg":"海豚任务id非法","retryable":false,"success":false}
-                        if (errorCode.contains("TASK_ID_INVALID")) {
-                            canAddBlackList = true;
-                        }
-
-                    }
-                    if (jo.has("errorMsg")) {
-                        String errorMsg = jo.optString("errorMsg");
-                        if (errorMsg.contains("海豚活动触发不可重试错误")) {
-                            canAddBlackList = true;
-                        }
-                    }
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntSports", listTitle, "运动任务", taskTitle);
-                    } else if (weakHit) {
-                        // 关键字落在非 desc 字段 → 连续命中确认
-                        MarkTaskBlackListConfirm("AntSports", listTitle, "运动任务", taskTitle);
-                    }
-                    break;
-
-                //会员任务AntMember
-                case "AntMemberTaskList":
-                    if (canAddBlackList) {
-                        MarkTaskBlackList("AntMember", listTitle, "会员任务", taskTitle);
-
-                    }
-                    break;
-
-                //会员芝麻信用任务芝麻粒AntMember
-                case "MemberCreditSesameTaskList":
-                    if (strongHit) {
-                        MarkTaskBlackList("AntMember", listTitle, "会员芝麻信用任务芝麻粒", taskTitle);
-                    } else if (weakHit
-                            || anyFieldContains(jo, "不是有效的入参")
-                            || anyFieldContains(jo, "存在进行中的生活记录")
-                            || anyFieldContains(jo, "生活记录模板不存在")) {
-                        // 关键字落在非 desc 字段 / 文案模糊（可能只是当天状态异常）→ 连续命中确认
-                        MarkTaskBlackListConfirm("AntMember", listTitle, "会员芝麻信用任务芝麻粒", taskTitle);
-                    }
-                    break;
-
+            if (canAddBlackList) {
+                MarkTaskBlackList(target[0], listTitle, target[1], taskTitle);
+            } else if (needConfirm) {
+                MarkTaskBlackListConfirm(target[0], listTitle, target[1], taskTitle);
             }
         } catch (Throwable t) {
             Log.err(TAG, "checkSuccess err:", t);
@@ -673,6 +594,43 @@ public class MessageUtil {
             return modelFields == null ? null : (SelectModelField) modelFields.get(listTitle);
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    /**
+     * 各模块"黑白名单初始化"的收尾：把预置黑名单补进列表、把预置白名单从列表移除，并保存配置。
+     * <p>原先 9 个模块 × 13 个任务列表块各自抄了一遍「遍历 blackList → add(已存在则跳过) ／
+     * 遍历 whiteList → remove ／ ConfigV2.save ＋ 成功/失败日志」，逻辑完全相同、只有中文名不同。
+     * <p>日志文案由 displayName 拼出，与原先逐字一致：成功 `黑白名单🈲<名>自动设置: <列表>`，
+     * 失败 `<名>黑白名单设置失败`。
+     *
+     * @param displayName 列表中文名（如 "森林活力值任务"），仅用于日志
+     * @param blackList   预置拉黑项（键＝任务标题）
+     * @param whiteList   预置释放项
+     * @param field       目标 SelectModelField（可用性由调用方先判空；为 null 时直接返回）
+     */
+    public static void syncTaskBlackList(String displayName, Set<String> blackList, Set<String> whiteList,
+                                         SelectModelField field) {
+        if (field == null) {
+            return;
+        }
+        Set<String> currentValues = field.getValue();
+        if (currentValues != null) {
+            for (String task : blackList) {
+                if (!currentValues.contains(task)) {
+                    field.add(task, 0);
+                }
+            }
+            for (String task : whiteList) {
+                if (currentValues.contains(task)) {
+                    currentValues.remove(task);
+                }
+            }
+        }
+        if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
+            Log.record("黑白名单🈲" + displayName + "自动设置: " + field.getValue());
+        } else {
+            Log.record(displayName + "黑白名单设置失败");
         }
     }
 

@@ -215,28 +215,8 @@ public class AntMember extends ModelTask {
                         return;
                     }
                     
-                    Set<String> currentValues = AntMemberTaskList.getValue();//该处直接返回列表地址
-                    if (currentValues != null) {
-                        for (String task : blackList) {
-                            if (!currentValues.contains(task)) {
-                                AntMemberTaskList.add(task, 0);
-                            }
-                        }
-                        
-                        // 3. 批量移除白名单任务（从现有列表中删除）
-                        for (String task : whiteList) {
-                            if (currentValues.contains(task)) {
-                                currentValues.remove(task);
-                            }
-                        }
-                    }
-                    // 4. 保存配置
-                    if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
-                        Log.record("黑白名单🈲会员任务自动设置: " + AntMemberTaskList.getValue());
-                    }
-                    else {
-                        Log.record("会员任务黑白名单设置失败");
-                    }
+                    // 2~4. 批量写回黑/白名单并保存
+                    MessageUtil.syncTaskBlackList("会员任务", blackList, whiteList, AntMemberTaskList);
                 }
             }
             //初始化MemberCreditSesameTaskListMap
@@ -319,28 +299,8 @@ public class AntMember extends ModelTask {
                         return;
                     }
                     
-                    Set<String> currentValues = MemberCreditSesameTaskList.getValue();//该处直接返回列表地址
-                    if (currentValues != null) {
-                        for (String task : blackList) {
-                            if (!currentValues.contains(task)) {
-                                MemberCreditSesameTaskList.add(task, 0);
-                            }
-                        }
-                        
-                        // 3. 批量移除白名单任务（从现有列表中删除）
-                        for (String task : whiteList) {
-                            if (currentValues.contains(task)) {
-                                currentValues.remove(task);
-                            }
-                        }
-                    }
-                    // 4. 保存配置
-                    if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
-                        Log.record("黑白名单🈲会员芝麻信用任务芝麻粒自动设置: " + MemberCreditSesameTaskList.getValue());
-                    }
-                    else {
-                        Log.record("会员芝麻信用任务芝麻粒黑白名单设置失败");
-                    }
+                    // 2~4. 批量写回黑/白名单并保存
+                    MessageUtil.syncTaskBlackList("会员芝麻信用任务芝麻粒", blackList, whiteList, MemberCreditSesameTaskList);
                 }
             }
         }

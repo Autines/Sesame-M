@@ -477,20 +477,9 @@ public final class GoldenBeansTasks {
                 return;
             }
 
-            // 补齐默认黑名单任务
-            Set<String> currentValues = taskListField.getValue();
-            if (currentValues != null) {
-                for (String task : defaultKeys) {
-                    if (!currentValues.contains(task)) {
-                        taskListField.add(task, 0);
-                    }
-                }
-            }
-            if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
-                Log.record("黑白名单🈲金豆夺宝任务自动设置: " + taskListField.getValue());
-            } else {
-                Log.record("黑白名单⚠️金豆夺宝任务设置失败");
-            }
+            // 2~4. 批量写回黑/白名单并保存（与其它模块统一走同一执行器；本模块没有预置白名单）
+            Set<String> whiteList = new LinkedHashSet<>();
+            MessageUtil.syncTaskBlackList("金豆夺宝任务", defaultKeys, whiteList, taskListField);
         } catch (Throwable th) {
             Log.i(GoldenBeansSupport.TAG, "initTaskListMap err:");
             Log.printStackTrace(GoldenBeansSupport.TAG, th);

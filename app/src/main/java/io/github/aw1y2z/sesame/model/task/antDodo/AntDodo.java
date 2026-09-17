@@ -185,28 +185,8 @@ public class AntDodo extends ModelTask {
                         return;
                     }
 
-                    // 2. 批量添加黑名单任务（确保存在）
-                    Set<String> currentValues = AntDodoTaskList.getValue();//该处直接返回列表地址
-                    if (currentValues != null) {
-                        for (String task : blackList) {
-                            if (!currentValues.contains(task)) {
-                                AntDodoTaskList.add(task, 0);
-                            }
-                        }
-
-                        // 3. 批量移除白名单任务（从现有列表中删除）
-                        for (String task : whiteList) {
-                            if (currentValues.contains(task)) {
-                                currentValues.remove(task);
-                            }
-                        }
-                    }
-                    // 4. 保存配置
-                    if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
-                        Log.record("黑白名单🈲神奇物种任务自动设置: " + AntDodoTaskList.getValue());
-                    } else {
-                        Log.record("神奇物种任务黑白名单设置失败");
-                    }
+                    // 2~4. 批量写回黑/白名单并保存
+                    MessageUtil.syncTaskBlackList("神奇物种任务", blackList, whiteList, AntDodoTaskList);
                 }
             }
         } catch (Throwable t) {

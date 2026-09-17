@@ -459,31 +459,8 @@ public class AntFarm extends ModelTask {
                 if (AntFarmDoFarmTaskList == null) {
                     return;
                 }
-                // 2. 批量添加黑名单任务（确保存在）
-                Set<String> currentValues = AntFarmDoFarmTaskList.getValue();//该处直接返回列表地址
-                if (currentValues != null) {
-                    for (String task : blackList) {
-                        if (!currentValues.contains(task)) {
-                            AntFarmDoFarmTaskList.add(task, 0);
-                        }
-                    }
-                }
-                currentValues = AntFarmDoFarmTaskList.getValue();//该处直接返回列表地址
-                if (currentValues != null) {
-
-                    // 3. 批量移除白名单任务（从现有列表中删除）
-                    for (String task : whiteList) {
-                        if (currentValues.contains(task)) {
-                            currentValues.remove(task);
-                        }
-                    }
-                }
-                // 4. 保存配置
-                if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
-                    Log.record("黑白名单🈲庄园饲料任务自动设置: " + AntFarmDoFarmTaskList.getValue());
-                } else {
-                    Log.record("庄园饲料任务黑白名单设置失败");
-                }
+                // 2~4. 批量写回黑/白名单并保存
+                MessageUtil.syncTaskBlackList("庄园饲料任务", blackList, whiteList, AntFarmDoFarmTaskList);
             }
 
             //初始化AntFarmDrawMachineTaskListMap
@@ -542,25 +519,8 @@ public class AntFarm extends ModelTask {
                     if (AntFarmDrawMachineTaskList == null) {
                         return;
                     }
-                    Set<String> currentValues = AntFarmDrawMachineTaskList.getValue();//该处直接返回列表地址
-                    if (currentValues != null) {
-                        for (String task : blackList) {
-                            if (!currentValues.contains(task)) {
-                                AntFarmDrawMachineTaskList.add(task, 0);
-                            }
-                        }
-                        for (String task : whiteList) {
-                            if (currentValues.contains(task)) {
-                                currentValues.remove(task);
-                            }
-                        }
-                    }
-                    // 4. 保存配置
-                    if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
-                        Log.record("黑白名单🈲庄园装扮抽抽乐任务自动设置: " + AntFarmDrawMachineTaskList.getValue());
-                    } else {
-                        Log.record("庄园装扮抽抽乐任务黑白名单设置失败");
-                    }
+                    // 批量写回黑/白名单并保存
+                    MessageUtil.syncTaskBlackList("庄园装扮抽抽乐任务", blackList, whiteList, AntFarmDrawMachineTaskList);
                 }
             }
         } catch (Throwable t) {
