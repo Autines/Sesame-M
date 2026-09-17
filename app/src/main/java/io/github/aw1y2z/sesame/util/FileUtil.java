@@ -336,102 +336,83 @@ public class FileUtil {
      * 保证历史日志里的「账号N」与配置页显示的序号始终指向同一账号。
      */
     public static File getAccountIndexFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "accountIndex.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "accountIndex.json");
     }
     
     public static File getSelfIdFile(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "self.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "self.json");
     }
     
     public static File getFriendIdMapFile(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "friend.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "friend.json");
     }
     
     public static File runtimeInfoFile(String userId) {
         File runtimeInfoFile = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "runtimeInfo.json");
-        if (!runtimeInfoFile.exists()) {
-            try {
-                runtimeInfoFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return runtimeInfoFile;
+        return ensureFileExists(runtimeInfoFile);
     }
     
     public static File getCooperationIdMapFile(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "cooperation.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "cooperation.json");
     }
     
     public static File getVitalityBenefitIdMap(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "vitalityBenefit.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "vitalityBenefit.json");
     }
     
     public static File getGameCenterMallItemMap(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "gameCenterMallItem.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "gameCenterMallItem.json");
     }
     
     public static File getFarmOrnamentsIdMapFile(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "farmOrnaments.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "farmOrnaments.json");
     }
     
     public static File getMemberBenefitIdMapFile(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "memberBenefit.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "memberBenefit.json");
     }
     
     public static File getPromiseSimpleTemplateIdMapFile(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "promiseSimpleTemplate.json");
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "promiseSimpleTemplate.json");
+    }
+    
+    /**
+     * 取文件助手的公共实现：路径同名处若被历史脏数据占成了目录，先删掉再返回。
+     * <p>原先每个 getXxxFile 都抄一遍「new File + exists/isDirectory/delete + return」，
+     * 现在统一走这里，各 getter 只剩一行。
+     * <p>⚠️ 方法体必须自己 {@code new File(...)}：2026-09-18 批量改写时曾把它改成调用自身
+     * （`File file = getFile(dir, name);`），实机启动即 StackOverflowError（栈里几千帧 getFile）。
+     * 改这里请务必保留真实的文件构造。
+     */
+    private static File getFile(File dir, String name) {
+        File file = new File(dir, name);
         if (file.exists() && file.isDirectory()) {
             file.delete();
         }
         return file;
     }
-    
-    public static File getStatusFile(String userId) {
-        File file = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "status.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
+
+    /**
+     * 运行时/日志类文件首次使用时需要真正落地一个空文件（否则后续写入/追加会失败）。
+     * <p>原先每个 getXxxLogFile 都抄一遍「不存在则 createNewFile + 吞异常」，统一走这里。
+     * <p>⚠️ 同理：这里必须自己做 exists/createNewFile，不能改成调用自身。
+     */
+    private static File ensureFileExists(File file) {
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (Throwable ignored) {
+            }
         }
         return file;
+    }
+
+    public static File getStatusFile(String userId) {
+        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "status.json");
     }
     
     public static File getStatisticsFile() {
-        File statisticsFile = new File(MAIN_DIRECTORY_FILE, "statistics.json");
-        if (statisticsFile.exists() && statisticsFile.isDirectory()) {
-            statisticsFile.delete();
-        }
+        File statisticsFile = getFile(MAIN_DIRECTORY_FILE, "statistics.json");
         if (statisticsFile.exists()) {
             // 遗留自检：真正写失败时 write2File 已会 Toast + 打异常日志，这里降为调试日志，避免每次读写都刷一行
             Log.debug(TAG + ", [statistics]读:" + statisticsFile.canRead() + ";写:" + statisticsFile.canWrite());
@@ -443,204 +424,100 @@ public class FileUtil {
     }
     
     public static File getTreeIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "tree.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "tree.json");
     }
     
     public static File getReserveIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "reserve.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "reserve.json");
     }
     
     public static File getAnimalIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "animal.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "animal.json");
     }
     
     public static File getMarathonIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "marathon.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "marathon.json");
     }
     
     public static File getNewAncientTreeIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "newAncientTree.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "newAncientTree.json");
     }
     
     public static File getPlantSceneIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "PlantScene.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "PlantScene.json");
     }
     
     public static File getrpcRequestMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "rpcRequest.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "rpcRequest.json");
     }
     
     public static File getBeachIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "beach.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "beach.json");
     }
     
     public static File getForestHuntIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "ForestHunt.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "ForestHunt.json");
     }
     
     public static File getMemberCreditSesameTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "MemberCreditSesameTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "MemberCreditSesameTask.json");
     }
     
     public static File getAntForestVitalityTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntForestVitalityTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntForestVitalityTask.json");
     }
     
     public static File getAntForestHuntTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntForestHuntTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntForestHuntTask.json");
     }
     
     public static File getAntFarmDoFarmTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntFarmDoFarmTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntFarmDoFarmTask.json");
     }
     
     public static File getAntFarmDrawMachineTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntFarmDrawMachineTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntFarmDrawMachineTask.json");
     }
 
     public static File getAntDodoTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntDodoTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntDodoTask.json");
     }
 
     public static File getAntOceanAntiepTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntOceanAntiepTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntOceanAntiepTask.json");
     }
 
     public static File getAntOceanFishBlackListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntOceanFishBlack.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntOceanFishBlack.json");
     }
     
     public static File getAntOrchardTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntOrchardTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntOrchardTask.json");
     }
 
     public static File getGoldenBeansTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "GoldenBeansTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "GoldenBeansTask.json");
     }
     
     /** 自动拉黑记录（含日期），用于"超期自动解禁重试" */
     public static File getAutoBlackListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AutoBlackList.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AutoBlackList.json");
     }
     
     public static File getAntStallTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntStallTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntStallTask.json");
     }
     
     public static File getAntSportsTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntSportsTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntSportsTask.json");
     }
 
     public static File getPathThemeMapListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "PathThemeMapList.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "PathThemeMapList.json");
     }
     
     public static File getAntMemberTaskListMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "AntMemberTask.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
-    }
-    
-    public static File getWalkPathIdMapFile() {
-        File file = new File(MAIN_DIRECTORY_FILE, "walkPath.json");
-        if (file.exists() && file.isDirectory()) {
-            file.delete();
-        }
-        return file;
+        return getFile(MAIN_DIRECTORY_FILE, "AntMemberTask.json");
     }
     
     public static File getExportedStatisticsFile() {
@@ -649,18 +526,12 @@ public class FileUtil {
         if (!storageDir.exists()) {
             storageDir.mkdirs();
         }
-        File exportedStatisticsFile = new File(storageDir, "statistics.json");
-        if (exportedStatisticsFile.exists() && exportedStatisticsFile.isDirectory()) {
-            exportedStatisticsFile.delete();
-        }
+        File exportedStatisticsFile = getFile(storageDir, "statistics.json");
         return exportedStatisticsFile;
     }
     
     public static File getFriendWatchFile() {
-        File friendWatchFile = new File(MAIN_DIRECTORY_FILE, "friendWatch.json");
-        if (friendWatchFile.exists() && friendWatchFile.isDirectory()) {
-            friendWatchFile.delete();
-        }
+        File friendWatchFile = getFile(MAIN_DIRECTORY_FILE, "friendWatch.json");
         return friendWatchFile;
     }
     
@@ -677,10 +548,7 @@ public class FileUtil {
         if (!exportDir.exists()) {
             exportDir.mkdirs();
         }
-        File exportFile = new File(exportDir, file.getName());
-        if (exportFile.exists() && exportFile.isDirectory()) {
-            exportFile.delete();
-        }
+        File exportFile = getFile(exportDir, file.getName());
         if (FileUtil.copyTo(file, exportFile)) {
             return exportFile;
         }
@@ -689,117 +557,44 @@ public class FileUtil {
     
     public static File getCityCodeFile() {
         if (cityCodeFile == null) {
-            cityCodeFile = new File(MAIN_DIRECTORY_FILE, "cityCode.json");
-            if (cityCodeFile.exists() && cityCodeFile.isDirectory()) {
-                cityCodeFile.delete();
-            }
+            cityCodeFile = getFile(MAIN_DIRECTORY_FILE, "cityCode.json");
         }
         return cityCodeFile;
     }
     
     public static File getRuntimeLogFile() {
-        File runtimeLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("runtime"));
-        if (runtimeLogFile.exists() && runtimeLogFile.isDirectory()) {
-            runtimeLogFile.delete();
-        }
-        if (!runtimeLogFile.exists()) {
-            try {
-                runtimeLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return runtimeLogFile;
+        File runtimeLogFile = getFile(LOG_DIRECTORY_FILE, Log.getLogFileName("runtime"));
+        return ensureFileExists(runtimeLogFile);
     }
     
     public static File getDebugLogFile() {
-        File debugLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("debug"));
-        if (debugLogFile.exists() && debugLogFile.isDirectory()) {
-            debugLogFile.delete();
-        }
-        if (!debugLogFile.exists()) {
-            try {
-                debugLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return debugLogFile;
+        File debugLogFile = getFile(LOG_DIRECTORY_FILE, Log.getLogFileName("debug"));
+        return ensureFileExists(debugLogFile);
     }
     
     public static File getForestLogFile() {
-        File forestLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("forest"));
-        if (forestLogFile.exists() && forestLogFile.isDirectory()) {
-            forestLogFile.delete();
-        }
-        if (!forestLogFile.exists()) {
-            try {
-                forestLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return forestLogFile;
+        File forestLogFile = getFile(LOG_DIRECTORY_FILE, Log.getLogFileName("forest"));
+        return ensureFileExists(forestLogFile);
     }
     
     public static File getFarmLogFile() {
-        File farmLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("farm"));
-        if (farmLogFile.exists() && farmLogFile.isDirectory()) {
-            farmLogFile.delete();
-        }
-        if (!farmLogFile.exists()) {
-            try {
-                farmLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return farmLogFile;
+        File farmLogFile = getFile(LOG_DIRECTORY_FILE, Log.getLogFileName("farm"));
+        return ensureFileExists(farmLogFile);
     }
     
     public static File getOtherLogFile() {
-        File otherLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("other"));
-        if (otherLogFile.exists() && otherLogFile.isDirectory()) {
-            otherLogFile.delete();
-        }
-        if (!otherLogFile.exists()) {
-            try {
-                otherLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return otherLogFile;
+        File otherLogFile = getFile(LOG_DIRECTORY_FILE, Log.getLogFileName("other"));
+        return ensureFileExists(otherLogFile);
     }
     
     public static File getGoldenBeansLogFile() {
-        File goldenBeansLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("goldenbeans"));
-        if (goldenBeansLogFile.exists() && goldenBeansLogFile.isDirectory()) {
-            goldenBeansLogFile.delete();
-        }
-        if (!goldenBeansLogFile.exists()) {
-            try {
-                goldenBeansLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return goldenBeansLogFile;
+        File goldenBeansLogFile = getFile(LOG_DIRECTORY_FILE, Log.getLogFileName("goldenbeans"));
+        return ensureFileExists(goldenBeansLogFile);
     }
     
     public static File getErrorLogFile() {
-        File errorLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("error"));
-        if (errorLogFile.exists() && errorLogFile.isDirectory()) {
-            errorLogFile.delete();
-        }
-        if (!errorLogFile.exists()) {
-            try {
-                errorLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return errorLogFile;
+        File errorLogFile = getFile(LOG_DIRECTORY_FILE, Log.getLogFileName("error"));
+        return ensureFileExists(errorLogFile);
     }
     
     public static void clearLog() {
