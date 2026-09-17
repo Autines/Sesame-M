@@ -97,7 +97,8 @@ public class AuthCodeHelper {
             
             return null;
         } catch (Throwable e) {
-            //Log.printStackTrace(TAG+"主动调用获取授权码失败: " + e.getMessage(), e);
+            // 返回 null 与「确实没有授权码」无法区分，必须留痕（原先被注释掉，等于失败无迹可查）
+            Log.printStackTrace(TAG + " 主动调用获取授权码失败", e);
             return null;
         }
     }

@@ -161,7 +161,10 @@ public class ApplicationHook extends XposedModule {
             if (app != null) {
                 app.sendBroadcast(new Intent("io.github.aw1y2z.sesame.status"));
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            // 模块激活相关步骤（配置加载/激活标记/激活广播）失败必须可见，否则「模块没生效」毫无线索
+            Log.printStackTrace(TAG + " onModuleLoaded", t);
+        }
     }
 
     private static void markFile(String path, String line) {
@@ -169,7 +172,10 @@ public class ApplicationHook extends XposedModule {
             java.io.FileWriter fw = new java.io.FileWriter(path, true);
             fw.write(line + " @ " + new java.util.Date() + "\n");
             fw.close();
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            // 诊断文件写不进去(如 /sdcard 权限受限)时，只有这里能提示，否则会让人误以为模块没加载
+            Log.i(TAG, "写入诊断文件失败: " + path + " (" + t + ")");
+        }
     }
 
     @Override
@@ -288,7 +294,10 @@ public class ApplicationHook extends XposedModule {
                         // 主动通知 App 本模块已被 LSPosed 启用并注入支付宝，用于显示「已激活」
                         try {
                             appService.sendBroadcast(new Intent("io.github.aw1y2z.sesame.status"));
-                        } catch (Throwable ignored) {}
+                        } catch (Throwable t) {
+                            // 广播失败会导致 UI 迟迟显示「未激活」，留一行便于排查
+                            Log.i(TAG, "发送激活状态广播失败: " + t);
+                        }
 
                         Log.i(TAG, "Service onCreate");
                         context = appService.getApplicationContext();

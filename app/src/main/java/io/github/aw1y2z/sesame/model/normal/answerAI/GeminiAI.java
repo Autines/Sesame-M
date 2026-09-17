@@ -18,6 +18,9 @@ public class GeminiAI implements AnswerAIInterface {
 
     private final String url = "https://api.genai.gd.edu.kg/google";
 
+    /** 复用同一个 OkHttpClient（自带连接池与线程），避免每次请求都新建 */
+    private static final OkHttpClient CLIENT = new OkHttpClient();
+
     private final String token;
 
     // 私有构造函数，防止外部实例化
@@ -40,7 +43,6 @@ public class GeminiAI implements AnswerAIInterface {
      */
     @Override
     public String getAnswerStr(String text) {
-        Response response = null;
         String result = "";
         try {
             String content = "{\n" +
@@ -54,7 +56,6 @@ public class GeminiAI implements AnswerAIInterface {
                     "        }\n" +
                     "    ]\n" +
                     "}";
-            OkHttpClient client = new OkHttpClient().newBuilder().build();
             MediaType mediaType = MediaType.parse("application/json");
             RequestBody body = RequestBody.create(content, mediaType);
             String url2 = url + "/v1beta/models/gemini-1.5-flash:generateContent?key=" + token;
@@ -63,24 +64,24 @@ public class GeminiAI implements AnswerAIInterface {
                     .method("POST", body)
                     .addHeader("Content-Type", "application/json")
                     .build();
-            response = client.newCall(request).execute();
-            if (response.body() == null) {
-                return result;
+            // try-with-resources：成功、提前 return、异常三条路径都会关闭 Response，连接归还连接池
+            try (Response response = CLIENT.newCall(request).execute()) {
+                ResponseBody responseBody = response.body();
+                if (responseBody == null) {
+                    return result;
+                }
+                String json = responseBody.string();
+                if (!response.isSuccessful()) {
+                    Log.other("Gemini请求失败");
+                    Log.i("Gemini接口异常：" + json);
+                    //可能key出错了
+                    return result;
+                }
+                JSONObject jsonObject = new JSONObject(json);
+                result = getValueByPath(jsonObject, "candidates.[0].content.parts.[0].text");
             }
-            String json = response.body().string();
-            if (!response.isSuccessful()) {
-                Log.other("Gemini请求失败");
-                Log.i("Gemini接口异常：" + json);
-                //可能key出错了
-                return result;
-            }
-            JSONObject jsonObject = new JSONObject(json);
-            result = getValueByPath(jsonObject, "candidates.[0].content.parts.[0].text");
         } catch (Throwable t) {
             Log.printStackTrace(TAG, t);
-            if (response != null) {
-                response.close();
-            }
         }
         return result;
     }

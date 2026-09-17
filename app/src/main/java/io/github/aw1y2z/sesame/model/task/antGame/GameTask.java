@@ -112,17 +112,19 @@ public enum GameTask {
 
             // 处理响应（包含错误流）
             int respCode = conn.getResponseCode();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(
+            StringBuilder responseText = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                     respCode >= 200 && respCode <= 299 ? conn.getInputStream() : conn.getErrorStream(),
                     StandardCharsets.UTF_8
-            ));
-            StringBuilder responseText = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                responseText.append(line);
+            ))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    responseText.append(line);
+                }
+            } finally {
+                // HttpURLConnection 没有 close()，异常路径也必须 disconnect 才能释放连接
+                conn.disconnect();
             }
-            reader.close();
-            conn.disconnect();
 
             //Log.other("login 响应 -> HTTP " + respCode + " " + responseText);
 
@@ -271,17 +273,19 @@ public enum GameTask {
 
             // 处理响应
             int respCode = conn.getResponseCode();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(
+            StringBuilder responseText = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                     respCode >= 200 && respCode <= 299 ? conn.getInputStream() : conn.getErrorStream(),
                     StandardCharsets.UTF_8
-            ));
-            StringBuilder responseText = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                responseText.append(line);
+            ))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    responseText.append(line);
+                }
+            } finally {
+                // HttpURLConnection 没有 close()，异常路径也必须 disconnect 才能释放连接
+                conn.disconnect();
             }
-            reader.close();
-            conn.disconnect();
 
             //Log.other("taskReport 响应 -> HTTP " + respCode + " " + responseText);
 

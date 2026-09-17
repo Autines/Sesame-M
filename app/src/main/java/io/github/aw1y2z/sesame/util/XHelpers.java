@@ -56,6 +56,7 @@ public class XHelpers {
         try {
             return cl.loadClass(name);
         } catch (Throwable t) {
+            // 探测型调用：找不到类属正常情况（用于兼容不同版本/机型），静默返回 null，不打日志
             return null;
         }
     }

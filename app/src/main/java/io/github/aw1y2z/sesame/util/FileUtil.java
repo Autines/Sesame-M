@@ -861,7 +861,12 @@ public class FileUtil {
     public static boolean write2File(String s, File f) {
         if (f.exists()) {
             if (!f.canWrite()) {
-                try { Toast.show(f.getAbsoluteFile() + "没有写入权限！", true); } catch (Throwable t) { }
+                try {
+                    Toast.show(f.getAbsoluteFile() + "没有写入权限！", true);
+                } catch (Throwable t) {
+                    // 「没有写入权限」已由返回 false 传达，Toast 失败只做低优先级留痕
+                    Log.debug("Toast 提示失败(没有写入权限): " + t);
+                }
                 return false;
             }
             if (f.isDirectory()) {
@@ -915,7 +920,12 @@ public class FileUtil {
     
     public static boolean append2File(String s, File f) {
         if (f.exists() && !f.canWrite()) {
-            try { Toast.show(f.getAbsoluteFile() + "没有写入权限！", true); } catch (Throwable t) { }
+            try {
+                Toast.show(f.getAbsoluteFile() + "没有写入权限！", true);
+            } catch (Throwable t) {
+                // 「没有写入权限」已由返回 false 传达，Toast 失败只做低优先级留痕
+                Log.debug("Toast 提示失败(没有写入权限): " + t);
+            }
             return false;
         }
         boolean success = false;
