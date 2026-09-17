@@ -771,6 +771,8 @@ public class Status {
             Status.unload();
             // 跨天：解禁超期的"自动拉黑"任务，给它们一次重试机会
             MessageUtil.sweepExpiredBlackList();
+            // 跨天：释放原先预置拉黑的技术性不可自动化项，交给自动拉黑机制判定
+            MessageUtil.sweepReleasedDefaults();
             return true;
         }
         else {

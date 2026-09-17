@@ -1700,15 +1700,16 @@ public class AntForestV2 extends ModelTask {
             //初始化AntForestVitalityTaskListMap
             AntForestVitalityTaskListMap.load();
             // 1. 定义黑名单（需要添加的任务）和白名单（需要移除的任务）
+            // 注："三国大冒险过1关征战"（小游戏）不再预置拉黑，交由自动拉黑机制判定；
+            // 其余（邀请助力/添加组件/连续7天/到店支付/淘宝花花乐/健康问答）保留
             Set<String> blackList = new HashSet<>();
-            blackList.add("去蚂蚁阿福健康问答");
             blackList.add("邀请1位好友助力");
-            blackList.add("三国大冒险过1关征战");
             blackList.add("添加组件及时收能量");
-            blackList.add("去淘宝花花乐领红包");
             blackList.add("到店支付得50g能量");
             blackList.add("践行绿色行为");
             blackList.add("连续7天收自己能量");
+            blackList.add("去淘宝花花乐领红包");
+            blackList.add("去蚂蚁阿福健康问答");
 
             // 可继续添加更多黑名单任务
 
@@ -1802,9 +1803,8 @@ public class AntForestV2 extends ModelTask {
             //初始化AntForestHuntTaskListMap
             AntForestHuntTaskListMap.load();
             // 1. 定义黑名单（需要添加的任务）和白名单（需要移除的任务）
+            // 注：抽抽乐里的游戏/开宝箱类不再预置拉黑，交由自动拉黑机制判定
             blackList = new HashSet<>();
-            blackList.add("【限时】玩游戏得2次机会");
-            blackList.add("去乐园开宝箱得机会");
             // 可继续添加更多黑名单任务
 
             whiteList = new HashSet<>();// 从黑名单中移除该任务
@@ -2462,11 +2462,20 @@ public class AntForestV2 extends ModelTask {
         return false;
     }
 
+    /**
+     * 黑名单键：剥掉标题末尾的 "(n/N)" 次数后缀。
+     * <p>权限类任务在调用 {@link #finishTask} 时标题会被拼上 "(2/10)"，
+     * 而运行时的黑名单检查用的是纯标题；不处理会导致写进黑名单的键永远匹配不上、拉黑失效。
+     */
+    private static String blackTaskKey(String taskTitle) {
+        return taskTitle == null ? null : taskTitle.replaceAll("\\(\\d+/\\d+\\)$", "");
+    }
+
     private Boolean finishTask(String sceneCode, String taskType, String taskTitle) {
         try {
             JSONObject jo = new JSONObject(AntForestRpcCall.finishTask(sceneCode, taskType));
             //检查并标记黑名单任务
-            MessageUtil.checkResultCodeAndMarkTaskBlackList("AntForestVitalityTaskList", taskTitle, jo);
+            MessageUtil.checkResultCodeAndMarkTaskBlackList("AntForestVitalityTaskList", blackTaskKey(taskTitle), jo);
             TimeUtil.sleep(500);
             if (MessageUtil.checkSuccess(TAG, jo)) {
                 Log.forest("森林任务🧾️完成[" + taskTitle + "]");

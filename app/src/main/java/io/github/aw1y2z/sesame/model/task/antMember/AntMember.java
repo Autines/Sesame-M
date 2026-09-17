@@ -250,7 +250,7 @@ public class AntMember extends ModelTask {
             blackList.add("完成旧衣回收得现金");
             blackList.add("0.1元起租会员攒粒");
             blackList.add("每日施肥领水果");
-            blackList.add("去玩小游戏");
+            // 注："去玩小游戏" 不再预置拉黑，交由自动拉黑机制判定
             // 可继续添加更多黑名单任务
             
             whiteList = new HashSet<>();// 从黑名单中移除该任务

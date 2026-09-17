@@ -3,6 +3,8 @@ package io.github.aw1y2z.sesame.util;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import io.github.aw1y2z.sesame.data.ConfigV2;
 import io.github.aw1y2z.sesame.data.ModelFields;
@@ -488,6 +490,80 @@ public class MessageUtil {
         } catch (Throwable t) {
             Log.i(TAG, "sweepExpiredBlackList err:");
             Log.printStackTrace(TAG, t);
+        }
+    }
+
+    /**
+     * 原先被"预置拉黑"的技术性不可自动化项：不再由各模块每日 init 预置，
+     * 改由自动拉黑机制自行判定（首跑尝试 → 失败即拉黑 → 满 N 天解禁复核 → 重试满 N 次永久拉黑）。
+     * <p>键为 {@code module|listTitle}，值为需要释放的条目（与写入黑名单时的键一致）。
+     * <p>注意：这些条目同时必须从各模块 init 的默认黑名单里删除，否则会被每日补回。
+     */
+    private static final Map<String, String[]> RELEASED_DEFAULTS = new LinkedHashMap<>();
+
+    static {
+        RELEASED_DEFAULTS.put("AntOcean|AntOceanAntiepTaskList", new String[]{
+                "随机任务：玩一玩得拼图"});
+        RELEASED_DEFAULTS.put("AntOcean|AntOceanFishBlackList", new String[]{
+                "玩一玩向僵尸开炮"});
+        RELEASED_DEFAULTS.put("AntForestV2|AntForestVitalityTaskList", new String[]{
+                "三国大冒险过1关征战"});
+        RELEASED_DEFAULTS.put("AntForestV2|AntForestHuntTaskList", new String[]{
+                "【限时】玩游戏得2次机会", "去乐园开宝箱得机会"});
+        RELEASED_DEFAULTS.put("AntFarm|AntFarmDrawMachineTaskList", new String[]{
+                "【限时】玩游戏得新机会", "【限时】玩游戏得3次机会", "限时玩游戏得新机会",
+                "【限时】开宝箱得2次机会", "【限时】开宝箱得3次机会"});
+        RELEASED_DEFAULTS.put("AntOrchard|AntOrchardTaskList", new String[]{
+                "逛助农好货得肥料", "钓鱼1次", "逛一逛闪购外卖", "逛好物最高得1500肥料"});
+        RELEASED_DEFAULTS.put("AntMember|MemberCreditSesameTaskList", new String[]{
+                "去玩小游戏"});
+    }
+
+    /**
+     * 释放原先预置拉黑的技术性不可自动化项（幂等，可重复执行）。
+     * <p>只移除**尚未被自动拉黑接管**的条目；一旦已被接管，就交给"解禁 / 永久拉黑"生命周期，不再干预。
+     */
+    public static void sweepReleasedDefaults() {
+        try {
+            boolean changed = false;
+            for (Map.Entry<String, String[]> entry : RELEASED_DEFAULTS.entrySet()) {
+                String[] keys = entry.getKey().split("\\|", 2);
+                if (keys.length < 2) {
+                    continue;
+                }
+                SelectModelField field = findTaskListField(keys[0], keys[1]);
+                if (field == null || field.getValue() == null) {
+                    continue;
+                }
+                for (String task : entry.getValue()) {
+                    if (field.getValue().contains(task) && !isAutoBlackTracked(keys[0], keys[1], task)) {
+                        field.remove(task);
+                        changed = true;
+                        Log.record("黑名单治理🧹[" + task + "]不再预置拉黑，改由自动拉黑机制判定");
+                    }
+                }
+            }
+            if (changed) {
+                ConfigV2.save(UserIdMap.getCurrentUid(), false);
+            }
+        } catch (Throwable t) {
+            Log.i(TAG, "sweepReleasedDefaults err:");
+            Log.printStackTrace(TAG, t);
+        }
+    }
+
+    /**
+     * 该任务是否已在自动拉黑记录中（观察期 / 已拉黑 / 已解禁待重试 / 永久拉黑）。
+     * <p>供各模块把"技术性不可自动化"的默认项作为**一次性种子**写入：
+     * 只在该任务从未进入过自动拉黑生命周期时写一次，之后完全交给
+     * "满 N 天自动解禁 / 重试满 N 次永久拉黑" 接管，不再由每日 init 反复补回。
+     */
+    public static boolean isAutoBlackTracked(String module, String listTitle, String taskTitle) {
+        try {
+            AutoBlackListMap.ensureLoaded();
+            return AutoBlackListMap.get(autoBlackKey(module, listTitle, taskTitle)) != null;
+        } catch (Throwable t) {
+            return false;
         }
     }
 

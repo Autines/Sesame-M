@@ -171,8 +171,9 @@ public class AntOcean extends ModelTask {
             //初始化AntOceanAntiepTaskListMap
             AntOceanAntiepTaskListMap.load();
             // 1. 定义黑名单（需要添加的任务）和白名单（需要移除的任务）
+            // 注：battleTile 类实验任务（如"随机任务：玩一玩得拼图"）不再预置拉黑，
+            // 交由自动拉黑机制判定（释放清单见 MessageUtil.sweepReleasedDefaults）
             Set<String> blackList = new HashSet<>();
-            blackList.add("随机任务：玩一玩得拼图");
             // 可继续添加更多黑名单任务
 
             Set<String> whiteList = new HashSet<>();// 从黑名单中移除该任务
@@ -236,8 +237,8 @@ public class AntOcean extends ModelTask {
             //初始化AntOceanFishBlackListMap
             AntOceanFishBlackListMap.load();
             // 1. 定义黑名单（需要添加的任务）和白名单（需要移除的任务）
+            // 注：小游戏类任务（如"玩一玩向僵尸开炮"）不再预置拉黑，交由自动拉黑机制判定
             blackList = new HashSet<>();
-            blackList.add("玩一玩向僵尸开炮");
             // 可继续添加更多黑名单任务
             whiteList = new HashSet<>();// 从黑名单中移除该任务
             //whiteList.add("逛一芝麻树");

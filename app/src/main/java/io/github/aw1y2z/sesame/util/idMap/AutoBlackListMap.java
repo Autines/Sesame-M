@@ -25,6 +25,8 @@ public class AutoBlackListMap {
 
     private static final Map<String, String> readOnlyIdMap = Collections.unmodifiableMap(idMap);
 
+    private static volatile boolean loaded = false;
+
     public static Map<String, String> getMap() {
         return readOnlyIdMap;
     }
@@ -45,8 +47,16 @@ public class AutoBlackListMap {
         idMap.remove(key);
     }
 
+    /** 首次访问时确保已从磁盘加载（记录只由模块自己写入，加载一次即可） */
+    public static void ensureLoaded() {
+        if (!loaded) {
+            load();
+        }
+    }
+
     public static synchronized void load() {
         idMap.clear();
+        loaded = true;
         try {
             String body = FileUtil.readFromFile(FileUtil.getAutoBlackListMapFile());
             if (!body.isEmpty()) {

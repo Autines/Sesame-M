@@ -489,13 +489,10 @@ public class AntFarm extends ModelTask {
 
             //初始化AntFarmDrawMachineTaskListMap
             AntFarmDrawMachineTaskListMap.load();
+            // 注：游戏/开宝箱类不再预置拉黑，交由自动拉黑机制判定；
+            // "伸出援手，点亮希望"（需真实捐赠）与"消耗饲料换机会"（需消耗资源）保留
             blackList = new HashSet<>();
-            blackList.add("【限时】玩游戏得新机会");
-            blackList.add("【限时】玩游戏得3次机会");
             blackList.add("伸出援手，点亮希望");
-            blackList.add("限时玩游戏得新机会");
-            blackList.add("【限时】开宝箱得2次机会");
-            blackList.add("【限时】开宝箱得3次机会");
             blackList.add("消耗饲料换机会");
 
             whiteList = new HashSet<>();// 从黑名单中移除该任务
