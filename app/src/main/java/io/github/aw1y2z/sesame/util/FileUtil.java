@@ -581,6 +581,15 @@ public class FileUtil {
         return file;
     }
     
+    /** 自动拉黑记录（含日期），用于"超期自动解禁重试" */
+    public static File getAutoBlackListMapFile() {
+        File file = new File(MAIN_DIRECTORY_FILE, "AutoBlackList.json");
+        if (file.exists() && file.isDirectory()) {
+            file.delete();
+        }
+        return file;
+    }
+    
     public static File getAntStallTaskListMapFile() {
         File file = new File(MAIN_DIRECTORY_FILE, "AntStallTask.json");
         if (file.exists() && file.isDirectory()) {

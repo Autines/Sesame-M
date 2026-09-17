@@ -769,6 +769,8 @@ public class Status {
     public static Boolean updateDay(Calendar nowCalendar) {
         if (TimeUtil.isLessThanSecondOfDays(INSTANCE.saveTime, nowCalendar.getTimeInMillis())) {
             Status.unload();
+            // 跨天：解禁超期的"自动拉黑"任务，给它们一次重试机会
+            MessageUtil.sweepExpiredBlackList();
             return true;
         }
         else {
