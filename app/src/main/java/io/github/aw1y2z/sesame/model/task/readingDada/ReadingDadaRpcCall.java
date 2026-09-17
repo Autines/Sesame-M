@@ -19,7 +19,7 @@ public class ReadingDadaRpcCall {
 
     public static String getQuestion(String activityId) {
         return ApplicationHook.requestString("com.alipay.reading.game.dada.openDailyAnswer.getQuestion",
-                "[{\"activityId\":\"" + activityId + "\",\"dadaVersion\":\"1.3.0\",\"version\":" + VERSION + "}]");
+                "[{\"activityId\":\"" + StringUtil.escapeJson(activityId) + "\",\"dadaVersion\":\"1.3.0\",\"version\":" + VERSION + "}]");
     }
 
 }
