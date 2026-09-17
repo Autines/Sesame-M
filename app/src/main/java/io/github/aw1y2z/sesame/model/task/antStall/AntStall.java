@@ -1184,7 +1184,9 @@ public class AntStall extends ModelTask {
             return;
         }
         try {
-            while (true) {
+            // 兜底：最多处理 50 个好友。服务端若反复返回同一个（或无法贴罚单的）好友，
+            // while(true) 会一直空转并不断发起 RPC；达到上限时不置「今日已贴完」标记，剩余额度留待下一轮
+            for (int i = 0; i < 50; i++) {
                 JSONObject jo = new JSONObject(AntStallRpcCall.nextTicketFriend());
                 if (!MessageUtil.checkResultCode(TAG, jo)) {
                     return;
@@ -1199,6 +1201,7 @@ public class AntStall extends ModelTask {
                 }
                 pasteTicket(jo.getString("friendUserId"));
             }
+            Log.i(TAG, "pasteTicket 达到单轮上限(50)，本轮停止，剩余额度留待下一轮");
         }
         catch (Throwable th) {
             Log.i(TAG, "pasteTicket err:");

@@ -1573,8 +1573,10 @@ public class AntSports extends ModelTask {
             addChildTask(new ChildModelTask(taskId, "TRAIN", () -> {
                 AntSportsRpcCall.queryClubRoom(roomId);
             }, gmtEnd));
-            int roomIdInt = Integer.parseInt(roomId.substring(2, 8));
-            Log.record("蹲点训练💪添加[" + roomIdInt + "号房]在[" + TimeUtil.getCommonDate(gmtEnd) + "]执行");
+            // 原先直接 substring(2, 8) + parseInt：roomId 长度不足或含非数字都会抛异常，连带整个模块出错；
+            // 这里只用于日志展示，取不到就原样打 roomId
+            String roomIdText = roomId.length() > 8 ? roomId.substring(2, 8) : roomId;
+            Log.record("蹲点训练💪添加[" + roomIdText + "号房]在[" + TimeUtil.getCommonDate(gmtEnd) + "]执行");
         }
     }
 

@@ -342,6 +342,8 @@ public class Status {
             count = 0; // 首次被浇水，次数初始化为0
         }
         INSTANCE.wateringFriendLogList.put(id, count + 1);
+        // 与 wateredFriendToday 对齐：不落盘的话进程被重启后「今日浇水」统计会丢失
+        save();
     }
     
     public static void getWateringFriendToday() {

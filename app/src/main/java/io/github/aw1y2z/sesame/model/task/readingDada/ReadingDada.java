@@ -25,13 +25,14 @@ public class ReadingDada {
             if (StringUtil.isEmpty(taskJumpUrl)) {
                 taskJumpUrl = bizInfo.getString("targetUrl");
             }
-            String activityId = taskJumpUrl.split("activityId%3D")[1].split("%26")[0];
-            String outBizId;
-            if (taskJumpUrl.contains("outBizId%3D")) {
-                outBizId = taskJumpUrl.split("outBizId%3D")[1].split("%26")[0];
-            } else {
-                outBizId = "";
+            // 原先用 split(...)[1] 直接取下标：链接里没有该参数、或参数正好在末尾（split 会丢掉末尾空串）
+            // 都会抛 ArrayIndexOutOfBoundsException；getSubString 取不到时返回 ""
+            String activityId = StringUtil.getSubString(taskJumpUrl, "activityId%3D", "%26");
+            if (StringUtil.isEmpty(activityId)) {
+                Log.record("答题跳过：跳转链接里没有 activityId");
+                return false;
             }
+            String outBizId = StringUtil.getSubString(taskJumpUrl, "outBizId%3D", "%26");
             String s = ReadingDadaRpcCall.getQuestion(activityId);
             JSONObject jo = new JSONObject(s);
             if ("200".equals(jo.getString("resultCode"))) {

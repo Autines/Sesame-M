@@ -1043,7 +1043,8 @@ public class AntOcean extends ModelTask {
                 int holdsNum = oceanPropVO.getInt("holdsNum");
                 int pageNum = 0;
                 boolean hasMore = true;
-                while (holdsNum > 0 && hasMore) {
+                // 兜底：最多翻 50 页。原先只看 hasMore，服务端若恒返回 true 且每页都没消耗，会无限翻页发 RPC
+                while (holdsNum > 0 && hasMore && pageNum < 50) {
                     // 查询鱼列表的JSON数据
                     pageNum++;
                     jo = new JSONObject(AntOceanRpcCall.queryFishList(pageNum));
@@ -1058,7 +1059,12 @@ public class AntOcean extends ModelTask {
                         return;
                     }
                     JSONArray fishVOS = jo.getJSONArray("fishVOS");
-                    holdsNum -= useUniversalPiece(fishVOS, holdsNum);
+                    int used = useUniversalPiece(fishVOS, holdsNum);
+                    if (used <= 0) {
+                        // 本页没有可用拼图（或替换失败）：持有数不会减少，继续翻页也是空转，直接结束
+                        break;
+                    }
+                    holdsNum -= used;
                 }
             }
         } catch (Throwable t) {

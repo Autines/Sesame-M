@@ -52,6 +52,20 @@ public class AntBookRead extends ModelTask {
         }
     }
 
+    /**
+     * 从文案里取数字：服务端文案一变，取到的就是空串或非数字，原先直接 Integer.parseInt 会抛
+     * NumberFormatException 并中断整个模块；这里改为返回 -1（调用方按「取不到」处理）。
+     */
+    private static int parseOrMinusOne(String text, String left, String right) {
+        String value = StringUtil.getSubString(text, left, right).trim();
+        try {
+            return Integer.parseInt(value);
+        } catch (Throwable t) {
+            Log.i(TAG, "解析数字失败[" + left + ".." + right + "]: " + text);
+            return -1;
+        }
+    }
+
     private static void queryTaskCenterPage() {
         try {
             String s = AntBookReadRpcCall.queryTaskCenterPage();
@@ -59,7 +73,7 @@ public class AntBookRead extends ModelTask {
             if (jo.optBoolean("success")) {
                 JSONObject data = jo.getJSONObject("data");
                 String todayPlayDurationText = data.getJSONObject("benefitAggBlock").getString("todayPlayDurationText");
-                int PlayDuration = Integer.parseInt(StringUtil.getSubString(todayPlayDurationText, "今日听读时长", "分钟"));
+                int PlayDuration = parseOrMinusOne(todayPlayDurationText, "今日听读时长", "分钟");
                 if (PlayDuration < 450) {
                     jo = new JSONObject(AntBookReadRpcCall.queryHomePage());
                     if (jo.optBoolean("success")) {
@@ -81,7 +95,7 @@ public class AntBookRead extends ModelTask {
                                     if (jo.optBoolean("success")) {
                                         String tips = jo.getJSONObject("data").getString("tips");
                                         if (tips.contains("已得")) {
-                                            energy = Integer.parseInt(StringUtil.getSubString(tips, "已得", "g"));
+                                            energy = parseOrMinusOne(tips, "已得", "g");
                                         }
                                         Log.forest("阅读书籍📚[" + name + "]#累计能量" + energy + "g");
                                     }
