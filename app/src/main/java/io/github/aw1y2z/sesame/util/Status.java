@@ -204,8 +204,7 @@ public class Status {
                 }
             }
         } catch (Exception e) {
-            Log.i(TAG, "获取wateredFriendList配置失败:");
-            Log.printStackTrace(TAG, e);
+            Log.err(TAG, "获取wateredFriendList配置失败:", e);
         }
         
         // 6. 如果配置存在且不为空，输出预计统计和差别
@@ -271,8 +270,7 @@ public class Status {
                 }
             }
         } catch (Exception e) {
-            Log.i(TAG, "获取wateredFriendList配置失败:");
-            Log.printStackTrace(TAG, e);
+            Log.err(TAG, "获取wateredFriendList配置失败:", e);
         }
 
         // 3. 如果配置为空，创建一个新的LinkedHashMap
@@ -331,8 +329,7 @@ public class Status {
                 }
             }
         } catch (Exception e) {
-            Log.i(TAG, "保存wateredFriendList配置失败:");
-            Log.printStackTrace(TAG, e);
+            Log.err(TAG, "保存wateredFriendList配置失败:", e);
         }
     }
     
@@ -384,8 +381,7 @@ public class Status {
                 }
             }
         } catch (Exception e) {
-            Log.i(TAG, "获取waterFriendList配置失败:");
-            Log.printStackTrace(TAG, e);
+            Log.err(TAG, "获取waterFriendList配置失败:", e);
         }
         
         // 6. 如果配置存在且不为空，输出预计统计和差别

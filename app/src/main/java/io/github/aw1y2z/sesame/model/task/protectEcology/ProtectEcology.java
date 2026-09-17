@@ -158,8 +158,7 @@ public class ProtectEcology extends ModelTask {
             
         }
         catch (Throwable t) {
-            Log.i(TAG, "initForest err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initForest err:", t);
         }
     }
     
@@ -182,8 +181,7 @@ public class ProtectEcology extends ModelTask {
             BeachIdMap.save();
         }
         catch (Throwable t) {
-            Log.i(TAG, "initOcean err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initOcean err:", t);
         }
     }
     
@@ -203,8 +201,7 @@ public class ProtectEcology extends ModelTask {
             CooperationIdMap.save(userId);
         }
         catch (Throwable t) {
-            Log.i(TAG, "cooperateWater err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "cooperateWater err:", t);
         }
     }
     
@@ -227,8 +224,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryCooperatePlant err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryCooperatePlant err:", t);
         }
     }
     
@@ -242,8 +238,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "cooperateWater err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "cooperateWater err:", t);
         }
         return false;
     }
@@ -277,8 +272,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "getEnergySummation err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getEnergySummation err:", t);
         }
         return 0;
     }
@@ -354,8 +348,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryTreeItemsForExchange err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTreeItemsForExchange err:", t);
         }
         return null;
     }
@@ -401,8 +394,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryTreeForExchange err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTreeForExchange err:", t);
         }
         return exchangeableTree;
     }
@@ -426,8 +418,7 @@ public class ProtectEcology extends ModelTask {
             return true;
         }
         catch (Throwable t) {
-            Log.i(TAG, "exchangeTree err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "exchangeTree err:", t);
         }
         return false;
     }
@@ -442,8 +433,7 @@ public class ProtectEcology extends ModelTask {
             Log.record("生态保护🏕️点亮[" + jo.getString("name") + "]");
         }
         catch (Throwable t) {
-            Log.i(TAG, "applyGoldAnimalCert err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "applyGoldAnimalCert err:", t);
         }
     }
     
@@ -476,8 +466,7 @@ public class ProtectEcology extends ModelTask {
             NewAncientTreeIdMap.save();
         }
         catch (Throwable t) {
-            Log.i(TAG, "protectCarbon err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "protectCarbon err:", t);
         }
     }
     
@@ -516,8 +505,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "marathonQueryActivity err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "marathonQueryActivity err:", t);
         }
     }
     
@@ -556,8 +544,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "carbonQueryActivity err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "carbonQueryActivity err:", t);
         }
     }
     
@@ -577,8 +564,7 @@ public class ProtectEcology extends ModelTask {
             return true;
         }
         catch (Throwable t) {
-            Log.i(TAG, "carbonCharityActivity err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "carbonCharityActivity err:", t);
         }
         return false;
     }
@@ -591,8 +577,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryCultivationList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryCultivationList err:", t);
         }
         return null;
     }
@@ -631,8 +616,7 @@ public class ProtectEcology extends ModelTask {
                 }
             }
             catch (Throwable t) {
-                Log.i(TAG, "protectReserveMinNum err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "protectReserveMinNum err:", t);
             }
         }
     }
@@ -665,8 +649,7 @@ public class ProtectEcology extends ModelTask {
                 }
             }
             catch (Throwable t) {
-                Log.i(TAG, "protectBeachMinNum err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "protectBeachMinNum err:", t);
             }
         }
         ;
@@ -698,8 +681,7 @@ public class ProtectEcology extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "protectBeach err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "protectBeach err:", t);
         }
     }
     
@@ -725,8 +707,7 @@ public class ProtectEcology extends ModelTask {
             return oceanExchangeTree(cultivationCode, projectCode, cultivationName);
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryCultivationDetail err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryCultivationDetail err:", t);
         }
         return false;
     }
@@ -750,8 +731,7 @@ public class ProtectEcology extends ModelTask {
             return true;
         }
         catch (Throwable t) {
-            Log.i(TAG, "oceanExchangeTree err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "oceanExchangeTree err:", t);
         }
         return false;
     }

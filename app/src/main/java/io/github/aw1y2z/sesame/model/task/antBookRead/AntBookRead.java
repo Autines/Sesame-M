@@ -47,8 +47,7 @@ public class AntBookRead extends ModelTask {
             queryTask();
             queryTreasureBox();
         } catch (Throwable t) {
-            Log.i(TAG, "start.run err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "start.run err:", t);
         }
     }
 
@@ -114,8 +113,7 @@ public class AntBookRead extends ModelTask {
                 Log.i(s);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryTaskCenterPage err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTaskCenterPage err:", t);
         }
     }
 
@@ -175,8 +173,7 @@ public class AntBookRead extends ModelTask {
                 Log.i(s);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTask err:", t);
         }
     }
 
@@ -189,8 +186,7 @@ public class AntBookRead extends ModelTask {
                 Log.other("阅读任务📖[" + name + "]#" + coinNum);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "collectTaskPrize err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collectTaskPrize err:", t);
         }
     }
 
@@ -202,8 +198,7 @@ public class AntBookRead extends ModelTask {
 
             }
         } catch (Throwable t) {
-            Log.i(TAG, "taskFinish err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "taskFinish err:", t);
         }
     }
 
@@ -225,8 +220,7 @@ public class AntBookRead extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryTreasureBox err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTreasureBox err:", t);
         }
     }
 }

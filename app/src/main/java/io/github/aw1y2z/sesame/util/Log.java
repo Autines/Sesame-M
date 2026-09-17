@@ -276,6 +276,19 @@ public class Log {
         writeError(tag + ", " + android.util.Log.getStackTraceString(t));
     }
 
+    /**
+     * 记录异常：一次调用同时写异常日志与运行日志，替代成对出现的
+     * {@code Log.i(TAG, "xxx err:"); Log.printStackTrace(TAG, t);}。
+     * <p>原先那种写法会占两行、只写其中一行时不易察觉，且运行日志里同一个异常会出现两行。
+     *
+     * @param tag 标签（通常传 TAG）
+     * @param msg 说明，如 "answerQuestion err:"
+     * @param t   异常
+     */
+    public static void err(String tag, String msg, Throwable t) {
+        writeError(tag + ", " + msg + "\n" + android.util.Log.getStackTraceString(t));
+    }
+
     public static String getLogFileName(String logName) {
         SimpleDateFormat sdf = DATE_FORMAT_THREAD_LOCAL.get();
         if (sdf == null) {

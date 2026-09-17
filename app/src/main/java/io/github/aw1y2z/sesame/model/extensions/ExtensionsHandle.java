@@ -99,8 +99,7 @@ public class ExtensionsHandle {
                 queryTreeForExchange(projectId);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "getTreeItems err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getTreeItems err:", t);
         }
     }
 
@@ -121,8 +120,7 @@ public class ExtensionsHandle {
             }
             Log.forest("新树上苗🌱[" + region + "-" + treeName + "]#" + currentBudget + "株-" + tips);
         } catch (Throwable t) {
-            Log.i(TAG, "queryTreeForExchange err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTreeForExchange err:", t);
         }
     }
 
@@ -143,8 +141,7 @@ public class ExtensionsHandle {
                 TimeUtil.sleep(100);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "getTreeItems err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getTreeItems err:", t);
         }
     }
 
@@ -158,8 +155,7 @@ public class ExtensionsHandle {
                 Log.forest("树苗查询🌱[" + region + "-" + treeName + "]#剩余:" + currentBudget);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryTreeForExchange err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTreeForExchange err:", t);
         }
     }
 
@@ -181,8 +177,7 @@ public class ExtensionsHandle {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryAreaTrees err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryAreaTrees err:", t);
         }
     }
 
@@ -206,8 +201,7 @@ public class ExtensionsHandle {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "getUnlockTreeItems err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getUnlockTreeItems err:", t);
         }
     }
 

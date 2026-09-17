@@ -418,8 +418,7 @@ public class AntFarm extends ModelTask {
             animalSleepAndWake();
 
         } catch (Throwable t) {
-            Log.i(TAG, "AntFarm.start.run err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "AntFarm.start.run err:", t);
         }
     }
 
@@ -565,8 +564,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "initAntFarmTaskListMap err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initAntFarmTaskListMap err:", t);
         }
     }
 
@@ -673,8 +671,7 @@ public class AntFarm extends ModelTask {
             }
             return jo;
         } catch (Throwable t) {
-            Log.i(TAG, "enterFarm err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "enterFarm err:", t);
         }
         return null;
     }
@@ -787,8 +784,7 @@ public class AntFarm extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "animalSleep err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "animalSleep err:", t);
         }
         return false;
     }
@@ -801,8 +797,7 @@ public class AntFarm extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "animalWakeUp err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "animalWakeUp err:", t);
         }
         return false;
     }
@@ -812,8 +807,7 @@ public class AntFarm extends ModelTask {
             String s = AntFarmRpcCall.syncAnimalStatus(farmId);
             parseSyncAnimalStatusResponse(s);
         } catch (Throwable t) {
-            Log.i(TAG, "syncAnimalStatus err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "syncAnimalStatus err:", t);
         }
     }
 
@@ -845,8 +839,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "syncAnimalStatusAtOtherFarm err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "syncAnimalStatusAtOtherFarm err:", t);
         }
     }
 
@@ -864,8 +857,7 @@ public class AntFarm extends ModelTask {
                 rewardList = null;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "rewardFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "rewardFriend err:", t);
         }
     }
 
@@ -880,8 +872,7 @@ public class AntFarm extends ModelTask {
             // 这里不需要加
             // add2FoodStock((int)foodHaveStolen);
         } catch (Throwable t) {
-            Log.i(TAG, "recallAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "recallAnimal err:", t);
         }
     }
 
@@ -923,8 +914,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "sendBackAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "sendBackAnimal err:", t);
         }
     }
 
@@ -969,8 +959,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveToolTaskReward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveToolTaskReward err:", t);
         }
     }
 
@@ -984,8 +973,7 @@ public class AntFarm extends ModelTask {
             harvestBenevolenceScore = jo.getDouble("finalBenevolenceScore");
             Log.farm("收取鸡蛋🥚[" + harvest + "颗]#剩余" + harvestBenevolenceScore + "颗");
         } catch (Throwable t) {
-            Log.i(TAG, "harvestProduce err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "harvestProduce err:", t);
         }
     }
 
@@ -1025,8 +1013,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "donation err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "donation err:", t);
         }
     }
 
@@ -1086,8 +1073,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "donation err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "donation err:", t);
         }
     }
 
@@ -1118,8 +1104,7 @@ public class AntFarm extends ModelTask {
             Log.farm("公益捐赠❤️[捐爱心蛋:" + activityName + "]捐赠" + donationAmount + "颗爱心蛋#累计捐赠" + donationTimesStat + "次");
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "donation err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "donation err:", t);
         }
         return false;
     }
@@ -1348,8 +1333,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "competition err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "competition err:", t);
         }
     }
 
@@ -1449,8 +1433,7 @@ public class AntFarm extends ModelTask {
             }
 
         } catch (Throwable t) {
-            Log.i(TAG, "stealRank err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "stealRank err:", t);
         }
     }
 
@@ -1521,8 +1504,7 @@ public class AntFarm extends ModelTask {
                 TimeUtil.sleep(500);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveReward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveReward err:", t);
         }
     }
 
@@ -1550,8 +1532,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("捐蛋排位🥚排位情况["+beforeLevelName+"]("+beforeStarNum + ")→["+afterLevelName+"](" + afterStarNum + ")(+"+starChange+")");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveDonationCompetitionProgressAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveDonationCompetitionProgressAward err:", t);
         }
     }
 
@@ -1573,8 +1554,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "PreviousCompetitionInfo err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "PreviousCompetitionInfo err:", t);
         }
     }
 
@@ -1586,8 +1566,7 @@ public class AntFarm extends ModelTask {
             }
             return jo.optInt("userProjectDonationNum");
         } catch (Throwable t) {
-            Log.i(TAG, "getProjectDonationNum err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getProjectDonationNum err:", t);
         }
         return 0;
     }
@@ -1612,8 +1591,7 @@ public class AntFarm extends ModelTask {
             }
             Status.flagToday("farm::donation");
         } catch (Throwable t) {
-            Log.i(TAG, "canDonationToday err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "canDonationToday err:", t);
         }
         return false;
     }
@@ -1655,8 +1633,7 @@ public class AntFarm extends ModelTask {
                 }
             } while (true);
         } catch (Throwable t) {
-            Log.i(TAG, "recordFarmGame err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "recordFarmGame err:", t);
         }
     }
 
@@ -1694,8 +1671,7 @@ public class AntFarm extends ModelTask {
                 TimeUtil.sleep(1000);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "listFarmTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "listFarmTask err:", t);
         }
     }
 
@@ -1732,8 +1708,7 @@ public class AntFarm extends ModelTask {
                 return false;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "sign err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "sign err:", t);
         } finally {
             if (signed) {
                 Status.flagToday("farm::sign");
@@ -1765,8 +1740,7 @@ public class AntFarm extends ModelTask {
                 Log.i(jo.toString());
             }
         } catch (Throwable t) {
-            Log.i(TAG, "doVideoTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doVideoTask err:", t);
         }
         return false;
     }
@@ -1798,8 +1772,7 @@ public class AntFarm extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "doAnswerTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doAnswerTask err:", t);
         }
         return false;
     }
@@ -1821,8 +1794,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "saveAnswerList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "saveAnswerList err:", t);
         }
     }
 
@@ -1853,8 +1825,7 @@ public class AntFarm extends ModelTask {
                 //Log.record("任务执行失败或跳过: " + title);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "doFarmTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doFarmTask err:", t);
         }
         return isDoTask;
     }
@@ -1882,8 +1853,7 @@ public class AntFarm extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveFarmTaskAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveFarmTaskAward err:", t);
         }
         return false;
     }
@@ -1914,8 +1884,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "feedAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "feedAnimal err:", t);
         } finally {
             long updateTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(10);
             String taskId = "UPDATE|FA|" + farmId;
@@ -1940,8 +1909,7 @@ public class AntFarm extends ModelTask {
                 farmTools[i].toolHoldLimit = jo.optInt("toolHoldLimit", 20);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "listFarmTool err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "listFarmTool err:", t);
         }
     }
 
@@ -2004,8 +1972,7 @@ public class AntFarm extends ModelTask {
                 break;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "useFarmTool err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "useFarmTool err:", t);
         }
         return false;
     }
@@ -2059,8 +2026,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "feedFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "feedFriend err:", t);
         }
     }
 
@@ -2090,8 +2056,7 @@ public class AntFarm extends ModelTask {
                 Status.feedFriendToday(AntFarmRpcCall.farmId2UserId(friendFarmId));
             }
         } catch (Throwable t) {
-            Log.i(TAG, "feedFriendAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "feedFriendAnimal err:", t);
         }
     }
 
@@ -2111,8 +2076,7 @@ public class AntFarm extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "feedFriendAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "feedFriendAnimal err:", t);
         }
         return false;
     }
@@ -2171,8 +2135,7 @@ public class AntFarm extends ModelTask {
             } while (hasNext);
             Log.record("饲料剩余[" + foodStock + "g]");
         } catch (Throwable t) {
-            Log.i(TAG, "notifyFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "notifyFriend err:", t);
         }
     }
 
@@ -2193,8 +2156,7 @@ public class AntFarm extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "notifyFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "notifyFriend err:", t);
         }
         return false;
     }
@@ -2272,8 +2234,7 @@ public class AntFarm extends ModelTask {
                 animals[i] = animal;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "parseSyncAnimalStatusResponse err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "parseSyncAnimalStatusResponse err:", t);
         }
     }
 
@@ -2320,8 +2281,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "collectDailyFoodMaterial err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collectDailyFoodMaterial err:", t);
         }
     }
 
@@ -2340,8 +2300,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "collectDailyLimitedFoodMaterial err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collectDailyLimitedFoodMaterial err:", t);
         }
     }
 
@@ -2363,8 +2322,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "cook err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "cook err:", t);
         }
     }
 
@@ -2393,8 +2351,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "useFarmFood err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "useFarmFood err:", t);
         }
     }
 
@@ -2421,8 +2378,7 @@ public class AntFarm extends ModelTask {
             }
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "useFarmFood err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "useFarmFood err:", t);
         }
         return false;
     }
@@ -2456,8 +2412,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "drawLotteryPlus err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "drawLotteryPlus err:", t);
         }
     }
 
@@ -2505,8 +2460,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "visitFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "visitFriend err:", t);
         }
     }
 
@@ -2518,8 +2472,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("收取麦子🌾[" + receiveFoodNum + "g]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "acceptGift err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "acceptGift err:", t);
         }
     }
 
@@ -2559,8 +2512,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryChickenDiary err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryChickenDiary err:", t);
         }
     }
 
@@ -2582,8 +2534,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryChickenDiaryList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryChickenDiaryList err:", t);
         }
     }
 
@@ -2627,8 +2578,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "visitAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "visitAnimal err:", t);
         }
     }
 
@@ -2670,8 +2620,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "queryOptionalPlay err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "queryOptionalPlay err:", th);
         }
     }
 
@@ -2695,8 +2644,7 @@ public class AntFarm extends ModelTask {
             }
             queryOptionalPlay();
         } catch (Throwable t) {
-            Log.i(TAG, "gameCenterBuyMallItem err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "gameCenterBuyMallItem err:", t);
         }
     }
 
@@ -2709,8 +2657,7 @@ public class AntFarm extends ModelTask {
                 mallItemSimpleList = jo.optJSONArray("mallItemSimpleList");
             }
         } catch (Throwable th) {
-            Log.i(TAG, "getGameCenterMallItemList err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getGameCenterMallItemList err:", th);
         }
         return mallItemSimpleList;
     }
@@ -2727,8 +2674,7 @@ public class AntFarm extends ModelTask {
                 getSkuInfoByItemInfoVO(itemInfoVO);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "getAllSkuInfo err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getAllSkuInfo err:", th);
         }
     }
 
@@ -2744,8 +2690,7 @@ public class AntFarm extends ModelTask {
             JSONObject spuItemInfoVo = jo.optJSONObject("spuItemInfoVO");
             getSkuInfoByItemInfoVO(spuItemInfoVo);
         } catch (Throwable th) {
-            Log.i(TAG, "getSkuInfoBySpuId err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getSkuInfoBySpuId err:", th);
         }
     }
 
@@ -2773,8 +2718,7 @@ public class AntFarm extends ModelTask {
             }
             GameCenterMallItemMap.save(UserIdMap.getCurrentUid());
         } catch (Throwable th) {
-            Log.i(TAG, "getSkuInfoByItemInfoVO err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getSkuInfoByItemInfoVO err:", th);
         }
     }
 
@@ -2806,8 +2750,7 @@ public class AntFarm extends ModelTask {
             }
             getSkuInfoBySpuId(spuId);
         } catch (Throwable th) {
-            Log.i(TAG, "BuyMallItem err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "BuyMallItem err:", th);
         }
         return false;
     }
@@ -2825,8 +2768,7 @@ public class AntFarm extends ModelTask {
                 return false;
             }
         } catch (Throwable th) {
-            Log.i(TAG, "BuyMallItem err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "BuyMallItem err:", th);
         }
         return false;
     }
@@ -2843,8 +2785,7 @@ public class AntFarm extends ModelTask {
             }
             return MessageUtil.checkResultCode(TAG, jo);
         } catch (Throwable th) {
-            Log.i(TAG, "BuyMallItem err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "BuyMallItem err:", th);
         }
         return false;
     }
@@ -2886,8 +2827,7 @@ public class AntFarm extends ModelTask {
                                     }
                                 }
                             } catch (Throwable t) {
-                                Log.i(TAG, "drawMachine err:");
-                                Log.printStackTrace(TAG, t);
+                                Log.err(TAG, "drawMachine err:", t);
                             }
 
                         }
@@ -2912,8 +2852,7 @@ public class AntFarm extends ModelTask {
                 TimeUtil.sleep(5000);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "drawMachine err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "drawMachine err:", t);
         }
     }
 
@@ -2980,8 +2919,7 @@ public class AntFarm extends ModelTask {
                 receiveFarmDrawTaskAward(taskId, title, awardType, taskSceneCode);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "doFarmDrawActivityTimeTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doFarmDrawActivityTimeTask err:", t);
         }
     }
 
@@ -2992,8 +2930,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("装扮抽奖🎖️领取[" + title + "]奖励");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveFarmDrawTimesTaskAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveFarmDrawTimesTaskAward err:", t);
         }
     }
 
@@ -3009,8 +2946,7 @@ public class AntFarm extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "drawMachine err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "drawMachine err:", t);
         }
         return false;
     }
@@ -3245,8 +3181,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("没有足够的小鸡可以雇佣");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "hireAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "hireAnimal err:", t);
         } finally {
             long updateTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(10);
             String taskId = "UPDATE|HIRE|" + ownerFarmId;
@@ -3269,8 +3204,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "autoHireAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "autoHireAnimal err:", t);
         }
     }
 
@@ -3297,8 +3231,7 @@ public class AntFarm extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "hireAnimalAction err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "hireAnimalAction err:", t);
         }
         return false;
     }
@@ -3396,8 +3329,7 @@ public class AntFarm extends ModelTask {
             }
 
         } catch (Throwable t) {
-            Log.i(TAG, "drawGameCenterAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "drawGameCenterAward err:", t);
         }
     }
 
@@ -3436,8 +3368,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("装扮焕新✨[" + jo.getString("name") + "]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "ornamentsDressUp err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "ornamentsDressUp err:", t);
         }
     }
 
@@ -3449,8 +3380,7 @@ public class AntFarm extends ModelTask {
             JSONObject jo = new JSONObject(AntFarmRpcCall.saveOrnaments(animalId, farmId, ornamentsSets));
             return MessageUtil.checkMemo(TAG, jo);
         } catch (Throwable t) {
-            Log.i(TAG, "saveOrnaments err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "saveOrnaments err:", t);
         }
         return false;
     }
@@ -3466,8 +3396,7 @@ public class AntFarm extends ModelTask {
                 ornamentsSets.append(set.getString("id"));
             }
         } catch (Throwable t) {
-            Log.i(TAG, "getOrnamentsSets err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getOrnamentsSets err:", t);
         }
         return ornamentsSets.toString();
     }
@@ -3666,8 +3595,7 @@ public class AntFarm extends ModelTask {
                 familyShareToFriends(ownerGroupId, familyUserIds, notInviteList);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "family err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "family err:", t);
         }
     }
 
@@ -3688,8 +3616,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("家庭任务🏡[使用顶梁柱特权] " + assignConfig.getString("assignDesc"));
             }
         } catch (Throwable t) {
-            Log.i(TAG, "assignFamilyMember err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "assignFamilyMember err:", t);
         }
     }
 
@@ -3740,8 +3667,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("家庭任务🏠帮喂好友🥣[" + maskName + "]的小鸡180g #剩余" + foodStockAfter + "g");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "familyFeedFriendAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "familyFeedFriendAnimal err:", t);
         }
     }
 
@@ -3768,8 +3694,7 @@ public class AntFarm extends ModelTask {
                 syncFamilyStatus(groupId);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "familyEatTogether err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "familyEatTogether err:", t);
         }
     }
 
@@ -3940,8 +3865,7 @@ public class AntFarm extends ModelTask {
                 Status.flagToday("antFarm::deliverMsgSend");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "deliverMsgSend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "deliverMsgSend err:", t);
         }
     }
 
@@ -3990,8 +3914,7 @@ public class AntFarm extends ModelTask {
             }
             Status.flagToday("antFarm::familyShareToFriends");
         } catch (Throwable t) {
-            Log.i(TAG, "familyShareToFriends err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "familyShareToFriends err:", t);
         }
     }
 
@@ -4052,8 +3975,7 @@ public class AntFarm extends ModelTask {
                 return jo;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "enterFamily err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "enterFamily err:", t);
         }
         return null;
     }
@@ -4067,8 +3989,7 @@ public class AntFarm extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "familySleep err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "familySleep err:", t);
         }
         return false;
     }
@@ -4081,8 +4002,7 @@ public class AntFarm extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "familyWakeUp err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "familyWakeUp err:", t);
         }
         return false;
     }
@@ -4105,8 +4025,7 @@ public class AntFarm extends ModelTask {
                 receiveFamilyAward(rightId, awardName, count);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "familyAwardList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "familyAwardList err:", t);
         }
     }
 
@@ -4117,8 +4036,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("亲密家庭🏠领取奖励[" + awardName + "*" + count + "]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "familyAwardList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "familyAwardList err:", t);
         }
     }
 
@@ -4129,8 +4047,7 @@ public class AntFarm extends ModelTask {
                 Log.farm("亲密家庭🏠提交任务[" + title + "]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "familyReceiveFarmTaskAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "familyReceiveFarmTaskAward err:", t);
         }
     }
 
@@ -4161,8 +4078,7 @@ public class AntFarm extends ModelTask {
                 return result;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryRecentFarmFood err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryRecentFarmFood err:", t);
         }
         return null;
     }
@@ -4176,8 +4092,7 @@ public class AntFarm extends ModelTask {
             JSONObject jo = new JSONObject(AntFarmRpcCall.syncFamilyStatus(groupId, "INTIMACY_VALUE", ownerUserId));
             MessageUtil.checkMemo(TAG, jo);
         } catch (Throwable t) {
-            Log.i(TAG, "syncFamilyStatus err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "syncFamilyStatus err:", t);
         }
     }
 

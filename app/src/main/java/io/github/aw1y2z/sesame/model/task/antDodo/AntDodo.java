@@ -129,8 +129,7 @@ public class AntDodo extends ModelTask {
                 giftToFriend();
             }
         } catch (Throwable t) {
-            Log.i(TAG, "AntoDodo.start.run err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "AntoDodo.start.run err:", t);
         }
     }
 
@@ -211,8 +210,7 @@ public class AntDodo extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "initAntDodoTaskListMap err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initAntDodoTaskListMap err:", t);
         }
     }
 
@@ -231,8 +229,7 @@ public class AntDodo extends ModelTask {
             String endDate = jo.getString("endDate") + " 23:59:59";
             return Log.timeToStamp(endDate);
         } catch (Throwable t) {
-            Log.i(TAG, "getEndDateTime err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getEndDateTime err:", t);
         }
         return 0;
     }
@@ -257,8 +254,7 @@ public class AntDodo extends ModelTask {
                 Status.flagToday("dodo::collect");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "collect err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collect err:", t);
         }
     }
 
@@ -290,8 +286,7 @@ public class AntDodo extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "collectAnimalCard err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collectAnimalCard err:", t);
         }
     }
 
@@ -333,8 +328,7 @@ public class AntDodo extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "taskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "taskList err:", t);
         }
     }
 
@@ -352,8 +346,7 @@ public class AntDodo extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "finishTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "finishTask err:", t);
         }
         return false;
     }
@@ -366,8 +359,7 @@ public class AntDodo extends ModelTask {
                 Log.forest("神奇物种🦕领取[" + taskTitle + "]奖励");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveTaskAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveTaskAward err:", t);
         }
     }
 
@@ -412,8 +404,7 @@ public class AntDodo extends ModelTask {
                 break;
             } while (true);
         } catch (Throwable th) {
-            Log.i(TAG, "propList err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "propList err:", th);
         }
     }
 
@@ -445,8 +436,7 @@ public class AntDodo extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "usePropUniversalCard err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "usePropUniversalCard err:", t);
         }
         return false;
     }
@@ -520,8 +510,7 @@ public class AntDodo extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryUniversalAnimal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryUniversalAnimal err:", t);
         }
         return animal;
     }
@@ -541,8 +530,7 @@ public class AntDodo extends ModelTask {
             checkAnimalAndGiftToFriend(animal);
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "consumeProp err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "consumeProp err:", t);
         }
         return false;
     }
@@ -560,8 +548,7 @@ public class AntDodo extends ModelTask {
             checkAnimalAndGiftToFriend(animal);
             return true;
         } catch (Throwable th) {
-            Log.i(TAG, "consumeProp err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "consumeProp err:", th);
         }
         return false;
     }
@@ -608,8 +595,7 @@ public class AntDodo extends ModelTask {
 
             }
         } catch (Throwable t) {
-            Log.i(TAG, "collectHelpFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collectHelpFriend err:", t);
         }
     }
 
@@ -658,8 +644,7 @@ public class AntDodo extends ModelTask {
                 }
             } while (hasMore);
         } catch (Throwable t) {
-            Log.i(TAG, "generateBookMedal err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "generateBookMedal err:", t);
         }
     }
 
@@ -696,8 +681,7 @@ public class AntDodo extends ModelTask {
             }
             giftToFriend(animal, targetUserId);
         } catch (Throwable t) {
-            Log.i(TAG, "checkAnimalAndGiftToFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "checkAnimalAndGiftToFriend err:", t);
         }
     }
 
@@ -747,8 +731,7 @@ public class AntDodo extends ModelTask {
                 }
             } while (hasMore);
         } catch (Throwable t) {
-            Log.i(TAG, "giftToFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "giftToFriend err:", t);
         }
     }
 
@@ -781,8 +764,7 @@ public class AntDodo extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "giftToFriend err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "giftToFriend err:", th);
         }
     }
 
@@ -799,8 +781,7 @@ public class AntDodo extends ModelTask {
                 return true;
             }
         } catch (Throwable th) {
-            Log.i(TAG, "giftToFriend err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "giftToFriend err:", th);
         }
         return false;
     }

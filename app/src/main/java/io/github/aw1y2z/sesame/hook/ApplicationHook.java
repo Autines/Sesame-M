@@ -226,8 +226,7 @@ public class ApplicationHook extends XposedModule {
                 XHelpers.findAndHookMethod("com.alipay.mobile.nebulaappproxy.api.rpc.H5AppRpcUpdate", classLoader, "matchVersion", classLoader.loadClass(ClassUtil.H5PAGE_NAME), Map.class, String.class, XC_MethodReplacement.returnConstant(false));
                 Log.i(TAG, "hook matchVersion successfully");
             } catch (Throwable t) {
-                Log.i(TAG, "hook matchVersion err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "hook matchVersion err:", t);
             }
             try {
                 XHelpers.findAndHookMethod("com.alipay.mobile.quinox.LauncherActivity", classLoader, "onResume", new XC_MethodHook() {
@@ -268,8 +267,7 @@ public class ApplicationHook extends XposedModule {
                 });
                 Log.i(TAG, "hook login successfully");
             } catch (Throwable t) {
-                Log.i(TAG, "hook login err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "hook login err:", t);
             }
             try {
                 XHelpers.findAndHookMethod("android.app.Service", classLoader, "onCreate", new XC_MethodHook() {
@@ -382,8 +380,7 @@ public class ApplicationHook extends XposedModule {
                                             }
                                         }
                                     } catch (Exception e) {
-                                        Log.i(TAG, "execAtTime err:");
-                                        Log.printStackTrace(TAG, e);
+                                        Log.err(TAG, "execAtTime err:", e);
                                     }
 
                                     execDelayedHandler(checkInterval);
@@ -404,8 +401,7 @@ public class ApplicationHook extends XposedModule {
                 });
                 Log.i(TAG, "hook service onCreate successfully");
             } catch (Throwable t) {
-                Log.i(TAG, "hook service onCreate err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "hook service onCreate err:", t);
             }
             try {
                 XHelpers.findAndHookMethod("android.app.Service", classLoader, "onDestroy", new XC_MethodHook() {
@@ -424,33 +420,28 @@ public class ApplicationHook extends XposedModule {
                     }
                 });
             } catch (Throwable t) {
-                Log.i(TAG, "hook service onDestroy err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "hook service onDestroy err:", t);
             }
             try {
                 XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackground", XC_MethodReplacement.returnConstant(false));
             } catch (Throwable t) {
-                Log.i(TAG, "hook FgBgMonitorImpl method 1 err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "hook FgBgMonitorImpl method 1 err:", t);
             }
             try {
                 XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackground", boolean.class, XC_MethodReplacement.returnConstant(false));
             } catch (Throwable t) {
-                Log.i(TAG, "hook FgBgMonitorImpl method 2 err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "hook FgBgMonitorImpl method 2 err:", t);
             }
             try {
                 XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackgroundV2", XC_MethodReplacement.returnConstant(false));
             } catch (Throwable t) {
-                Log.i(TAG, "hook FgBgMonitorImpl method 3 err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "hook FgBgMonitorImpl method 3 err:", t);
             }
             try {
                 XHelpers.findAndHookMethod("com.alipay.mobile.common.transport.utils.MiscUtils", classLoader, "isAtFrontDesk", classLoader.loadClass("android.content.Context"), XC_MethodReplacement.returnConstant(true));
                 Log.i(TAG, "hook MiscUtils successfully");
             } catch (Throwable t) {
-                Log.i(TAG, "hook MiscUtils err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "hook MiscUtils err:", t);
             }
             hooked = true;
             Log.i(TAG, "load success: " + lpparam.packageName);
@@ -473,8 +464,7 @@ public class ApplicationHook extends XposedModule {
                     Log.record("设置定时唤醒:0|000000");
                 }
             } catch (Exception e) {
-                Log.i(TAG, "setWakenAt0 err:");
-                Log.printStackTrace(TAG, e);
+                Log.err(TAG, "setWakenAt0 err:", e);
             }
             List<String> wakenAtTimeList = BaseModel.getWakenAtTimeList().getValue();
             if (wakenAtTimeList != null && !wakenAtTimeList.isEmpty()) {
@@ -494,14 +484,12 @@ public class ApplicationHook extends XposedModule {
                             }
                         }
                     } catch (Exception e) {
-                        Log.i(TAG, "setWakenAtTime err:");
-                        Log.printStackTrace(TAG, e);
+                        Log.err(TAG, "setWakenAtTime err:", e);
                     }
                 }
             }
         } catch (Exception e) {
-            Log.i(TAG, "setWakenAtTimeAlarm err:");
-            Log.printStackTrace(TAG, e);
+            Log.err(TAG, "setWakenAtTimeAlarm err:", e);
         }
     }
 
@@ -516,8 +504,7 @@ public class ApplicationHook extends XposedModule {
                         Log.record("取消定时唤醒:" + wakenAtTimeKey);
                     }
                 } catch (Exception e) {
-                    Log.i(TAG, "unsetWakenAtTime err:");
-                    Log.printStackTrace(TAG, e);
+                    Log.err(TAG, "unsetWakenAtTime err:", e);
                 }
             }
             try {
@@ -526,12 +513,10 @@ public class ApplicationHook extends XposedModule {
                     Log.record("取消定时唤醒:0|000000");
                 }
             } catch (Exception e) {
-                Log.i(TAG, "unsetWakenAt0 err:");
-                Log.printStackTrace(TAG, e);
+                Log.err(TAG, "unsetWakenAt0 err:", e);
             }
         } catch (Exception e) {
-            Log.i(TAG, "unsetWakenAtTimeAlarm err:");
-            Log.printStackTrace(TAG, e);
+            Log.err(TAG, "unsetWakenAtTimeAlarm err:", e);
         }
     }
 
@@ -631,8 +616,7 @@ public class ApplicationHook extends XposedModule {
                         });
                         Log.i(TAG, "hook record request successfully");
                     } catch (Throwable t) {
-                        Log.i(TAG, "hook record request err:");
-                        Log.printStackTrace(TAG, t);
+                        Log.err(TAG, "hook record request err:", t);
                     }
                     try {
                         rpcResponseUnhook = XHelpers.findAndHookMethod("com.alibaba.ariver.engine.common.bridge.internal.DefaultBridgeCallback", classLoader, "sendJSONResponse", classLoader.loadClass(ClassUtil.JSON_OBJECT_NAME), new XC_MethodHook() {
@@ -650,8 +634,7 @@ public class ApplicationHook extends XposedModule {
                         });
                         Log.i(TAG, "hook record response successfully");
                     } catch (Throwable t) {
-                        Log.i(TAG, "hook record response err:");
-                        Log.printStackTrace(TAG, t);
+                        Log.err(TAG, "hook record response err:", t);
                     }
                 }
                 NotificationUtil.start(service);
@@ -668,8 +651,7 @@ public class ApplicationHook extends XposedModule {
             execHandler();
             return true;
         } catch (Throwable th) {
-            Log.i(TAG, "startHandler err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "startHandler err:", th);
             Toast.show("芝麻粒加载失败");
             return false;
         }
@@ -715,8 +697,7 @@ public class ApplicationHook extends XposedModule {
                 ModelTask.stopAllTask();
             }
         } catch (Throwable th) {
-            Log.i(TAG, "stopHandler err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "stopHandler err:", th);
         }
     }
 
@@ -784,8 +765,7 @@ public class ApplicationHook extends XposedModule {
             Log.i("setAlarmTask triggerAtMillis:" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(triggerAtMillis) + " operation:" + (operation == null ? "" : operation.toString()));
             return true;
         } catch (Throwable th) {
-            Log.i(TAG, "setAlarmTask err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "setAlarmTask err:", th);
         }
         return false;
     }
@@ -798,8 +778,7 @@ public class ApplicationHook extends XposedModule {
             }
             return true;
         } catch (Throwable th) {
-            Log.i(TAG, "unsetAlarmTask err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "unsetAlarmTask err:", th);
         }
         return false;
     }
@@ -872,8 +851,7 @@ public class ApplicationHook extends XposedModule {
         try {
             context.sendBroadcast(new Intent("com.eg.android.AlipayGphone.sesame.reLogin"));
         } catch (Throwable th) {
-            Log.i(TAG, "sesame sendBroadcast reLogin err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "sesame sendBroadcast reLogin err:", th);
         }
     }
 
@@ -881,8 +859,7 @@ public class ApplicationHook extends XposedModule {
         try {
             context.sendBroadcast(new Intent("com.eg.android.AlipayGphone.sesame.restart"));
         } catch (Throwable th) {
-            Log.i(TAG, "sesame sendBroadcast restart err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "sesame sendBroadcast restart err:", th);
         }
     }
 
@@ -905,8 +882,7 @@ public class ApplicationHook extends XposedModule {
         try {
             return XHelpers.callMethod(getMicroApplicationContext(), "findServiceByInterface", service);
         } catch (Throwable th) {
-            Log.i(TAG, "getServiceObject err");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getServiceObject err", th);
         }
         return null;
     }
@@ -915,8 +891,7 @@ public class ApplicationHook extends XposedModule {
         try {
             return XHelpers.callMethod(getServiceObject(XHelpers.findClass("com.alipay.mobile.personalbase.service.SocialSdkContactService", classLoader).getName()), "getMyAccountInfoModelByLocal");
         } catch (Throwable th) {
-            Log.i(TAG, "getUserObject err");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getUserObject err", th);
         }
         return null;
     }
@@ -928,8 +903,7 @@ public class ApplicationHook extends XposedModule {
                 return (String) XHelpers.getObjectField(userObject, "userId");
             }
         } catch (Throwable th) {
-            Log.i(TAG, "getUserId err");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getUserId err", th);
         }
         return null;
     }
@@ -998,8 +972,7 @@ public class ApplicationHook extends XposedModule {
                             Log.i(TAG, "broadcast: recv query, send active status");
                             context.sendBroadcast(new Intent("io.github.aw1y2z.sesame.status"));
                         } catch (Throwable th) {
-                            Log.i(TAG, "sesame sendBroadcast status err:");
-                            Log.printStackTrace(TAG, th);
+                            Log.err(TAG, "sesame sendBroadcast status err:", th);
                         }
                         break;
                     case "com.eg.android.AlipayGphone.sesame.rpctest":
@@ -1010,8 +983,7 @@ public class ApplicationHook extends XposedModule {
                             // Log.record("收到测试消息:\n方法:" + method + "\n数据:" + data + "\n类型:" + type);
                             TestRpc.start(method, data, type);
                         } catch (Throwable th) {
-                            Log.i(TAG, "sesame rpctest err:");
-                            Log.printStackTrace(TAG, th);
+                            Log.err(TAG, "sesame rpctest err:", th);
                         }
                         break;
                     case "com.eg.android.AlipayGphone.sesame.reloadConfig":
@@ -1020,8 +992,7 @@ public class ApplicationHook extends XposedModule {
                             AppConfig.load();
                             Log.i(TAG, "reload AppConfig from UI");
                         } catch (Throwable th) {
-                            Log.i(TAG, "sesame reloadConfig err:");
-                            Log.printStackTrace(TAG, th);
+                            Log.err(TAG, "sesame reloadConfig err:", th);
                         }
                         break;
                 }
@@ -1038,8 +1009,7 @@ public class ApplicationHook extends XposedModule {
                     broadcastReceiverRegistered = false;
                     Log.i(TAG, "hook unregisterBroadcastReceiver successfully");
                 } catch (Throwable t) {
-                    Log.i(TAG, "hook unregisterBroadcastReceiver err:");
-                    Log.printStackTrace(TAG, t);
+                    Log.err(TAG, "hook unregisterBroadcastReceiver err:", t);
                 }
             }
 
@@ -1060,8 +1030,7 @@ public class ApplicationHook extends XposedModule {
             broadcastReceiverRegistered = true;
             Log.i(TAG, "hook registerBroadcastReceiver successfully");
         } catch (Throwable th) {
-            Log.i(TAG, "hook registerBroadcastReceiver err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "hook registerBroadcastReceiver err:", th);
         }
     }
 

@@ -79,8 +79,7 @@ public class OmegakoiTown extends ModelTask {
             getSignInStatus();
             houseProduct();
         } catch (Throwable t) {
-            Log.i(TAG, "start.run err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "start.run err:", t);
         }
     }
 
@@ -119,8 +118,7 @@ public class OmegakoiTown extends ModelTask {
                 Log.i(s);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "getUserTasks err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getUserTasks err:", t);
         }
     }
 
@@ -140,8 +138,7 @@ public class OmegakoiTown extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "getSignInStatus err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getSignInStatus err:", t);
         }
     }
 
@@ -180,8 +177,7 @@ public class OmegakoiTown extends ModelTask {
                 Log.i(s);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "getUserTasks err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "getUserTasks err:", t);
         }
     }
 

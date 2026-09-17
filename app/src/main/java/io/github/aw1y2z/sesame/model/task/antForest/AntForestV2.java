@@ -437,8 +437,7 @@ public class AntForestV2 extends ModelTask {
                 }
                 selfHomeObject = collectSelfEnergy();
             } catch (Throwable t) {
-                Log.i(TAG, "queryEnergyRanking err:");
-                Log.printStackTrace(TAG, t);
+                Log.err(TAG, "queryEnergyRanking err:", t);
             }
 
             if (!TaskCommon.IS_ENERGY_TIME && selfHomeObject != null) {
@@ -688,8 +687,7 @@ public class AntForestV2 extends ModelTask {
 
             }
         } catch (Throwable t) {
-            Log.i(TAG, "AntForestV2.run err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "AntForestV2.run err:", t);
         } finally {
             try {
                 synchronized (AntForestV2.this) {
@@ -831,8 +829,7 @@ public class AntForestV2 extends ModelTask {
             //Log.forest("");
 
         } catch (Throwable th) {
-            Log.i(TAG, "ForestEnergyInfo err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "ForestEnergyInfo err:", th);
         }
 
     }
@@ -1141,8 +1138,7 @@ public class AntForestV2 extends ModelTask {
 
             return userHomeObject;
         } catch (Throwable t) {
-            Log.i(TAG, "collectUserEnergy err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collectUserEnergy err:", t);
         }
         return null;
     }
@@ -1226,8 +1222,7 @@ public class AntForestV2 extends ModelTask {
                         }
                     }
                 } catch (Exception t) {
-                    Log.i(TAG, "collectFriendEnergy err:");
-                    Log.printStackTrace(TAG, t);
+                    Log.err(TAG, "collectFriendEnergy err:", t);
                 }
             }
         } catch (Exception e) {
@@ -1527,8 +1522,7 @@ public class AntForestV2 extends ModelTask {
             }
             forestExtensions();
         } catch (Throwable th) {
-            Log.i(TAG, "updateUsingPropsEndTime err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "updateUsingPropsEndTime err:", th);
         }
     }
 
@@ -1543,8 +1537,7 @@ public class AntForestV2 extends ModelTask {
                 collectRobExpandEnergy(propId, propType);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "collectRobExpandEnergy err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "collectRobExpandEnergy err:", th);
         }
     }
 
@@ -1558,8 +1551,7 @@ public class AntForestV2 extends ModelTask {
                 Statistics.addData(Statistics.DataType.COLLECTED, collectEnergy);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "collectRobExpandEnergy err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "collectRobExpandEnergy err:", th);
         }
     }
 
@@ -1583,8 +1575,7 @@ public class AntForestV2 extends ModelTask {
                 TimeUtil.sleep(1000);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "queryForestEnergy err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "queryForestEnergy err:", th);
         }
     }
 
@@ -1602,8 +1593,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "produceForestEnergy err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "produceForestEnergy err:", th);
         }
         return energyGeneratedList;
     }
@@ -1624,8 +1614,7 @@ public class AntForestV2 extends ModelTask {
                 return true;
             }
         } catch (Throwable th) {
-            Log.i(TAG, "harvestForestEnergy err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "harvestForestEnergy err:", th);
         }
         return false;
     }
@@ -1648,8 +1637,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "whackMole err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "whackMole err:", t);
         }
     }
 
@@ -1872,8 +1860,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "initAntForestTaskListMap err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initAntForestTaskListMap err:", t);
         }
     }
 
@@ -1903,8 +1890,7 @@ public class AntForestV2 extends ModelTask {
             Log.forest("绿色租赁🛍️完成[线上逛街]#产生[" + zulinshangpinliulan + "g能量]");
             Toast.show("绿色租赁🛍️完成[线上逛街]#产生[" + zulinshangpinliulan + "g能量]");
         } catch (Throwable t) {
-            Log.i(TAG, "greenRent err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "greenRent err:", t);
         }
     }
 
@@ -1945,8 +1931,7 @@ public class AntForestV2 extends ModelTask {
             }
             Log.forest("森林集市🛍️打卡[坚持" + numberOfDaysCompleted + "天]" + award);
         } catch (Throwable t) {
-            Log.i(TAG, "retrieveCurrentActivity err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "retrieveCurrentActivity err:", t);
         }
     }
 
@@ -1969,8 +1954,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "sendEnergyByAction err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "sendEnergyByAction err:", t);
         }
     }
 
@@ -2003,8 +1987,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "popupTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "popupTask err:", t);
         }
     }
 
@@ -2043,8 +2026,7 @@ public class AntForestV2 extends ModelTask {
                         }
                     }
                 } catch (Throwable t) {
-                    Log.i(TAG, "waterFriendEnergy err:");
-                    Log.printStackTrace(TAG, t);
+                    Log.err(TAG, "waterFriendEnergy err:", t);
                 }
             }
         }
@@ -2093,8 +2075,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "returnFriendWater err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "returnFriendWater err:", t);
         }
         return new KVNode<>(wateredTimes, isContinue);
     }
@@ -2158,8 +2139,7 @@ public class AntForestV2 extends ModelTask {
         try {
             ExtensionsHandle.handleAlphaRequest("antForest", "extensions", usingProps);
         } catch (Throwable t) {
-            Log.i(TAG, "forestExtensions err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "forestExtensions err:", t);
         }
     }
 
@@ -2181,8 +2161,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "vitalityExchangeBenefit err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "vitalityExchangeBenefit err:", t);
         }
     }
 
@@ -2215,8 +2194,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "vitalitySign err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "vitalitySign err:", t);
         }
     }
 
@@ -2260,8 +2238,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "vitalitySign err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "vitalitySign err:", t);
         }
     }
 
@@ -2275,8 +2252,7 @@ public class AntForestV2 extends ModelTask {
                 Log.forest("森林任务📆签到[" + continuousCount + "天]奖励[" + signAwardCount + "活力值]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "vitalitySign err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "vitalitySign err:", t);
         }
     }
 
@@ -2331,8 +2307,7 @@ public class AntForestV2 extends ModelTask {
                 doubleCheck = doForsetTaskList(taskInfoList);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTaskList err:", t);
         }
     }
 
@@ -2383,8 +2358,7 @@ public class AntForestV2 extends ModelTask {
             //可能是触发限时挑战奖励的
             AntForestRpcCall.batchQueryAndTouchopengreen();
         } catch (Throwable t) {
-            Log.i(TAG, "doForsetTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doForsetTaskList err:", t);
         }
         return doubleCheck;
     }
@@ -2433,8 +2407,7 @@ public class AntForestV2 extends ModelTask {
                 return;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTaskList err:", t);
         }
     }
 
@@ -2456,8 +2429,7 @@ public class AntForestV2 extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveTaskAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveTaskAward err:", t);
         }
         return false;
     }
@@ -2483,8 +2455,7 @@ public class AntForestV2 extends ModelTask {
             }
             Log.record("完成任务[" + taskTitle + "]失败");
         } catch (Throwable t) {
-            Log.i(TAG, "finishTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "finishTask err:", t);
         }
         return false;
     }
@@ -2506,8 +2477,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "doChildTask err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "doChildTask err:", th);
         }
     }
 
@@ -2537,8 +2507,7 @@ public class AntForestV2 extends ModelTask {
             }
             TimeUtil.sleep(500);
         } catch (Throwable th) {
-            Log.i(TAG, "startEnergyRain err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "startEnergyRain err:", th);
         }
     }
 
@@ -2564,8 +2533,7 @@ public class AntForestV2 extends ModelTask {
                 // 使用能量雨卡
             } while (consumeProp(jo));
         } catch (Throwable th) {
-            Log.i(TAG, "useEnergyRainCard err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "useEnergyRainCard err:", th);
         }
     }
 
@@ -2625,8 +2593,7 @@ public class AntForestV2 extends ModelTask {
                 startEnergyRain();
             }
         } catch (Throwable th) {
-            Log.i(TAG, "energyRain err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "energyRain err:", th);
         }
     }
 
@@ -2839,8 +2806,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "queryOptionalPlay err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "queryOptionalPlay err:", th);
         }
     }
 
@@ -2942,8 +2908,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "continuousUseAndExchangeCard err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "continuousUseAndExchangeCard err:", th);
         }
     }
 
@@ -3012,8 +2977,7 @@ public class AntForestV2 extends ModelTask {
             }
             return 0;
         } catch (Throwable th) {
-            Log.i(TAG, "useDoubleCard err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "useDoubleCard err:", th);
         }
         return -1;
     }
@@ -3049,8 +3013,7 @@ public class AntForestV2 extends ModelTask {
             }
             return null;
         } catch (Throwable th) {
-            Log.i(TAG, "UserobExpandCardFactor err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "UserobExpandCardFactor err:", th);
         }
         return null;
     }
@@ -3145,8 +3108,7 @@ public class AntForestV2 extends ModelTask {
             }
             return rightCard;
         } catch (Throwable th) {
-            Log.i(TAG, "useDoubleCard err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "useDoubleCard err:", th);
         }
         return null;
     }
@@ -3213,8 +3175,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "useDoubleCard err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "useDoubleCard err:", th);
         }
     }
 
@@ -3271,8 +3232,7 @@ public class AntForestV2 extends ModelTask {
                 break;
             } while (true);
         } catch (Throwable th) {
-            Log.i(TAG, "giveProp err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "giveProp err:", th);
         }
     }
 
@@ -3311,8 +3271,7 @@ public class AntForestV2 extends ModelTask {
                 ecoLifeTick(actionListVO, dayPoint);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "ecoLife err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "ecoLife err:", th);
         }
     }
 
@@ -3345,8 +3304,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "ecoLifeTick err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "ecoLifeTick err:", th);
         }
     }
 
@@ -3412,8 +3370,7 @@ public class AntForestV2 extends ModelTask {
             Toast.show("光盘行动💿打卡完成#" + toastMsg);
             Log.forest("光盘行动💿打卡完成#" + toastMsg + "");
         } catch (Throwable t) {
-            Log.i(TAG, "photoGuangPan err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "photoGuangPan err:", t);
         }
     }
 
@@ -3478,8 +3435,7 @@ public class AntForestV2 extends ModelTask {
                 break;
             } while (true);
         } catch (Throwable t) {
-            Log.i(TAG, "queryUserPatrol err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryUserPatrol err:", t);
         }
     }
 
@@ -3519,8 +3475,7 @@ public class AntForestV2 extends ModelTask {
                 TimeUtil.sleep(100);
             } while (true);
         } catch (Throwable t) {
-            Log.i(TAG, "patrolKeepGoing err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "patrolKeepGoing err:", t);
         }
     }
 
@@ -3546,8 +3501,7 @@ public class AntForestV2 extends ModelTask {
             }
             consumeAnimalProp(animalProp);
         } catch (Throwable t) {
-            Log.i(TAG, "queryAnimalPropList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryAnimalPropList err:", t);
         }
     }
 
@@ -3565,8 +3519,7 @@ public class AntForestV2 extends ModelTask {
                 Log.forest("巡护派遣🐆[" + name + "]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "consumeAnimalProp err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "consumeAnimalProp err:", t);
         }
     }
 
@@ -3594,8 +3547,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryAnimalAndPiece err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryAnimalAndPiece err:", t);
         }
     }
 
@@ -3635,8 +3587,7 @@ public class AntForestV2 extends ModelTask {
                 break;
             } while (true);
         } catch (Throwable t) {
-            Log.i(TAG, "combineAnimalPiece err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "combineAnimalPiece err:", t);
         }
     }
 
@@ -3664,8 +3615,7 @@ public class AntForestV2 extends ModelTask {
                 Log.i(s);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "forFriendCollectEnergy err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "forFriendCollectEnergy err:", t);
         }
         return helped;
     }
@@ -3678,8 +3628,7 @@ public class AntForestV2 extends ModelTask {
                 forestPropVOList = jo.getJSONArray("forestPropVOList");
             }
         } catch (Throwable th) {
-            Log.i(TAG, "getForestPropVOList err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getForestPropVOList err:", th);
         }
         return forestPropVOList;
     }
@@ -3721,8 +3670,7 @@ public class AntForestV2 extends ModelTask {
                 }
             });
         } catch (Throwable th) {
-            Log.i(TAG, "getPropGroup err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getPropGroup err:", th);
         }
         return list;
     }
@@ -3741,8 +3689,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "getForestPropVO err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getForestPropVO err:", th);
         }
         return null;
     }
@@ -3761,8 +3708,7 @@ public class AntForestV2 extends ModelTask {
             String propName = prop.getJSONObject("propConfigVO").getString("propName");
             return consumeProp(propGroup, propId, propType, propName);
         } catch (Throwable th) {
-            Log.i(TAG, "consumeProp err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "consumeProp err:", th);
         }
         return false;
     }
@@ -3775,8 +3721,7 @@ public class AntForestV2 extends ModelTask {
                 return true;
             }
         } catch (Throwable th) {
-            Log.i(TAG, "consumeProp err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "consumeProp err:", th);
         }
         return false;
     }
@@ -3790,8 +3735,7 @@ public class AntForestV2 extends ModelTask {
                 itemInfoVOList = jo.optJSONArray("itemInfoVOList");
             }
         } catch (Throwable th) {
-            Log.i(TAG, "getVitalityItemList err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getVitalityItemList err:", th);
         }
         return itemInfoVOList;
     }
@@ -3808,8 +3752,7 @@ public class AntForestV2 extends ModelTask {
                 getSkuInfoByItemInfoVO(itemInfoVO);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "getAllSkuInfo err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getAllSkuInfo err:", th);
         }
     }
 
@@ -3822,8 +3765,7 @@ public class AntForestV2 extends ModelTask {
             JSONObject spuItemInfoVo = jo.getJSONObject("spuItemInfoVO");
             getSkuInfoByItemInfoVO(spuItemInfoVo);
         } catch (Throwable th) {
-            Log.i(TAG, "getSkuInfoBySpuId err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getSkuInfoBySpuId err:", th);
         }
     }
 
@@ -3843,8 +3785,7 @@ public class AntForestV2 extends ModelTask {
             }
             VitalityBenefitIdMap.save(UserIdMap.getCurrentUid());
         } catch (Throwable th) {
-            Log.i(TAG, "getSkuInfoByItemInfoVO err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getSkuInfoByItemInfoVO err:", th);
         }
     }
 
@@ -3882,8 +3823,7 @@ public class AntForestV2 extends ModelTask {
             }
             getSkuInfoBySpuId(spuId);
         } catch (Throwable th) {
-            Log.i(TAG, "exchangeBenefit err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "exchangeBenefit err:", th);
         }
         return false;
     }
@@ -3897,8 +3837,7 @@ public class AntForestV2 extends ModelTask {
                 return true;
             }
         } catch (Throwable th) {
-            Log.i(TAG, "exchangeBenefit err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "exchangeBenefit err:", th);
         }
         return false;
     }
@@ -3915,8 +3854,7 @@ public class AntForestV2 extends ModelTask {
             }
             return MessageUtil.checkResultCode(TAG, jo);
         } catch (Throwable th) {
-            Log.i(TAG, "exchangeBenefit err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "exchangeBenefit err:", th);
         }
         return false;
     }
@@ -4026,8 +3964,7 @@ public class AntForestV2 extends ModelTask {
                 return true;
             }
         } catch (Throwable th) {
-            Log.i(TAG, "updateUserConfig err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "updateUserConfig err:", th);
         }
         return false;
     }
@@ -4051,8 +3988,7 @@ public class AntForestV2 extends ModelTask {
                     }
                 }
             } catch (Throwable th) {
-                Log.i(TAG, "loveteam err:");
-                Log.printStackTrace(TAG, th);
+                Log.err(TAG, "loveteam err:", th);
             }
         }
     }
@@ -4066,8 +4002,7 @@ public class AntForestV2 extends ModelTask {
                 Status.flagToday("Forest::loveteamWater");
             }
         } catch (Throwable th) {
-            Log.i(TAG, "loveteamWater err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "loveteamWater err:", th);
         }
     }
 
@@ -4102,8 +4037,7 @@ public class AntForestV2 extends ModelTask {
             }
             return false;
         } catch (Throwable th) {
-            Log.i(TAG, "updateUserConfigEnergyPvp err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "updateUserConfigEnergyPvp err:", th);
         }
         return false;
     }
@@ -4151,8 +4085,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "queryPvpHomeInfo err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "queryPvpHomeInfo err:", th);
         }
 
     }
@@ -4192,8 +4125,7 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "receivePvpRewards err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "receivePvpRewards err:", th);
         }
     }
 
@@ -4219,8 +4151,7 @@ public class AntForestV2 extends ModelTask {
                 dressDetail.put(position, batchType);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "getDressDetail err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "getDressDetail err:", th);
         }
         return dressDetail;
     }
@@ -4256,8 +4187,7 @@ public class AntForestV2 extends ModelTask {
                 Log.forest("装扮保护🔐皮肤修改,芝麻粒已为你自动恢复!");
             }
         } catch (Throwable th) {
-            Log.i(TAG, "checkDressDetail err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "checkDressDetail err:", th);
         }
     }
 
@@ -4288,8 +4218,7 @@ public class AntForestV2 extends ModelTask {
             }
             return isTakeOff;
         } catch (Throwable th) {
-            Log.i(TAG, "queryUserDressForBackpack err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "queryUserDressForBackpack err:", th);
         }
         return false;
     }
@@ -4299,8 +4228,7 @@ public class AntForestV2 extends ModelTask {
             JSONObject jo = new JSONObject(AntForestRpcCall.wearDress(dressType));
             return MessageUtil.checkResultCode(TAG, jo);
         } catch (Throwable th) {
-            Log.i(TAG, "wearDress err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "wearDress err:", th);
         }
         return false;
     }
@@ -4310,8 +4238,7 @@ public class AntForestV2 extends ModelTask {
             JSONObject jo = new JSONObject(AntForestRpcCall.takeOffDress(dressType, position));
             return MessageUtil.checkResultCode(TAG, jo);
         } catch (Throwable th) {
-            Log.i(TAG, "takeOffDress err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "takeOffDress err:", th);
         }
         return false;
     }

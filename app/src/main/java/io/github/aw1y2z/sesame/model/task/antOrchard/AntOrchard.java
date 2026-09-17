@@ -171,8 +171,7 @@ public class AntOrchard extends ModelTask {
             }
 
         } catch (Throwable t) {
-            Log.i(TAG, "start.run err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "start.run err:", t);
         }
     }
 
@@ -233,8 +232,7 @@ public class AntOrchard extends ModelTask {
 
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "orchardIndex err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "orchardIndex err:", t);
             return false;
         }
     }
@@ -277,8 +275,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "queryOptionalPlay err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "queryOptionalPlay err:", th);
         }
     }
 
@@ -357,8 +354,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "initAntOrchardTaskListMap err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initAntOrchardTaskListMap err:", t);
         }
     }
 
@@ -379,8 +375,7 @@ public class AntOrchard extends ModelTask {
             }
             PlantSceneIdMap.save();
         } catch (Throwable t) {
-            Log.i(TAG, "initPlantScene err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initPlantScene err:", t);
         }
     }
 
@@ -414,8 +409,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "handleEnableScenes err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "handleEnableScenes err:", t);
         }
     }
 
@@ -438,8 +432,7 @@ public class AntOrchard extends ModelTask {
                 fertilizerProgress = seedStage.getInt("totalValue");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "handleTaoBaoData err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "handleTaoBaoData err:", t);
         }
     }
 
@@ -481,8 +474,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "orchardSpreadManure err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "orchardSpreadManure err:", t);
         }
     }
 
@@ -516,8 +508,7 @@ public class AntOrchard extends ModelTask {
             }
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "doSpreadManure err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doSpreadManure err:", t);
             return false;
         }
     }
@@ -589,8 +580,7 @@ public class AntOrchard extends ModelTask {
                     return false;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "canSpreadManure err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "canSpreadManure err:", t);
             return false;
         }
     }
@@ -604,8 +594,7 @@ public class AntOrchard extends ModelTask {
             String result = AntOrchardRpcCall.switchPlantScene(sceneName);
             return MessageUtil.checkResultCode(TAG, new JSONObject(result));
         } catch (Throwable t) {
-            Log.i(TAG, "switchPlantScene err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "switchPlantScene err:", t);
             return false;
         }
     }
@@ -629,8 +618,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "querySpreadManureActivity err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "querySpreadManureActivity err:", t);
         }
     }
 
@@ -660,8 +648,7 @@ public class AntOrchard extends ModelTask {
             // 触发已完成任务的奖励
             triggerTbTask();
         } catch (Throwable t) {
-            Log.i(TAG, "orchardListTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "orchardListTask err:", t);
         }
     }
 
@@ -692,8 +679,7 @@ public class AntOrchard extends ModelTask {
                 Status.flagToday("orchardSign", userId);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "handleSignTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "handleSignTask err:", t);
         }
     }
 
@@ -727,8 +713,7 @@ public class AntOrchard extends ModelTask {
                 // 处理已完成的任务奖励（已在triggerTbTask中统一处理）
             }
         } catch (Throwable t) {
-            Log.i(TAG, "handleTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "handleTaskList err:", t);
         }
     }
 
@@ -810,8 +795,7 @@ public class AntOrchard extends ModelTask {
             }
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "finishOrchardTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "finishOrchardTask err:", t);
             return false;
         }
     }
@@ -856,8 +840,7 @@ public class AntOrchard extends ModelTask {
                 Log.record("获取任务列表失败: " + jo.getString("resultDesc"));
             }
         } catch (Throwable t) {
-            Log.i(TAG, "triggerTbTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "triggerTbTask err:", t);
         }
     }
 
@@ -905,8 +888,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "drawLotteryPlus err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "drawLotteryPlus err:", t);
         }
     }
 
@@ -929,8 +911,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "extraInfoGet err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "extraInfoGet err:", t);
         }
     }
 
@@ -966,8 +947,7 @@ public class AntOrchard extends ModelTask {
                 TimeUtil.sleep(5000);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "orchardAssistFriend err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "orchardAssistFriend err:", t);
         }
     }
 
@@ -996,8 +976,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "querySubplotsActivity err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "querySubplotsActivity err:", t);
         }
     }
 
@@ -1043,8 +1022,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "handleWishActivity err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "handleWishActivity err:", t);
         }
     }
 
@@ -1081,8 +1059,7 @@ public class AntOrchard extends ModelTask {
                 querySubplotsActivity("CAMP_TAKEOVER"); // 重新查询状态
             }
         } catch (Throwable t) {
-            Log.i(TAG, "handleCampTakeoverActivity err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "handleCampTakeoverActivity err:", t);
         }
     }
 
@@ -1113,8 +1090,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryYebRevenueDetail err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryYebRevenueDetail err:", t);
         }
     }
 
@@ -1158,8 +1134,7 @@ public class AntOrchard extends ModelTask {
                 TimeUtil.sleep(500);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "smashedGoldenEgg err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "smashedGoldenEgg err:", t);
         }
     }
 
@@ -1196,8 +1171,7 @@ public class AntOrchard extends ModelTask {
             }
             Status.flagToday("orchardWidgetDailyAward", userId);
         } catch (Throwable t) {
-            Log.i(TAG, "receiveOrchardVisitAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveOrchardVisitAward err:", t);
         }
     }
 
@@ -1350,8 +1324,7 @@ public class AntOrchard extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "limitedTimeChallenge err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "limitedTimeChallenge err:", t);
         }
     }
 

@@ -143,8 +143,7 @@ public class AntOcean extends ModelTask {
             }
 
         } catch (Throwable t) {
-            Log.i(TAG, "AntOcean.start.run err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "AntOcean.start.run err:", t);
         }
     }
 
@@ -160,8 +159,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryOceanStatus err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryOceanStatus err:", t);
         }
         return false;
     }
@@ -304,8 +302,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "initAntOceanAntiepTaskListMap err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initAntOceanAntiepTaskListMap err:", t);
         }
     }
 
@@ -335,8 +332,7 @@ public class AntOcean extends ModelTask {
 
             queryMiscInfo();
         } catch (Throwable t) {
-            Log.i(TAG, "queryHomePage err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryHomePage err:", t);
         }
     }
 
@@ -368,8 +364,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "collectEnergy err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collectEnergy err:", t);
         }
     }
 
@@ -384,8 +379,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "cleanOcean err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "cleanOcean err:", t);
         }
     }
 
@@ -405,8 +399,7 @@ public class AntOcean extends ModelTask {
                 Log.record("神奇海洋🐳蹲添加蹲点在[" + TimeUtil.getCommonDate(canCleanLaterTime) + "]执行清理海洋");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryHomePage err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryHomePage err:", t);
         }
     }
 
@@ -418,8 +411,7 @@ public class AntOcean extends ModelTask {
                 checkReward(rewardVOS);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "ipOpenSurprise err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "ipOpenSurprise err:", t);
         }
     }
 
@@ -434,8 +426,7 @@ public class AntOcean extends ModelTask {
             //检测是否能开启限时挑战
             createSeaAreaExtraCollect();
         } catch (Throwable t) {
-            Log.i(TAG, "combineFish err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "combineFish err:", t);
         }
     }
 
@@ -462,8 +453,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "checkReward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "checkReward err:", t);
         }
     }
 
@@ -491,8 +481,7 @@ public class AntOcean extends ModelTask {
 
             queryReplicaTaskList();
         } catch (Throwable t) {
-            Log.i(TAG, "queryReplicaHome err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryReplicaHome err:", t);
         }
     }
 
@@ -505,8 +494,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "collectReplicaAsset err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "collectReplicaAsset err:", t);
         }
     }
 
@@ -518,8 +506,7 @@ public class AntOcean extends ModelTask {
                 Log.forest("神奇海洋🐳迎回[" + name + "]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "unLockReplicaPhase err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "unLockReplicaPhase err:", t);
         }
     }
 
@@ -542,8 +529,7 @@ public class AntOcean extends ModelTask {
                 receiveReplicaTaskAward(taskType, taskTitle);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryReplicaTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryReplicaTaskList err:", t);
         }
     }
 
@@ -555,8 +541,7 @@ public class AntOcean extends ModelTask {
                 Log.forest("神奇海洋🐳领取[" + taskTitle + "]奖励#获得[潘多拉能量*" + incAwardCount + "]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveReplicaTaskAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveReplicaTaskAward err:", t);
         }
     }
 
@@ -573,8 +558,7 @@ public class AntOcean extends ModelTask {
             }
             switchOceanChapter();
         } catch (Throwable t) {
-            Log.i(TAG, "queryMiscInfo err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryMiscInfo err:", t);
         }
     }
 
@@ -595,8 +579,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "createSeaAreaExtraCollect err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "createSeaAreaExtraCollect err:", t);
         }
     }
 
@@ -657,8 +640,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "querySeaAreaDetailList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "querySeaAreaDetailList err:", t);
         }
     }
 
@@ -688,8 +670,7 @@ public class AntOcean extends ModelTask {
                 AntOceanRpcCall.repairSeaArea();
             }
         } catch (Throwable t) {
-            Log.i(TAG, "querySeaAreaDetailList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "querySeaAreaDetailList err:", t);
         }
     }
 
@@ -700,8 +681,7 @@ public class AntOcean extends ModelTask {
                 AntOceanRpcCall.repairSeaArea();
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryOceanPropList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryOceanPropList err:", t);
         }
     }
 
@@ -737,8 +717,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "switchOceanChapter err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "switchOceanChapter err:", t);
         }
     }
 
@@ -805,8 +784,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryUserRanking err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryUserRanking err:", t);
         }
     }
 
@@ -827,8 +805,7 @@ public class AntOcean extends ModelTask {
                 TimeUtil.sleep(1000);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "cleanFriendOcean err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "cleanFriendOcean err:", t);
         }
     }
 
@@ -856,8 +833,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "cleanFriendOcean err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "cleanFriendOcean err:", t);
         }
         return false;
     }
@@ -899,8 +875,7 @@ public class AntOcean extends ModelTask {
                 receiveTaskAward(sceneCode, taskType, taskTitle);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "queryTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryTaskList err:", t);
         }
     }
 
@@ -916,8 +891,7 @@ public class AntOcean extends ModelTask {
                 Log.forest("海洋任务🎖️领取[" + taskTitle + "]奖励#获得[" + awardCount + "块拼图]");
             }
         } catch (Throwable t) {
-            Log.i(TAG, "receiveTaskAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "receiveTaskAward err:", t);
         }
     }
 
@@ -953,8 +927,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "finishOceanTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "finishOceanTask err:", t);
         }
         return false;
     }
@@ -980,8 +953,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "answerQuestion err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "answerQuestion err:", t);
         }
         return false;
     }
@@ -1006,8 +978,7 @@ public class AntOcean extends ModelTask {
                 duplicatePieceNum -= exchangeNum * 10;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "exchangeUniversalPiece error:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "exchangeUniversalPiece error:", t);
         }
     }
 
@@ -1021,8 +992,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "exchangeUniversalPiece error:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "exchangeUniversalPiece error:", t);
         }
         return false;
     }
@@ -1068,8 +1038,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "useUniversalPiece error:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "useUniversalPiece error:", t);
         }
     }
 
@@ -1084,8 +1053,7 @@ public class AntOcean extends ModelTask {
                 count += useUniversalPiece(fishVO, holdsNum - count);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "useUniversalPiece error:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "useUniversalPiece error:", t);
         }
         return count;
     }
@@ -1116,8 +1084,7 @@ public class AntOcean extends ModelTask {
                 return assetsDetails.length();
             }
         } catch (Throwable t) {
-            Log.i(TAG, "useUniversalPiece error:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "useUniversalPiece error:", t);
         }
         return 0;
     }
@@ -1134,8 +1101,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "useUniversalPiece error:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "useUniversalPiece error:", t);
         }
         return false;
     }
@@ -1175,8 +1141,7 @@ public class AntOcean extends ModelTask {
 
 
         } catch (Throwable t) {
-            Log.i(TAG, "antfishRun err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "antfishRun err:", t);
         }
     }
 
@@ -1198,8 +1163,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "antfishQueryStatus err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "antfishQueryStatus err:", t);
         }
         return false;
     }
@@ -1279,8 +1243,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "antfishQueryHomePage err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "antfishQueryHomePage err:", t);
         }
     }
 
@@ -1313,8 +1276,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "antfishFinishTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "antfishFinishTask err:", t);
         }
         return false;
     }
@@ -1345,8 +1307,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "rescueFish err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "rescueFish err:", t);
         }
         return false;
     }
@@ -1412,8 +1373,7 @@ public class AntOcean extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.i(TAG, "antfishHandleTasks err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "antfishHandleTasks err:", t);
         }
     }
 
@@ -1430,8 +1390,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "antfishFinishTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "antfishFinishTask err:", t);
         }
         return false;
     }
@@ -1454,8 +1413,7 @@ public class AntOcean extends ModelTask {
                 return true;
             }
         } catch (Throwable t) {
-            Log.i(TAG, "antfishReceiveTaskAward err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "antfishReceiveTaskAward err:", t);
         }
         return false;
     }
@@ -1570,8 +1528,7 @@ public class AntOcean extends ModelTask {
             }
 
         } catch (Throwable t) {
-            Log.i(TAG, "antfishDrawFish err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "antfishDrawFish err:", t);
         }
     }
 

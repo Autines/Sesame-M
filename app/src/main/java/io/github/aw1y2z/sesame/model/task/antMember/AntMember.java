@@ -345,8 +345,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "initMemberTaskListMap err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "initMemberTaskListMap err:", t);
         }
     }
     
@@ -364,8 +363,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "memberSign err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "memberSign err:", t);
         }
     }
     
@@ -399,8 +397,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryPointCert err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryPointCert err:", t);
         }
     }
     
@@ -441,8 +438,7 @@ public class AntMember extends ModelTask {
             while (true);
         }
         catch (Throwable t) {
-            Log.i(TAG, "signPageTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "signPageTaskList err:", t);
         }
     }
     
@@ -464,8 +460,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryAllStatusTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryAllStatusTaskList err:", t);
         }
     }
     
@@ -491,8 +486,7 @@ public class AntMember extends ModelTask {
             PromiseSimpleTemplateIdMap.save(UserIdMap.getCurrentUid());
         }
         catch (Throwable t) {
-            Log.i(TAG, "promise err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "promise err:", t);
         }
     }
     
@@ -531,8 +525,7 @@ public class AntMember extends ModelTask {
             return result;
         }
         catch (Throwable t) {
-            Log.i(TAG, "querySingleTemplate err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "querySingleTemplate err:", t);
         }
         return null;
     }
@@ -551,8 +544,7 @@ public class AntMember extends ModelTask {
             Log.other("生活记录📝加入[" + promiseName + "]");
         }
         catch (Throwable t) {
-            Log.i(TAG, "promiseJoin err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "promiseJoin err:", t);
         }
     }
     
@@ -585,8 +577,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "doBrowseTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doBrowseTask err:", t);
         }
         return doubleCheck;
     }
@@ -631,8 +622,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "doBrowseTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doBrowseTask err:", t);
         }
         return doubleCheck;
     }
@@ -860,8 +850,7 @@ public class AntMember extends ModelTask {
             Log.other("黄金票🏦本次总共获得[" + JsonUtil.getValueByPath(object, "collectedCamp.amount") + "]");
         }
         catch (Throwable th) {
-            Log.i(TAG, "signIn err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "signIn err:", th);
         }
     }
     //游戏中心任务
@@ -879,8 +868,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "batchReceivePointBall err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "batchReceivePointBall err:", t);
         }
     }
     
@@ -901,8 +889,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "continueSignIn err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "continueSignIn err:", t);
         }
         return false;
     }
@@ -938,8 +925,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "doTask err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "doTask err:", t);
         }
     }
     
@@ -965,8 +951,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryModularTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryModularTaskList err:", t);
         }
     }
     
@@ -985,8 +970,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryModularTaskList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryModularTaskList err:", t);
         }
     }
     
@@ -1005,8 +989,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "queryPointBallList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "queryPointBallList err:", t);
         }
     }
     
@@ -1033,8 +1016,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "querySignInBall err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "querySignInBall err:", t);
         }
     }
     
@@ -1062,8 +1044,7 @@ public class AntMember extends ModelTask {
                 Log.record("游戏中心🎮签到成功");
             }
             catch (Throwable th) {
-                Log.i(TAG, "signIn err:");
-                Log.printStackTrace(TAG, th);
+                Log.err(TAG, "signIn err:", th);
             }
             try {
                 String str = AntMemberRpcCall.queryPointBallList();
@@ -1087,8 +1068,7 @@ public class AntMember extends ModelTask {
                 }
             }
             catch (Throwable th) {
-                Log.i(TAG, "batchReceive err:");
-                Log.printStackTrace(TAG, th);
+                Log.err(TAG, "batchReceive err:", th);
             }
         }
         catch (Throwable t) {
@@ -1177,8 +1157,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "memberPointExchangeBenefit err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "memberPointExchangeBenefit err:", t);
         }
     }
 
@@ -1264,8 +1243,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "fetchBenefitsFromNavi err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "fetchBenefitsFromNavi err:", t);
         }
     }
     
@@ -1278,8 +1256,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable t) {
-            Log.i(TAG, "exchangeBenefit err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "exchangeBenefit err:", t);
         }
         return false;
     }
@@ -1538,8 +1515,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable th) {
-            Log.i(TAG, "RecommendTask err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "RecommendTask err:", th);
         }
     }
     
@@ -1585,8 +1561,7 @@ public class AntMember extends ModelTask {
             }
         }
         catch (Throwable th) {
-            Log.i(TAG, "OrdinaryTask err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "OrdinaryTask err:", th);
         }
     }
 }

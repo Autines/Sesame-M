@@ -30,8 +30,7 @@ public class MessageUtil {
         try {
             return new JSONObject(str);
         } catch (Throwable t) {
-            Log.i(TAG, "newJSONObject err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "newJSONObject err:", t);
         }
         return null;
     }
@@ -42,8 +41,7 @@ public class MessageUtil {
             Log.record(errMsg + jo.getString(errorMessageField));
             Log.i(jo.getString(errorMessageField), jo.toString());
         } catch (Throwable t) {
-            Log.i(TAG, "printErrorMessage err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "printErrorMessage err:", t);
         }
     }
 
@@ -63,8 +61,7 @@ public class MessageUtil {
             }
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "checkMemo err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "checkMemo err:", t);
         }
         return false;
     }
@@ -98,8 +95,7 @@ public class MessageUtil {
             Log.i(tag, jo.toString());
             return false;
         } catch (Throwable t) {
-            Log.i(TAG, "checkResultCode err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "checkResultCode err:", t);
         }
         return false;
     }
@@ -123,8 +119,7 @@ public class MessageUtil {
             }
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "checkResultCodeString err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "checkResultCodeString err:", t);
         }
         return false;
     }
@@ -142,8 +137,7 @@ public class MessageUtil {
             }
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "checkResultCodeInteger err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "checkResultCodeInteger err:", t);
         }
         return false;
     }
@@ -172,8 +166,7 @@ public class MessageUtil {
             }
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "checkSuccess err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "checkSuccess err:", t);
         }
         return false;
     }
@@ -370,8 +363,7 @@ public class MessageUtil {
 
             }
         } catch (Throwable t) {
-            Log.i(TAG, "checkSuccess err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "checkSuccess err:", t);
         }
     }
 
@@ -420,8 +412,7 @@ public class MessageUtil {
             }
             MarkTaskBlackList(ModelFieldsType, listTitle, TaskListName, taskTitle);
         } catch (Throwable t) {
-            Log.i(TAG, "MarkTaskBlackListConfirm err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "MarkTaskBlackListConfirm err:", t);
         }
     }
 
@@ -488,8 +479,7 @@ public class MessageUtil {
                 ConfigV2.save(UserIdMap.getCurrentUid(), false);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "sweepExpiredBlackList err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "sweepExpiredBlackList err:", t);
         }
     }
 
@@ -547,8 +537,7 @@ public class MessageUtil {
                 ConfigV2.save(UserIdMap.getCurrentUid(), false);
             }
         } catch (Throwable t) {
-            Log.i(TAG, "sweepReleasedDefaults err:");
-            Log.printStackTrace(TAG, t);
+            Log.err(TAG, "sweepReleasedDefaults err:", t);
         }
     }
 

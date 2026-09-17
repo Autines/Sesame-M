@@ -100,8 +100,7 @@ public class GreenFinance extends ModelTask {
                 batchSelfCollect(bsnIds);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "index err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "index err:", th);
         }
 
         signIn("PLAY102632271");
@@ -139,8 +138,7 @@ public class GreenFinance extends ModelTask {
                 Log.i(TAG + ".batchSelfCollect", joSelfCollect.optString("resultDesc"));
             }
         } catch (Throwable th) {
-            Log.i(TAG, "batchSelfCollect err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "batchSelfCollect err:", th);
         }
     }
 
@@ -170,8 +168,7 @@ public class GreenFinance extends ModelTask {
                 Log.i(TAG + ".signIn.signInTrigger", jo.optString("resultDesc"));
             }
         } catch (Throwable th) {
-            Log.i(TAG, "signIn err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "signIn err:", th);
         }
     }
 
@@ -242,8 +239,7 @@ public class GreenFinance extends ModelTask {
 //                Thread.sleep(executeIntervalInt);
             }
         } catch (Throwable th) {
-            Log.i(TAG, "doTick err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "doTick err:", th);
         }
     }
 
@@ -311,8 +307,7 @@ public class GreenFinance extends ModelTask {
                 Log.other("绿色经营📊成功捐助[" + name + "]" + am + "金币");
             }
         } catch (Throwable th) {
-            Log.i(TAG, "donation err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "donation err:", th);
         }
     }
 
@@ -358,8 +353,7 @@ public class GreenFinance extends ModelTask {
             }
             Log.other("绿色经营🍬评级奖品[" + object.getString("prizeName") + "]" + object.getString("price"));
         } catch (Throwable th) {
-            Log.i(TAG, "prizes err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "prizes err:", th);
         }
     }
 
@@ -435,8 +429,7 @@ public class GreenFinance extends ModelTask {
                 }
             }
         } catch (Throwable th) {
-            Log.i(TAG, "batchStealFriend err:");
-            Log.printStackTrace(TAG, th);
+            Log.err(TAG, "batchStealFriend err:", th);
         }
     }
 
