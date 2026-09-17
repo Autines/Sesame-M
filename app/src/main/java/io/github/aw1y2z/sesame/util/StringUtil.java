@@ -81,4 +81,31 @@ public class StringUtil {
         return text.substring(leftIndex, rightIndex);
     }
 
+    /**
+     * 剥掉标题末尾的 "(n/N)" 次数后缀，如「XX(2/10)」→「XX」。
+     * <p>权限类任务上报时标题会被拼上次数后缀，而黑名单检查用的是纯标题；
+     * 不归一化会导致写进黑名单的键永远匹配不上、拉黑失效。
+     *
+     * @param text 原标题；为 null 时返回 null
+     */
+    public static String stripCountSuffix(String text) {
+        return text == null ? null : text.replaceAll("\\(\\d+/\\d+\\)$", "");
+    }
+
+    /**
+     * 解析整数：null、空串、非数字（含溢出）都返回 null，不抛异常。
+     * <p>服务端文案变化很常见，直接 Integer.parseInt 会中断整个模块。
+     * <p>返回 null 而不是默认值，调用方才能区分「解析失败」与「解析出来的值本身」。
+     */
+    public static Integer parseIntOrNull(String text) {
+        if (text == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(text.trim());
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
 }

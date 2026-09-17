@@ -2440,7 +2440,7 @@ public class AntForestV2 extends ModelTask {
      * 而运行时的黑名单检查用的是纯标题；不处理会导致写进黑名单的键永远匹配不上、拉黑失效。
      */
     private static String blackTaskKey(String taskTitle) {
-        return taskTitle == null ? null : taskTitle.replaceAll("\\(\\d+/\\d+\\)$", "");
+        return StringUtil.stripCountSuffix(taskTitle);
     }
 
     private Boolean finishTask(String sceneCode, String taskType, String taskTitle) {

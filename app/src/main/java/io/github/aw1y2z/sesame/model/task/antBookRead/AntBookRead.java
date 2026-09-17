@@ -56,13 +56,12 @@ public class AntBookRead extends ModelTask {
      * NumberFormatException 并中断整个模块；这里改为返回 -1（调用方按「取不到」处理）。
      */
     private static int parseOrMinusOne(String text, String left, String right) {
-        String value = StringUtil.getSubString(text, left, right).trim();
-        try {
-            return Integer.parseInt(value);
-        } catch (Throwable t) {
+        Integer parsed = StringUtil.parseIntOrNull(StringUtil.getSubString(text, left, right));
+        if (parsed == null) {
             Log.i(TAG, "解析数字失败[" + left + ".." + right + "]: " + text);
             return -1;
         }
+        return parsed;
     }
 
     private static void queryTaskCenterPage() {
