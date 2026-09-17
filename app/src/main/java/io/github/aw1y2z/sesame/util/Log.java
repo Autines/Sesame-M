@@ -4,6 +4,7 @@ import com.elvishew.xlog.LogLevel;
 import com.elvishew.xlog.Logger;
 import com.elvishew.xlog.XLog;
 import com.elvishew.xlog.flattener.PatternFlattener;
+import com.elvishew.xlog.printer.Printer;
 import com.elvishew.xlog.printer.file.FilePrinter;
 import com.elvishew.xlog.printer.file.backup.NeverBackupStrategy;
 import com.elvishew.xlog.printer.file.clean.NeverCleanStrategy;
@@ -48,63 +49,29 @@ public class Log {
 
     };
 
+    /**
+     * runtime 日志文件的共用打印机。
+     * <p>5 个 tag（RUNTIME / FOREST / GOLDENBEANS / FARM / OTHER）共写同一个 runtime 文件，
+     * 共用一组缓冲与后台 worker，避免多个 printer 同时写同一文件带来的行交错与线程浪费。
+     */
+    private static final Printer RUNTIME_FILE_PRINTER = new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
+            .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
+            .backupStrategy(new NeverBackupStrategy())
+            .cleanStrategy(new NeverCleanStrategy())
+            .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
+            .build();
+
     /** 通用运行日志（用于 system/i 调用），tag 固定为 RUNTIME */
-    private static final Logger runtimeLogger = XLog.tag("RUNTIME").printers(
-            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
-                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
-                    .backupStrategy(new NeverBackupStrategy())
-                    .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
-                    .build()).build();
+    private static final Logger runtimeLogger = XLog.tag("RUNTIME").printers(RUNTIME_FILE_PRINTER).build();
 
     /** 各模块向 runtime.log 写入时使用的专用 logger（不同 tag，同文件） */
-    private static final Logger runtimeForestLogger = XLog.tag("FOREST").printers(
-            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
-                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
-                    .backupStrategy(new NeverBackupStrategy())
-                    .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
-                    .build()).build();
+    private static final Logger runtimeForestLogger = XLog.tag("FOREST").printers(RUNTIME_FILE_PRINTER).build();
 
-    private static final Logger runtimeGoldenBeansLogger = XLog.tag("GOLDENBEANS").printers(
-            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
-                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
-                    .backupStrategy(new NeverBackupStrategy())
-                    .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
-                    .build()).build();
+    private static final Logger runtimeGoldenBeansLogger = XLog.tag("GOLDENBEANS").printers(RUNTIME_FILE_PRINTER).build();
 
-    private static final Logger runtimeFarmLogger = XLog.tag("FARM").printers(
-            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
-                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
-                    .backupStrategy(new NeverBackupStrategy())
-                    .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
-                    .build()).build();
+    private static final Logger runtimeFarmLogger = XLog.tag("FARM").printers(RUNTIME_FILE_PRINTER).build();
 
-    private static final Logger runtimeOtherLogger = XLog.tag("OTHER").printers(
-            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
-                    .fileNameGenerator(new CustomDateFileNameGenerator("runtime"))
-                    .backupStrategy(new NeverBackupStrategy())
-                    .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
-                    .build()).build();
-
-    private static final Logger recordLogger = XLog.tag("RECORD").printers(
-            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
-                    .fileNameGenerator(new CustomDateFileNameGenerator("record"))
-                    .backupStrategy(new NeverBackupStrategy())
-                    .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {m}"))
-                    .build()).build();
-
-    private static final Logger systemLogger = XLog.tag("SYSTEM").printers(
-            new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
-                    .fileNameGenerator(new CustomDateFileNameGenerator("system"))
-                    .backupStrategy(new NeverBackupStrategy())
-                    .cleanStrategy(new NeverCleanStrategy())
-                    .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
-                    .build()).build();
+    private static final Logger runtimeOtherLogger = XLog.tag("OTHER").printers(RUNTIME_FILE_PRINTER).build();
 
     private static final Logger debugLogger = XLog.tag("DEBUG").printers(
             new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
@@ -154,11 +121,63 @@ public class Log {
                     .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
                     .build()).build();
 
+    /**
+     * 统一日志写入口：在消息前加上账号简称（账号1、账号2…），便于多账号下区分日志来源。
+     * <p>序号由 {@code UserIdMap} 首次出现时分配并持久化，与配置页显示的账号序号一致；
+     * 日志里**不写 uid、也不写昵称**，避免日志被分享/导出时把账号信息带出去。
+     * <p>简称在调用线程读取；uid 为空时保持原样。查看器按「时间 tag: 正文」解析，
+     * 前缀会落在正文里，不影响解析。
+     */
+    private static String withUser(String msg) {
+        try {
+            String label = io.github.aw1y2z.sesame.util.idMap.UserIdMap.getAccountLabel(
+                    io.github.aw1y2z.sesame.util.idMap.UserIdMap.getCurrentUid());
+            return StringUtil.isEmpty(label) ? msg : "[" + label + "]" + msg;
+        } catch (Throwable t) {
+            return msg;
+        }
+    }
+
+    /**
+     * 模块日志双写（运行日志 + 分类文件）：只写开关打开的一侧，消息统一带 uid 前缀。
+     */
+    private static void writeModuleLog(String s, boolean toRuntime, Logger runtimeTarget,
+                                       boolean toFile, Logger fileTarget) {
+        if (!toRuntime && !toFile) {
+            return;
+        }
+        String msg = withUser(s);
+        if (toRuntime) {
+            runtimeTarget.i(msg);
+        }
+        if (toFile) {
+            fileTarget.i(msg);
+        }
+    }
+
+    /**
+     * 错误日志双写（异常日志 + 运行日志）：消息统一带 uid 前缀。
+     */
+    private static void writeError(String s) {
+        boolean toError = io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewErrorLog();
+        boolean toRuntime = io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog();
+        if (!toError && !toRuntime) {
+            return;
+        }
+        String msg = withUser(s);
+        if (toError) {
+            errorLogger.i(msg);
+        }
+        if (toRuntime) {
+            runtimeLogger.i(msg);
+        }
+    }
+
     public static void i(String s) {
         if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
             return;
         }
-        runtimeLogger.i(s);
+        runtimeLogger.i(withUser(s));
     }
 
     public static void i(String tag, String s) {
@@ -198,87 +217,63 @@ public class Log {
         countModuleLog();
         // 记录日志(record)已停用,只按「查看运行日志」开关写入运行日志
         if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            runtimeLogger.i(str);
+            runtimeLogger.i(withUser(str));
         }
     }
 
+    /**
+     * system 记录(配置加载/保存/重置等)：统一并入运行日志，不再单独写 system.&lt;date&gt;.log。
+     * <p>这些调用点旁边本就有一条内容相同的 Log.i，单独建文件只是重复副本，
+     * 而且查看器里也没有对应的日志类目。仍受「查看运行日志」开关控制。
+     */
     public static void system(String tag, String s) {
-        // system 记录(配置加载/保存/重置等)同样受「查看运行日志」开关控制,
-        // 避免关闭运行日志后仍持续写入 system 日志
         if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
             return;
         }
-        systemLogger.i(tag + ", " + s);
+        runtimeLogger.i(withUser(tag + ", " + s));
     }
 
     public static void forest(String s) {
         countModuleLog();
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            runtimeForestLogger.i(s);
-        }
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog()) {
-            forestLogger.i(s);
-        }
+        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeForestLogger,
+                io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog(), forestLogger);
     }
 
     public static void goldenBeans(String s) {
         countModuleLog();
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            runtimeGoldenBeansLogger.i(s);
-        }
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog()) {
-            goldenBeansLogger.i(s);
-        }
+        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeGoldenBeansLogger,
+                io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog(), goldenBeansLogger);
     }
 
     public static void farm(String s) {
         countModuleLog();
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            runtimeFarmLogger.i(s);
-        }
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableFarmLog()) {
-            farmLogger.i(s);
-        }
+        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeFarmLogger,
+                io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableFarmLog(), farmLogger);
     }
 
     public static void other(String s) {
         countModuleLog();
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            runtimeOtherLogger.i(s);
-        }
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableOtherLog()) {
-            otherLogger.i(s);
-        }
+        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeOtherLogger,
+                io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableOtherLog(), otherLogger);
     }
 
     public static void debug(String s) {
         if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableDebugLog()) {
             return;
         }
-        debugLogger.d(s);
+        debugLogger.d(withUser(s));
     }
 
     public static void error(String s) {
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewErrorLog()) {
-            errorLogger.i(s);
-        }
-        i(s);
+        writeError(s);
     }
 
     public static void printStackTrace(Throwable t) {
-        String str = android.util.Log.getStackTraceString(t);
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewErrorLog()) {
-            errorLogger.i(str);
-        }
-        i(str);
+        writeError(android.util.Log.getStackTraceString(t));
     }
 
     public static void printStackTrace(String tag, Throwable t) {
-        String str = tag + ", " + android.util.Log.getStackTraceString(t);
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewErrorLog()) {
-            errorLogger.i(str);
-        }
-        i(str);
+        writeError(tag + ", " + android.util.Log.getStackTraceString(t));
     }
 
     public static String getLogFileName(String logName) {

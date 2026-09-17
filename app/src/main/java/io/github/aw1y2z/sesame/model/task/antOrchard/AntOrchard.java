@@ -1145,7 +1145,7 @@ public class AntOrchard extends ModelTask {
                                 }
 
                                 String jackpotMessage = jackpot ? "（触发大奖）" : "";
-                                Log.farm("砸出肥料🎖️" + manureCount + "g" + unsmashedGoldenEggsString + jackpotMessage + "#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+                                Log.farm("砸出肥料🎖️" + manureCount + "g" + unsmashedGoldenEggsString + jackpotMessage + "");
                             }
                         }
                     }

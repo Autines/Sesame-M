@@ -37,7 +37,10 @@ public class ModuleHttpServer extends NanoHTTPD {
      * @param secretToken 秘钥令牌
      */
     public ModuleHttpServer(int port, String secretToken) {
-        super("0.0.0.0", port);
+        // 仅监听回环地址：避免同局域网内其他设备直接访问（原来绑 0.0.0.0 时，
+        // /getAlipayMiniMark 与 /getAuthCode 两条路由不做鉴权，可被同网段任意设备调用）。
+        // 本机调用不受影响；需要从电脑访问时用 adb forward tcp:8080 tcp:8080。
+        super("127.0.0.1", port);
         // 原Kotlin init块中的路由注册逻辑
         register("/debugHandler", new DebugHandler(secretToken), "调试接口");
         register("/getAlipayMiniMark", new AlipayMiniMarkHandler(), "获取支付宝小程序标记");

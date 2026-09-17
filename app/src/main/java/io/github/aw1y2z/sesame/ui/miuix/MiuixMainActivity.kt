@@ -651,8 +651,9 @@ fun openLog(activity: MiuixMainActivity, logType: LogType) {
 fun ConfigTab() {
     val context = LocalContext.current
     val items = remember {
-        val list = ArrayList<Pair<String?, String>>()
-        list.add(null to "默认")
+        // (userId, 标题, 副标题)：标题固定为「账号N」保证单行不换行，昵称/账号放副标题
+        val list = ArrayList<Triple<String?, String, String?>>()
+        list.add(Triple(null, "默认", null))
         try {
             val dir = FileUtil.CONFIG_DIRECTORY_FILE
             dir.listFiles()?.forEach { configDir ->
@@ -660,8 +661,9 @@ fun ConfigTab() {
                     val userId = configDir.name
                     UserIdMap.loadSelf(userId)
                     val userEntity = UserIdMap.get(userId)
-                    val name = userEntity?.let { it.showName + ": " + it.account } ?: userId
-                    list.add(userId to name)
+                    val label = UserIdMap.getAccountLabel(userId) ?: userId
+                    val summary = userEntity?.let { it.showName + ": " + it.account }
+                    list.add(Triple(userId, label, summary))
                 }
             }
         } catch (e: Exception) {
@@ -680,9 +682,10 @@ fun ConfigTab() {
 
     SmallTitle(text = "配置管理")
     CardColumn {
-        items.forEach { (userId, name) ->
+        items.forEach { (userId, title, summary) ->
             ArrowPreference(
-                title = name,
+                title = title,
+                summary = summary,
                 onClick = {
                     val intent = Intent(context, MiuixSettingsActivity::class.java)
                     if (userId != null) intent.putExtra("userId", userId)

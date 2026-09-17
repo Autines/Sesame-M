@@ -402,7 +402,7 @@ public class AntOcean extends ModelTask {
             String taskId = "Ocean|" + UserId;
             if (!hasChildTask(taskId)) {
                 addChildTask(new ChildModelTask(taskId, "Ocean", this::queryHomePage, canCleanLaterTime));
-                Log.record("神奇海洋🐳蹲添加蹲点在[" + TimeUtil.getCommonDate(canCleanLaterTime) + "]执行清理海洋#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+                Log.record("神奇海洋🐳蹲添加蹲点在[" + TimeUtil.getCommonDate(canCleanLaterTime) + "]执行清理海洋");
             }
         } catch (Throwable t) {
             Log.i(TAG, "queryHomePage err:");
@@ -590,7 +590,7 @@ public class AntOcean extends ModelTask {
                 JSONObject Extrajo = new JSONObject(AntOceanRpcCall.createSeaAreaExtraCollect());
                 if (MessageUtil.checkResultCode(TAG, Extrajo)) {
                     if (Extrajo.has("seaAreaExtraCollectVO")) {
-                        Log.forest("神奇海洋🐳开启了神秘海域#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+                        Log.forest("神奇海洋🐳开启了神秘海域");
                     }
                 }
             }
@@ -612,7 +612,7 @@ public class AntOcean extends ModelTask {
                 JSONObject Extrajo = new JSONObject(AntOceanRpcCall.createSeaAreaExtraCollect());
                 if (MessageUtil.checkResultCode(TAG, Extrajo)) {
                     if (Extrajo.has("seaAreaExtraCollectVO")) {
-                        Log.forest("神奇海洋🐳开启了神秘海域#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+                        Log.forest("神奇海洋🐳开启了神秘海域");
                     }
                 }
             }
@@ -677,7 +677,7 @@ public class AntOcean extends ModelTask {
                 JSONObject Extrajo = new JSONObject(Extrastr == null ? "{}" : Extrastr);
                 if (MessageUtil.checkResultCode(TAG, Extrajo)) {
                     if (Extrajo.has("seaAreaExtraCollectVO")) {
-                        Log.forest("神奇海洋🐳开启了神秘海域#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+                        Log.forest("神奇海洋🐳开启了神秘海域");
                     }
                 }
             }

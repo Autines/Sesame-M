@@ -68,7 +68,7 @@ public abstract class BaseCaptchaHandler {
                 // Log.captcha(TAG, "未找到滑动验证文本，跳过处理");
                 return false; // 未找到关键视图，返回 false 让其他处理器尝试
             }
-            Log.record("滑动验证🆘发现滑动验证文本:" + slideTextInDialog.getText()+"[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+            Log.record("滑动验证🆘发现滑动验证文本:" + slideTextInDialog.getText()+"");
             try {
                 Thread.sleep(500L); // 等待界面稳定
             } catch (InterruptedException e) {
@@ -210,7 +210,7 @@ public abstract class BaseCaptchaHandler {
         Log.record("滑块信息: 位置=[" + sliderX + "," + sliderY + "], 尺寸=" + sliderWidth + "x" + sliderHeight);
         Log.record("计算结果: 起点=[" + startX + "," + startY + "], 终点=[" + endX + "," + endY + "], 滑动距离=" + (endX - startX) + "px");
         */
-        //Log.record("滑动验证🆘屏幕信息:尺寸=" + screenWidth + "x" + screenHeight + ";" + "滑动区域信息:容器位置=[" + containerX + "," + containerY + "],尺寸=" + containerWidth + "x" + containerHeight + ";" + "滑块信息:位置=[" + sliderX + "," + sliderY + "],尺寸=" + sliderWidth + "x" + sliderHeight + ";" + "计算结果:起点=[" + startX + "," + startY + "],终点=[" + endX + "," + endY + "],滑动距离=" + (endX - startX) + "px.[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+        //Log.record("滑动验证🆘屏幕信息:尺寸=" + screenWidth + "x" + screenHeight + ";" + "滑动区域信息:容器位置=[" + containerX + "," + containerY + "],尺寸=" + containerWidth + "x" + containerHeight + ";" + "滑块信息:位置=[" + sliderX + "," + sliderY + "],尺寸=" + sliderWidth + "x" + sliderHeight + ";" + "计算结果:起点=[" + startX + "," + startY + "],终点=[" + endX + "," + endY + "],滑动距离=" + (endX - startX) + "px.");
         // 生成滑动指令并发送广播
         long slideDuration = SLIDE_DURATION_MIN + RandomUtil.nextLong(SLIDE_DURATION_MAX,SLIDE_DURATION_MIN + 1);
         String swipeCmd = String.format("input swipe %d %d %d %d %d",

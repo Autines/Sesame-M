@@ -3336,7 +3336,7 @@ public class AntFarm extends ModelTask {
                                     }
                                 }
                                 String awardLog = String.join(",", awardStrings);
-                                Log.farm("小鸡乐园🎁开宝箱得[" + awardLog + "]#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+                                Log.farm("小鸡乐园🎁开宝箱得[" + awardLog + "]");
                                 TimeUtil.sleep(3000);
                             } else {
                                 Log.record("小鸡乐园开启宝箱失败: " + drawRes.optString("desc"));
@@ -3763,7 +3763,7 @@ public class AntFarm extends ModelTask {
             }
             JSONObject jo = new JSONObject(AntFarmRpcCall.familyEatTogether(groupId, cuisines, EatTogetherUserIds));
             if (MessageUtil.checkMemo(TAG, jo)) {
-                Log.farm("亲密家庭🏠" + periodName + "请客#消耗美食" + EatTogetherUserIds.length() + "份#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+                Log.farm("亲密家庭🏠" + periodName + "请客#消耗美食" + EatTogetherUserIds.length() + "份");
                 syncFamilyStatus(groupId);
             }
         } catch (Throwable t) {

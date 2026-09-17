@@ -185,7 +185,7 @@ public class FileUtil {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Files.copy(originalFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
-            Log.record("备份成功🔄配置覆盖滚动" + BACKUP_MAX_COUNT + "次循环#用户:" + (StringUtil.isEmpty(userId) ? "default" : getShowName(getShowName(userId))) + "#备份文件:" + getBackupDirectoryFile().getPath() + "/" + targetFile.getName());
+            Log.record("备份成功🔄配置覆盖滚动" + BACKUP_MAX_COUNT + "次循环#用户:" + (StringUtil.isEmpty(userId) ? "default" : io.github.aw1y2z.sesame.util.idMap.UserIdMap.getAccountLabel(userId)) + "#备份文件:" + getBackupDirectoryFile().getPath() + "/" + targetFile.getName());
         } catch (IOException e) {
             Log.printStackTrace(FileUtil.class.getSimpleName(), e);
             Log.error("备份失败|用户: " + (StringUtil.isEmpty(userId) ? "default" : userId) + "|原因: " + e.getMessage());
@@ -329,6 +329,18 @@ public class FileUtil {
     
     public static boolean setTokenConfigFile(String json) {
         return write2File(json, new File(MAIN_DIRECTORY_FILE, "token_config.json"));
+    }
+    
+    /**
+     * 账号序号映射文件（uid -> 账号N 的 N）：首次出现时分配并持久化，只增不改，
+     * 保证历史日志里的「账号N」与配置页显示的序号始终指向同一账号。
+     */
+    public static File getAccountIndexFile() {
+        File file = new File(MAIN_DIRECTORY_FILE, "accountIndex.json");
+        if (file.exists() && file.isDirectory()) {
+            file.delete();
+        }
+        return file;
     }
     
     public static File getSelfIdFile(String userId) {
@@ -697,36 +709,6 @@ public class FileUtil {
             }
         }
         return runtimeLogFile;
-    }
-    
-    public static File getRecordLogFile() {
-        File recordLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("record"));
-        if (recordLogFile.exists() && recordLogFile.isDirectory()) {
-            recordLogFile.delete();
-        }
-        if (!recordLogFile.exists()) {
-            try {
-                recordLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return recordLogFile;
-    }
-    
-    public static File getSystemLogFile() {
-        File systemLogFile = new File(LOG_DIRECTORY_FILE, Log.getLogFileName("system"));
-        if (systemLogFile.exists() && systemLogFile.isDirectory()) {
-            systemLogFile.delete();
-        }
-        if (!systemLogFile.exists()) {
-            try {
-                systemLogFile.createNewFile();
-            }
-            catch (Throwable ignored) {
-            }
-        }
-        return systemLogFile;
     }
     
     public static File getDebugLogFile() {

@@ -191,7 +191,7 @@ public class Status {
         }
         
         // 4. 输出汇总统计信息
-        Log.forest("统计被水🍯共计被"+friendCount+"个好友浇水"+ totalWaterAmount+"次#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+        Log.forest("统计被水🍯共计被"+friendCount+"个好友浇水"+ totalWaterAmount+"次");
     
         // 5. 从ConfigV2读取wateredFriendList配置值
         Map<String, Integer> configWateredFriendList = null;
@@ -220,7 +220,7 @@ public class Status {
                     configTotalWaterAmount += configWaterAmount;
                 }
             }
-            Log.forest("统计被水🍯预计被"+configFriendCount+"个好友浇水"+ configTotalWaterAmount+"次#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+            Log.forest("统计被水🍯预计被"+configFriendCount+"个好友浇水"+ configTotalWaterAmount+"次");
 
             // 6.2 对比配置和实际浇水情况，输出差别
             for (Map.Entry<String, Integer> entry : configWateredFriendList.entrySet()) {
@@ -327,7 +327,7 @@ public class Status {
                     wateredFriendField.setObjectValue(configWateredFriendList);
                     String currentUid = UserIdMap.getCurrentUid();
                     ConfigV2.save(currentUid, true);
-                    Log.forest("填入被水🍯完成新增" + addedCount + "个更新" + updatedCount + "个清除" + removedCount + "个#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+                    Log.forest("填入被水🍯完成新增" + addedCount + "个更新" + updatedCount + "个清除" + removedCount + "个");
                 }
             }
         } catch (Exception e) {
@@ -369,7 +369,7 @@ public class Status {
         }
         
         // 4. 输出汇总统计信息
-        Log.forest("统计浇水🚿共计给"+friendCount+"个好友浇水"+ totalWaterAmount+"次#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+        Log.forest("统计浇水🚿共计给"+friendCount+"个好友浇水"+ totalWaterAmount+"次");
         
         // 5. 从ConfigV2读取waterFriendList配置值
         Map<String, Integer> configWaterFriendList = null;
@@ -398,7 +398,7 @@ public class Status {
                     configTotalWaterAmount += configWaterAmount;
                 }
             }
-            Log.forest("统计浇水🚿预计给"+configFriendCount+"个好友浇水"+ configTotalWaterAmount+"次#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
+            Log.forest("统计浇水🚿预计给"+configFriendCount+"个好友浇水"+ configTotalWaterAmount+"次");
 
             // 6.2 对比配置和实际浇水情况，输出差别
             for (Map.Entry<String, Integer> entry : configWaterFriendList.entrySet()) {
@@ -701,21 +701,18 @@ public class Status {
                 String formatted = JsonUtil.toFormatJsonString(INSTANCE);
                 if (formatted != null && !formatted.equals(json)) {
                     Log.i(TAG, "重新格式化 status.json");
-                    Log.system(TAG, "重新格式化 status.json");
                     FileUtil.write2File(formatted, FileUtil.getStatusFile(currentUid));
                 }
             }
             else {
                 JsonUtil.copyMapper().updateValue(INSTANCE, new Status());
                 Log.i(TAG, "初始化 status.json");
-                Log.system(TAG, "初始化 status.json");
                 FileUtil.write2File(JsonUtil.toFormatJsonString(INSTANCE), FileUtil.getStatusFile(currentUid));
             }
         }
         catch (Throwable t) {
             Log.printStackTrace(TAG, t);
             Log.i(TAG, "状态文件格式有误，已重置");
-            Log.system(TAG, "状态文件格式有误，已重置");
             try {
                 JsonUtil.copyMapper().updateValue(INSTANCE, new Status());
                 FileUtil.write2File(JsonUtil.toFormatJsonString(INSTANCE), FileUtil.getStatusFile(currentUid));
