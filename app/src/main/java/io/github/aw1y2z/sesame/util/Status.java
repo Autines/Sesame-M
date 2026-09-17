@@ -619,6 +619,11 @@ public class Status {
         if (task == null) {
             return false;
         }
+        // 双击卡使用次数配置已停用（AntForestV2 里对应的 addField 被注释）→ 字段必为 null，
+        // 按"当日不能再双击"处理，避免 NPE（与其它双击卡配置的停用语义保持一致）
+        if (task.getDoubleCountLimit() == null || task.getDoubleCountLimit().getValue() == null) {
+            return false;
+        }
         return INSTANCE.doubleTimes < task.getDoubleCountLimit().getValue();
     }
     

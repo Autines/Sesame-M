@@ -163,6 +163,8 @@ public final class GoldenBeansExchange {
                 Log.goldenBeans("金豆芝麻粒换豆⚠️响应缺少有效beanDelta#不记录额度");
                 return;
             }
+            // 豆已换出：先记当日额度再回查。原先放在回查之后，回查失败即不记额度 → 会重复换豆/超单日上限
+            Status.setIntFlagToday(FLAG_SESAME_BEAN_AMOUNT, exchangedToday + beanDelta);
 
             GoldenBeansSupport.pause(interval);
             JSONObject syncResponse = GoldenBeansSupport.parse(goldenbeansRpcCall.pullOf(
@@ -173,7 +175,6 @@ public final class GoldenBeansExchange {
                 return;
             }
             JSONObject afterInfo = syncResponse.optJSONObject("manureExchangeInfo");
-            Status.setIntFlagToday(FLAG_SESAME_BEAN_AMOUNT, exchangedToday + beanDelta);
             Log.goldenBeans("金豆芝麻粒换豆🌾请求[" + exchangeBeanAmount + "]消耗["
                     + exchangeResponse.optInt("manureCost", -1) + "芝麻粒]#获得[" + beanDelta + "豆]"
                     + "剩余芝麻粒["

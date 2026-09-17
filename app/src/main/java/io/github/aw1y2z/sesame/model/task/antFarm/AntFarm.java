@@ -2820,7 +2820,8 @@ public class AntFarm extends ModelTask {
                 Log.farm("乐币兑奖🎐[" + skuName + "]#第" + buyedCount + "次");
                 return true;
             } else {
-                Status.gameCenterBuyMallItemToday(skuId);
+                // 失败不累加当日次数：该计数用于控制当日兑换额度，成功才算一次，
+                // 否则一次可重试的失败会吃掉额度导致当天不再重试（与 AntForestV2.exchangeBenefit 保持一致）
                 return false;
             }
         } catch (Throwable th) {

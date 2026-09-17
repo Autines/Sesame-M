@@ -1418,6 +1418,8 @@ public class AntMember extends ModelTask {
         if (Status.hasFlagToday("AntMember::zmlCheckIn")) {
             return;
         }
+        // 领取是否失败：失败时不置今日标记，留给下一轮重试（否则当天不再重试 → 漏领）
+        boolean claimFailed = false;
         try {
             
             String checkInRes = AntMemberRpcCall.alchemyQueryCheckIn("zml");
@@ -1442,17 +1444,24 @@ public class AntMember extends ModelTask {
                                     Log.other("收芝麻粒🙇🏻‍♂️领取[每日签到成功]#获得" + num + "粒");
                                 }
                                 else {
+                                    claimFailed = true;
                                     Log.error(".doSesameAlchemy#" + "签到失败:" + completeRes);
                                 }
                             }
                             catch (Throwable e) {
+                                claimFailed = true;
                                 Log.printStackTrace(TAG + ".doSesameAlchemy.alchemyCheckInComplete", e);
                             }
                         }
                     }
                 }
             }
-            Status.flagToday("AntMember::zmlCheckIn");
+            if (claimFailed) {
+                Log.other("收芝麻粒🙇🏻‍♂️签到领取失败#本轮不置今日标记，稍后重试");
+            }
+            else {
+                Status.flagToday("AntMember::zmlCheckIn");
+            }
         }
         catch (Throwable t) {
             Log.printStackTrace(TAG + ".doSesameZmlCheckIn", t);

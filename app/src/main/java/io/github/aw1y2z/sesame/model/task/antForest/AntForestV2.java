@@ -3165,7 +3165,8 @@ public class AntForestV2 extends ModelTask {
     }
 
     private Boolean needDoubleClick() {
-        if (doubleClickType.getValue() == UsePropType.CLOSE) {
+        // 双击卡配置已停用（addField 被注释）→ 字段为 null，按"关闭"处理，避免 NPE
+        if (doubleClickType == null || doubleClickType.getValue() == UsePropType.CLOSE) {
             return false;
         }
         Long doubleClickEndTime = usingProps.get(PropGroup.doubleClick.name());
@@ -3185,7 +3186,8 @@ public class AntForestV2 extends ModelTask {
                     jo = list.get(0);
                 }
                 if (jo == null || !jo.has("recentExpireTime")) {
-                    if (doubleCardConstant.getValue()) {
+                    // 配置已停用则字段为 null，按"关闭"处理
+                    if (doubleCardConstant != null && doubleCardConstant.getValue()) {
                         // 商店兑换 限时能量双击卡
                         if (exchangeBenefit("SK20240805004754")) {
                             jo = getForestPropVO(getForestPropVOList(), "ENERGY_DOUBLE_CLICK_31DAYS");
@@ -3197,7 +3199,8 @@ public class AntForestV2 extends ModelTask {
                 if (jo == null) {
                     return;
                 }
-                if (!jo.has("recentExpireTime") && doubleClickType.getValue() == UsePropType.ONLY_LIMIT_TIME) {
+                if (!jo.has("recentExpireTime")
+                        && (doubleClickType == null || doubleClickType.getValue() == UsePropType.ONLY_LIMIT_TIME)) {
                     return;
                 }
                 // 使用能量双击卡
@@ -3216,6 +3219,10 @@ public class AntForestV2 extends ModelTask {
     }
 
     private boolean hasDoubleCardTime() {
+        // 配置已停用（addField 被注释）→ 字段为 null，视为"不在使用时间范围"
+        if (doubleCardTime == null) {
+            return false;
+        }
         long currentTimeMillis = System.currentTimeMillis();
         return TimeUtil.checkInTimeRange(currentTimeMillis, doubleCardTime.getValue());
     }
