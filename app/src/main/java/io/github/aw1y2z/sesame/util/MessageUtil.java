@@ -5,6 +5,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.aw1y2z.sesame.data.ConfigV2;
 import io.github.aw1y2z.sesame.data.ModelFields;
@@ -35,10 +36,13 @@ public class MessageUtil {
         return null;
     }
 
-    /** 服务端繁忙退避：起夜 2s，连续命中翻倍，上限 8s */
-    private static final long SERVER_BUSY_BASE_MS = 2000L;
-    private static final long SERVER_BUSY_MAX_MS = 8000L;
-    private static int serverBusyStreak = 0;
+    /**
+     * 服务端繁忙（102）日志降噪：同一模块（tag）累计打印满该次数后，后续 102 不再打印。
+     * <p>这里**只降噪、不拦截**：请求照发——不做跳过、不做退避 sleep、也不写"当日停试"标记。
+     */
+    private static final int SERVER_BUSY_LOG_LIMIT = 3;
+    /** tag → 已打印过的 102 次数（只增不减，进程重启即清零） */
+    private static final Map<String, int[]> SERVER_BUSY_LOG_COUNT = new ConcurrentHashMap<>();
 
     /**
      * 是否服务端繁忙：`resultCode=102` 或文案为"服务器正在开小差"。
@@ -54,30 +58,6 @@ public class MessageUtil {
         return jo.optString("memo", "").contains("服务器正在开小差");
     }
 
-    /**
-     * 服务端繁忙时退避：命中即 sleep（2s 起、连续命中翻倍、上限 8s），收到非繁忙响应则计数归零。
-     * <p>实测原先会在几秒内连打 3 次（23:59:12/15/19、00:08:26/29），退避后既少发无效请求也少刷日志。
-     *
-     * @return 是否命中服务端繁忙
-     */
-    public static boolean backOffIfServerBusy(JSONObject jo) {
-        long sleepMs;
-        int streak;
-        // 只在锁内更新连续计数，sleep 必须放在锁外——否则一个模块退避会连带卡住其它模块
-        synchronized (MessageUtil.class) {
-            if (!isServerBusy(jo)) {
-                serverBusyStreak = 0;
-                return false;
-            }
-            sleepMs = Math.min(SERVER_BUSY_BASE_MS << Math.min(serverBusyStreak, 2), SERVER_BUSY_MAX_MS);
-            serverBusyStreak++;
-            streak = serverBusyStreak;
-        }
-        Log.i(TAG, "服务端繁忙🌧️退避" + (sleepMs / 1000) + "s后继续(连续第" + streak + "次)");
-        TimeUtil.sleep(sleepMs);
-        return true;
-    }
-
     /** 在多个文案字段里找关键字（各接口字段不统一，不能只扫 desc） */
     private static boolean anyFieldContains(JSONObject jo, String keyword) {
         for (String field : FAIL_TEXT_FIELDS) {
@@ -88,16 +68,43 @@ public class MessageUtil {
         return false;
     }
 
+    /**
+     * 打印失败应答。唯一的特殊处理是**服务端繁忙（102）的日志降噪**：同一 tag 累计打印满
+     * {@link #SERVER_BUSY_LOG_LIMIT} 次后不再打印，避免限流期间刷屏。
+     * <p>注意：这里不拦截、不退避、不跳过——请求该发照发，只是少写几行日志。
+     */
     public static void printErrorMessage(String tag, JSONObject jo, String errorMessageField) {
         try {
-            // 服务端繁忙先退避，避免几秒内连续重试（所有失败文案都汇聚到这里）
-            backOffIfServerBusy(jo);
-            String errMsg = tag + " error:";
-            Log.record(errMsg + jo.getString(errorMessageField));
-            Log.i(jo.getString(errorMessageField), jo.toString());
+            String memo = jo.getString(errorMessageField);
+            if (isServerBusy(jo) && !shouldLogServerBusy(tag)) {
+                return;
+            }
+            Log.record(tag + " error:" + memo);
+            Log.i(memo, jo.toString());
         } catch (Throwable t) {
             Log.err(TAG, "printErrorMessage err:", t);
         }
+    }
+
+    /**
+     * 服务端繁忙（102）是否还应该打印日志：同一 tag 前 {@link #SERVER_BUSY_LOG_LIMIT} 次打印，
+     * 之后静默（并在最后一次打印时提示"已开始静默"，免得看日志的人以为 102 消失了）。
+     */
+    private static boolean shouldLogServerBusy(String tag) {
+        String key = StringUtil.isEmpty(tag) ? UNKNOWN_TAG : tag;
+        int printed;
+        synchronized (MessageUtil.class) {
+            int[] state = SERVER_BUSY_LOG_COUNT.computeIfAbsent(key, k -> new int[]{0});
+            if (state[0] >= SERVER_BUSY_LOG_LIMIT) {
+                return false;
+            }
+            state[0]++;
+            printed = state[0];
+        }
+        if (printed == SERVER_BUSY_LOG_LIMIT) {
+            Log.i(key, "服务端繁忙🌧️本模块 102 已累计" + printed + "次，后续 102 不再打印日志（请求照常发送）");
+        }
+        return true;
     }
 
     public static Boolean checkMemo(JSONObject jo) {
