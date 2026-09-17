@@ -128,7 +128,7 @@ public class AntSports extends ModelTask {
         modelFields.addField(clubTradeMemberType = new ChoiceModelField("clubTradeMemberType", "抢好友 | 抢购动作", TradeMemberType.NONE, TradeMemberType.nickNames));
         modelFields.addField(clubTradeMemberList = new SelectModelField("clubTradeMemberList", "抢好友 | 好友列表", new LinkedHashSet<>(), AlipayUser::getList));
         modelFields.addField(tiyubiz = new BooleanModelField("tiyubiz", "文体中心", false));
-        modelFields.addField(syncStepCount = new IntegerModelField("syncStepCount", "同步步数 | 自定义", 22000));
+        modelFields.addField(syncStepCount = new IntegerModelField("syncStepCount", "同步步数 | 自定义", 22000, 0, 78000));
         modelFields.addField(earliestSyncStepTime = new IntegerModelField("earliestSyncStepTime", "同步步数 | 最早同步时间(24小时制)", 0, 0, 23));
         modelFields.addField(latestExchangeTime = new IntegerModelField("latestExchangeTime", "行走捐 | 最晚捐步时间(24小时制)", 22));
         modelFields.addField(minExchangeCount = new IntegerModelField("minExchangeCount", "行走捐 | 最小捐步步数", 10));
@@ -157,7 +157,7 @@ public class AntSports extends ModelTask {
                     int hour = Integer.parseInt(Log.getFormatTime().split(":")[0]);
                     int originStep = (Integer) param.getResult();
                     int step = tmpStepCount();
-                    if (!Status.hasFlagToday("sport::syncStep") && hour >= earliestSyncStepTime.getValue() && originStep < step) {
+                    if (hour >= earliestSyncStepTime.getValue() && originStep < step) {
                         param.setResult(step);
                     }
                 }
@@ -182,8 +182,8 @@ public class AntSports extends ModelTask {
     public void run() {
         try {
             int hour = Integer.parseInt(Log.getFormatTime().split(":")[0]);
-            //if (!Status.hasFlagToday("sport::syncStep")) {
-            if (!Status.hasFlagToday("sport::syncStep") && hour >= earliestSyncStepTime.getValue()) {
+            // 主动推送使用独立标记 sport::syncStepPush，失败/废弃都不再影响 readDailyStep hook
+            if (!Status.hasFlagToday("sport::syncStepPush") && hour >= earliestSyncStepTime.getValue()) {
                 JSONObject jo = new JSONObject(AntSportsRpcCall.queryWalkStep());
                 if (!MessageUtil.checkResultCode(TAG, jo)) {
                     return;
@@ -192,23 +192,30 @@ public class AntSports extends ModelTask {
                 addChildTask(new ChildModelTask("syncStep", () -> {
                     int step = tmpStepCount();
                     if (stepCount < step) {
-                        // 支付宝 v10.8.60+ 已移除 RpcManager.a() 方法，改用反射调用防止编译报错
-                        // readDailyStep hook 仍正常工作（篡改步数读取），此主动推送机制已废弃
+                        // a(int, boolean, String) 是【实例方法】。旧实现为两步：
+                        //   XHelpers.callMethod(XHelpers.callStaticMethod(RpcManager.class, "a"), "a", {step, false, "system"})
+                        // 即先用静态无参 a() 取单例，再在该实例上调用；此前误写成 Method.invoke(null, …) 传 null 接收者 → null receiver NPE
                         try {
                             ClassLoader classLoader = ApplicationHook.getClassLoader();
-                            java.lang.reflect.Method m = classLoader.loadClass("com.alibaba.health.pedometer.intergation.rpc.RpcManager").getMethod("a", int.class, boolean.class, String.class);
-                            if ((Boolean) m.invoke(null, step, Boolean.FALSE, "system")) {
+                            Class<?> rpcManagerClass = classLoader.loadClass("com.alibaba.health.pedometer.intergation.rpc.RpcManager");
+                            Object rpcManager = XHelpers.callStaticMethod(rpcManagerClass, "a");
+                            if ((Boolean) XHelpers.callMethod(rpcManager, "a", step, Boolean.FALSE, "system")) {
                                 Toast.show("同步步数🏃🏻‍♂️[" + step + "步]");
                                 Log.other("同步步数🏃🏻‍♂️[" + step + "步]#[" + UserIdMap.getShowName(UserIdMap.getCurrentUid()) + "]");
-                                Status.flagToday("sport::syncStep");
+                                Status.flagToday("sport::syncStepPush");
                             } else {
                                 Log.record("同步运动步数失败:" + step);
                             }
-                        } catch (NoSuchMethodException e) {
-                            Log.record("RpcManager.a() 接口已废弃（支付宝新版本不再支持），跳过主动步数推送；hook 注入步数仍正常工作");
-                            Status.flagToday("sport::syncStep");
                         } catch (Throwable t) {
-                            Log.printStackTrace(TAG, t);
+                            // XHelpers 会把 NoSuchMethodException 包装进 RuntimeException，这里统一处理
+                            if (t.getCause() instanceof NoSuchMethodException) {
+                                Log.record("同步步数主动推送⚠️接口已不可用（新版支付宝移除），已跳过；readDailyStep hook 不受影响");
+                            } else {
+                                Log.record("同步步数主动推送⚠️异常，已跳过；readDailyStep hook 不受影响");
+                                Log.printStackTrace(TAG, t);
+                            }
+                            // 标记已尝试，避免每次运行都重试刷日志（readDailyStep hook 已能独立工作）
+                            Status.flagToday("sport::syncStepPush");
                         }
                     }
                 }));
@@ -283,8 +290,8 @@ public class AntSports extends ModelTask {
         tmpStepCount = syncStepCount.getValue();
         if (tmpStepCount > 0) {
             tmpStepCount = RandomUtil.nextInt(tmpStepCount, tmpStepCount + 2000);
-            if (tmpStepCount > 100000) {
-                tmpStepCount = 100000;
+            if (tmpStepCount > 78000) {
+                tmpStepCount = 78000;
             }
         }
         return tmpStepCount;
