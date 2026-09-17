@@ -71,7 +71,7 @@ public class AntDodo extends ModelTask {
     public ModelFields getFields() {
         ModelFields modelFields = new ModelFields();
         modelFields.addField(dodoTaskList = new BooleanModelField("dodoTaskList", "物种任务", false));
-        modelFields.addField(AutoAntDodoTaskList = new BooleanModelField("AutoAntDodoTaskList", "物种任务 | 自动黑白名单", true));
+        modelFields.addField(AutoAntDodoTaskList = new BooleanModelField("AutoAntDodoTaskList", "物种任务 | 自动黑名单", true));
         modelFields.addField(AntDodoTaskList = new SelectModelField("AntDodoTaskList", "物种任务 | 黑名单列表", new LinkedHashSet<>(), AlipayAntDodoTaskList::getList));
         modelFields.addField(useProp = new BooleanModelField("useProp", "使用道具 | 开启", false));
         modelFields.addField(usePropList = new SelectModelField("usePropList", "使用道具 | 道具列表", new LinkedHashSet<>(), CustomOption::getAntDodoPropList));
