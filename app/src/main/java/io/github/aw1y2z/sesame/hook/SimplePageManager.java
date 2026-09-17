@@ -14,9 +14,11 @@ import android.widget.TextView;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.aw1y2z.sesame.util.compat.XC_MethodHook;
 import io.github.aw1y2z.sesame.util.XHelpers;
@@ -30,7 +32,8 @@ public class SimplePageManager {
     
     private static WeakReference<Context> mContextRef;
     private static ClassLoader mClassLoader;
-    private static Activity topActivity;
+    /** 顶层 Activity 只持弱引用：静态强引用会把已销毁的 Activity 一直留到进程结束 */
+    private static WeakReference<Activity> topActivityRef;
     
     private static final ConcurrentHashMap<String, ActivityFocusHandler> activityFocusHandlerMap = new ConcurrentHashMap<>();
     
@@ -38,11 +41,13 @@ public class SimplePageManager {
     public static final Handler handler = new Handler(Looper.getMainLooper());
     
     private static int taskDuration = 500;
-    // 加 volatile 保证多线程可见性（参考 BaseTask.java 并发设计）
-    private static volatile boolean hasPendingActivityTask = false;
+    // 用 AtomicBoolean 而不是 volatile boolean：原先"判断 + 置位"是两步，多线程下会同时通过
+    private static final AtomicBoolean hasPendingActivityTask = new AtomicBoolean(false);
     private static boolean disable = false;
     
-    private static final ArrayList<WeakReference<Dialog>> dialogs = new ArrayList<>();
+    // 对话框列表会被 hook 线程（写）与模块线程（读）同时访问：
+    // CopyOnWriteArrayList 保证遍历期间不会被插入/删除打断（原先 ArrayList 会抛 ConcurrentModificationException）
+    private static final List<WeakReference<Dialog>> dialogs = new CopyOnWriteArrayList<>();
     private static boolean windowMonitorEnabled = false;
     
     /**
@@ -65,7 +70,7 @@ public class SimplePageManager {
     }
     
     public static Activity getTopActivity() {
-        return topActivity;
+        return topActivityRef != null ? topActivityRef.get() : null;
     }
     
     public static void setTaskDuration(int duration) {
@@ -84,7 +89,7 @@ public class SimplePageManager {
         activityFocusHandlerMap.remove(activityClassName);
     }
     
-    public static ArrayList<WeakReference<Dialog>> getDialogs() {
+    public static List<WeakReference<Dialog>> getDialogs() {
         return dialogs;
     }
     
@@ -114,13 +119,8 @@ public class SimplePageManager {
      */
     @SuppressLint("UseCompatLoadingForDrawables")
     public static io.github.aw1y2z.sesame.hook.SimpleViewImage tryGetTopView(String xpath) {
-        // 清理空引用
-        Iterator<WeakReference<Dialog>> iterator = dialogs.iterator();
-        while (iterator.hasNext()) {
-            if (iterator.next().get() == null) {
-                iterator.remove();
-            }
-        }
+        // 清理空引用：CopyOnWriteArrayList 的 removeIf 内部按快照处理，不会与其它线程的写入冲突
+        dialogs.removeIf(ref -> ref.get() == null);
         
         for (WeakReference<Dialog> dialogWeakReference : dialogs) {
             Dialog dialog = dialogWeakReference.get();
@@ -181,11 +181,12 @@ public class SimplePageManager {
                     new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
-                            topActivity = (Activity) param.args[0];
+                            Activity activity = (Activity) param.args[0];
+                            topActivityRef = new WeakReference<>(activity);
                             if (mContextRef == null || mContextRef.get() == null) {
-                                mContextRef = new WeakReference<>(topActivity.getApplicationContext());
+                                mContextRef = new WeakReference<>(activity.getApplicationContext());
                             }
-                            mClassLoader = topActivity.getClassLoader();
+                            mClassLoader = activity.getClassLoader();
                             triggerActivity();
                         }
                     }
@@ -303,7 +304,7 @@ public class SimplePageManager {
      * 触发待处理的 Activity 处理器
      */
     private static void triggerPendingActivityHandler(String source) {
-        final Activity activity = topActivity;
+        final Activity activity = getTopActivity();
         if (activity == null) {
             Log.i(TAG, "无法从 " + source + " 触发处理器，未找到顶层 Activity");
             return;
@@ -315,12 +316,12 @@ public class SimplePageManager {
             return;
         }
         
-        if (hasPendingActivityTask) {
+        // 判断与置位必须原子：原先"先读后写 volatile"会让两个线程同时通过检查
+        if (!hasPendingActivityTask.compareAndSet(false, true)) {
             Log.d(TAG, "跳过从 " + source + " 触发，已有待处理任务");
             return;
         }
         
-        hasPendingActivityTask = true;
         Log.i(TAG, "从 " + source + " 触发 " + activity.getClass().getName() + " 的处理器");
         triggerActivityActive(activity, handler, 0);
     }
@@ -334,6 +335,8 @@ public class SimplePageManager {
             final int triggerCount
     ) {
         if (disable) {
+            // 原先直接 return 没有复位标记，会让标记永远停在 true，之后每次触发都被"已有待处理任务"跳过
+            hasPendingActivityTask.set(false);
             Log.i(TAG, "页面触发管理器已禁用");
             return;
         }
@@ -341,7 +344,7 @@ public class SimplePageManager {
         // 替代协程：主线程延迟执行（复用类内已定义的主线程 Handler）
         handler.postDelayed(() -> {
             try {
-                hasPendingActivityTask = false;
+                hasPendingActivityTask.set(false);
                 
                 // 执行处理器逻辑（与原逻辑完全一致）
                 View decorView = activity.getWindow() != null ? activity.getWindow().getDecorView() : null;

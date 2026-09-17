@@ -22,7 +22,12 @@ public class Statistics {
     private TimeStatistics month = new TimeStatistics();
     private TimeStatistics day = new TimeStatistics();
     
-    public static void addData(DataType dt, int i) {
+    /**
+     * synchronized：与 save/load/unload 共用 Statistics.class 监视器。
+     * <p>各个模块跑在各自线程上、都会累加同一个计数器，原先的 += 既会丢更新，
+     * 也可能正好撞上 save() 的序列化过程。
+     */
+    public static synchronized void addData(DataType dt, int i) {
         Statistics stat = INSTANCE;
         switch (dt) {
             case COLLECTED:
@@ -53,7 +58,7 @@ public class Statistics {
         }
     }
     
-    public static int getData(TimeType tt, DataType dt) {
+    public static synchronized int getData(TimeType tt, DataType dt) {
         Statistics stat = INSTANCE;
         int data = 0;
         TimeStatistics ts = null;
