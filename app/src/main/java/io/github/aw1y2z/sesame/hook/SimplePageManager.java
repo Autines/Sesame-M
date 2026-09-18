@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.aw1y2z.sesame.util.compat.XC_MethodHook;
@@ -44,6 +46,22 @@ public class SimplePageManager {
     // 用 AtomicBoolean 而不是 volatile boolean：原先"判断 + 置位"是两步，多线程下会同时通过
     private static final AtomicBoolean hasPendingActivityTask = new AtomicBoolean(false);
     private static boolean disable = false;
+    
+    /** 处理链的最大尝试次数（0 起算，与历史行为一致：共 11 次） */
+    private static final int MAX_ACTIVITY_ATTEMPT = 10;
+    /**
+     * 验证码处理工作线程。
+     * <p>处理过程要遍历视图树、还要"等界面稳定"地 sleep，**绝不能放在主线程**：原实现跑在主线程，
+     * 一次尝试就阻塞 1s 以上，叠加十来次重试足以把宿主界面拖到无响应（后台时滑块解不掉、必然跑满重试，
+     * 就是最严重的场景）。单线程即可——验证码处理本就该串行，也顺带起到限流作用。
+     */
+    private static final ExecutorService captchaWorker = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "Sesame-Captcha");
+        thread.setDaemon(true);
+        return thread;
+    });
+    /** 处理链跑完之前又有新触发（新弹窗 / 新 Activity）：记下来，链结束后补跑一次，保证不漏 */
+    private static final AtomicBoolean rerunRequested = new AtomicBoolean(false);
     
     // 对话框列表会被 hook 线程（写）与模块线程（读）同时访问：
     // CopyOnWriteArrayList 保证遍历期间不会被插入/删除打断（原先 ArrayList 会抛 ConcurrentModificationException）
@@ -318,7 +336,10 @@ public class SimplePageManager {
         
         // 判断与置位必须原子：原先"先读后写 volatile"会让两个线程同时通过检查
         if (!hasPendingActivityTask.compareAndSet(false, true)) {
-            Log.d(TAG, "跳过从 " + source + " 触发，已有待处理任务");
+            // 已有处理链在跑：不要并发再开一条。原实现每次尝试开始就把标记清掉，触发稍密就会同时跑多条链，
+            // 每条都在主线程阻塞 1s 以上 → 后台场景下宿主被拖死。这里改为整条链独占，只记下"跑完再补一次"。
+            rerunRequested.set(true);
+            Log.d(TAG, "已有处理链在运行，标记补跑（来源: " + source + "）");
             return;
         }
         
@@ -336,31 +357,86 @@ public class SimplePageManager {
     ) {
         if (disable) {
             // 原先直接 return 没有复位标记，会让标记永远停在 true，之后每次触发都被"已有待处理任务"跳过
-            hasPendingActivityTask.set(false);
+            releasePendingTask();
             Log.i(TAG, "页面触发管理器已禁用");
             return;
         }
         
-        // 替代协程：主线程延迟执行（复用类内已定义的主线程 Handler）
-        handler.postDelayed(() -> {
-            try {
-                hasPendingActivityTask.set(false);
-                
-                // 执行处理器逻辑（与原逻辑完全一致）
-                View decorView = activity.getWindow() != null ? activity.getWindow().getDecorView() : null;
-                if (decorView != null && activityFocusHandler.handleActivity(activity, new SimpleViewImage(decorView))) {
-                    return; // 处理成功直接返回，终止重试
+        // 替代协程 delay()：延迟时长保持 taskDuration
+        handler.postDelayed(() -> attemptOnWorker(activity, activityFocusHandler, triggerCount), taskDuration);
+    }
+    
+    /**
+     * 主线程：取一次视图快照，然后把真正的处理交给工作线程（主线程不做任何等待）
+     */
+    private static void attemptOnWorker(
+            final Activity activity,
+            final ActivityFocusHandler activityFocusHandler,
+            final int triggerCount
+    ) {
+        SimpleViewImage root = null;
+        try {
+            View decorView = activity.getWindow() != null ? activity.getWindow().getDecorView() : null;
+            if (decorView != null) {
+                root = new SimpleViewImage(decorView);
+            }
+        } catch (Throwable throwable) {
+            Log.e(TAG, "取 Activity 视图出错: " + activity.getClass().getName(), throwable);
+        }
+        if (root == null) {
+            onAttemptFinished(activity, activityFocusHandler, triggerCount, false);
+            return;
+        }
+        
+        final SimpleViewImage rootView = root;
+        try {
+            captchaWorker.execute(() -> {
+                boolean handled = false;
+                try {
+                    handled = activityFocusHandler.handleActivity(activity, rootView);
+                } catch (Throwable throwable) {
+                    Log.e(TAG, "处理 Activity 出错: " + activity.getClass().getName(), throwable);
                 }
-            } catch (Throwable throwable) {
-                Log.e(TAG, "处理 Activity 出错: " + activity.getClass().getName(), throwable);
-            }
-            
-            // 递归重试（最多10次，与原逻辑一致）
-            if (triggerCount <= 10) {
-                triggerActivityActive(activity, activityFocusHandler, triggerCount + 1);
-            } else {
-                Log.w(TAG, "Activity 事件触发失败次数过多: " + activityFocusHandler.getClass().getName());
-            }
-        }, taskDuration); // 替代协程 delay()，延迟时长保持 taskDuration
+                final boolean done = handled;
+                // 回到主线程再决定：结束本次链，还是继续下一次尝试
+                handler.post(() -> onAttemptFinished(activity, activityFocusHandler, triggerCount, done));
+            });
+        } catch (Throwable throwable) {
+            // 线程池不可用（极罕见）：必须复位标记，否则后续触发会被永久跳过
+            Log.e(TAG, "验证码处理线程不可用: ", throwable);
+            releasePendingTask();
+        }
+    }
+    
+    /**
+     * 一次尝试结束（主线程）：处理成功即结束整条链，否则继续下一次（上限与历史行为一致）
+     */
+    private static void onAttemptFinished(
+            Activity activity,
+            ActivityFocusHandler activityFocusHandler,
+            int triggerCount,
+            boolean handled
+    ) {
+        if (handled) {
+            releasePendingTask();
+            return;
+        }
+        if (triggerCount <= MAX_ACTIVITY_ATTEMPT) {
+            triggerActivityActive(activity, activityFocusHandler, triggerCount + 1);
+        } else {
+            Log.w(TAG, "Activity 事件触发失败次数过多: " + activityFocusHandler.getClass().getName());
+            releasePendingTask();
+        }
+    }
+    
+    /**
+     * 结束本次处理链（复位"有待处理任务"标记）；期间若有被记下的补跑请求，就立刻补跑一次。
+     * <p>补跑只消费一次标记，因此即使处理一直不成功也不会自我循环下去。
+     */
+    private static void releasePendingTask() {
+        hasPendingActivityTask.set(false);
+        if (rerunRequested.compareAndSet(true, false)) {
+            triggerPendingActivityHandler("补跑");
+        }
     }
 }
