@@ -206,6 +206,11 @@ fun SelectionEditContent(
         else options.filter { it.name.contains(searchQuery, ignoreCase = true) || it.id.contains(searchQuery) }
     }
 
+    // 选中项自动置顶
+    val sortedOptions = remember(filteredOptions, sel) {
+        filteredOptions.sortedByDescending { it.id in sel }
+    }
+
     val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     fun applyAndSave() {
@@ -306,8 +311,8 @@ fun SelectionEditContent(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
-                    items(count = filteredOptions.size, key = { idx -> filteredOptions[idx].id }) { idx ->
-                        val opt = filteredOptions[idx]
+                    items(count = sortedOptions.size, key = { idx -> sortedOptions[idx].id }) { idx ->
+                        val opt = sortedOptions[idx]
                         val isChecked = sel.contains(opt.id)
                         Row(
                             modifier = Modifier
@@ -362,7 +367,7 @@ fun SelectionEditContent(
                             }
                         }
                     }
-                    if (filteredOptions.isNotEmpty()) {
+                    if (sortedOptions.isNotEmpty()) {
                         item {
                             Spacer(Modifier.height(8.dp))
                         }
