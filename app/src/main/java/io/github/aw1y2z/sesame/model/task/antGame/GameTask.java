@@ -1,8 +1,5 @@
 package io.github.aw1y2z.sesame.model.task.antGame;
 
-import static io.github.aw1y2z.sesame.hook.AlipayMiniMarkHelper.getAlipayMiniMark;
-
-import io.github.aw1y2z.sesame.hook.AlipayMiniMarkHelper;
 import io.github.aw1y2z.sesame.hook.ApplicationHook;
 import io.github.aw1y2z.sesame.hook.AuthCodeHelper;
 import io.github.aw1y2z.sesame.util.Log;
@@ -81,7 +78,11 @@ public enum GameTask {
     private String login() {
         try {
             String authCode = AuthCodeHelper.getAuthCode(appId);
-            String mark = getAlipayMiniMark(appId, version);
+            // 小程序标记（紧邻的 alipayMiniMark 请求头）在当前支付宝版本上必然为空：
+            // 承载它的宿主类 H5HttpUtils 已不存在（AlipayMiniMarkHelper 探测两个候选类名都找不到，
+            // 并会在日志里说明一次）。这里直接用空串，省掉逐游戏的反射调用；
+            // 将来某版支付宝恢复该能力时，把空串换回 AlipayMiniMarkHelper.getAlipayMiniMark(appId, version) 即可。
+            String mark = "";
             String reqId = System.currentTimeMillis() + "_" + new Random().nextInt(350) + 1;
 
             JSONObject bodyJson = new JSONObject();
@@ -241,7 +242,8 @@ public enum GameTask {
 
     private boolean executeSingleReport(String gameType, int current, int total, String channelOverride) {
         try {
-            String mark = getAlipayMiniMark(appId, version);
+            // 同 login()：当前宿主没有 H5HttpUtils，标记必然为空，直接用空串（header 值不变）
+            String mark = "";
             String reqId = System.currentTimeMillis() + "_" + (new Random().nextInt(90) + 10); // 10-99随机数
 
             // 构建请求体
