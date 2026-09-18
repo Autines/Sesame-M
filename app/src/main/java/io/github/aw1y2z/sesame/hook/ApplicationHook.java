@@ -773,6 +773,16 @@ public class ApplicationHook extends XposedModule {
         return false;
     }
 
+    /**
+     * 替换 RPC 实现（离线模式、诊断、单元测试注入替身用）；传 null 表示回到默认的支付宝 RPC 桥。
+     * <p>不注入时行为与原先完全一致：一律转发给 startHandler 里创建的 {@code rpcBridge}。
+     * <p>注入替身后，各 RpcCall 构造出的请求体（method + data）会原样交给替身，
+     * 因此可以在不连真机的情况下检查请求体本身是否正确。
+     */
+    public static void setRpcBridge(RpcBridge bridge) {
+        rpcBridge = bridge;
+    }
+
     public static String requestString(RpcEntity rpcEntity) {
         return rpcBridge.requestString(rpcEntity, 3, -1);
     }
