@@ -78,9 +78,6 @@ public class AntSports extends ModelTask {
     // 处理气泡任务
     private BooleanModelField QUERY_BUBBLE_TASK;
 
-    // 兑换权益
-    private BooleanModelField QUERY_ITEM_LIST;
-
     //能量泵
     private BooleanModelField WALK_GRID;
 
@@ -93,7 +90,6 @@ public class AntSports extends ModelTask {
     private BooleanModelField awardspecialActivityReceive;
 
     //private SelectModelField neverLandOptions;
-    private SelectModelField neverLandBenefitList;
     private ChoiceModelField energyStrategy;
 
     @Override
@@ -136,7 +132,6 @@ public class AntSports extends ModelTask {
         modelFields.addField(QUERY_SIGN = new BooleanModelField("QUERY_SIGN", "健康岛 | 每日签到", false).setDependsOn("neverLand"));
         modelFields.addField(QUERY_TASK_CENTER = new BooleanModelField("QUERY_TASK_CENTER", "健康岛 | 做任务 加能量", false).setDependsOn("neverLand"));
         modelFields.addField(QUERY_BUBBLE_TASK = new BooleanModelField("QUERY_BUBBLE_TASK", "健康岛 | 领取能量球奖励", false).setDependsOn("neverLand"));
-        modelFields.addField(QUERY_ITEM_LIST = new BooleanModelField("QUERY_ITEM_LIST", "健康岛 | 健康能量兑好礼", false).setDependsOn("neverLand"));
         modelFields.addField(WALK_GRID = new BooleanModelField("WALK_GRID", "健康岛 | 能量泵", false).setDependsOn("neverLand"));
         modelFields.addField(WALK_GRID_MAX = new IntegerModelField("WALK_GRID_MAX", "健康岛 | 单次执行能量泵最大次数(不限:0)", 5).setDependsOn("neverLand"));
         modelFields.addField(WALK_GRID_LIMIT = new IntegerModelField("WALK_GRID_LIMIT", "健康岛 | 使用能量泵剩余能量值(低于该值停止使用)", 10000).setDependsOn("neverLand"));
@@ -2058,66 +2053,6 @@ public class AntSports extends ModelTask {
     }
 
     /**
-     * 兑换权益
-     */
-    public void exchangeBenefits() {
-        int currentEnergy = queryUserEnergy();
-        int page = 1;
-        boolean hasMore = true;
-
-        try {
-            while (hasMore) {
-                if (Status.hasFlagToday("sport::exchangeBenefits_ERROR")) {
-                    return;
-                }
-                JSONObject jsonResult = new JSONObject(AntSportsRpcCall.queryItemList(page));
-                String errorMessage = jsonResult.optString("errorMessage");
-                if (errorMessage.equals("系统繁忙，请稍后再试。")) {
-                    Status.flagToday("sport::exchangeBenefits_ERROR");
-                    return;
-                }
-                if (!MessageUtil.checkSuccess(TAG, jsonResult)) {
-                    break;
-                }
-
-                JSONObject data = jsonResult.getJSONObject("data");
-                hasMore = data.optBoolean("hasMore");
-                if (!data.has("itemVOList")) {
-                    break;
-                }
-
-                JSONArray items = data.getJSONArray("itemVOList");
-                for (int i = 0; i < items.length(); i++) {
-                    JSONObject item = items.getJSONObject(i);
-                    if (!"benefitItem".equals(item.getString("materialType"))) {
-                        continue;
-                    }
-
-                    String benefitId = item.getString("benefitId");
-                    String itemId = item.getString("itemId");
-                    String itemName = item.getString("itemName");
-                    int remainCount = item.getInt("remainCount");
-                    int cost = Integer.parseInt(item.getString("salePoint"));
-
-                    // 检查是否可兑换
-                    if (remainCount >= 1 && neverLandBenefitList.contains(itemId) && currentEnergy >= cost) {
-                        if (item.getString("status").equals("ITEM_SALE")) {
-                            String exchangeResult = AntSportsRpcCall.createOrder(benefitId, itemId);
-                            if (MessageUtil.checkSuccess(TAG, new JSONObject(exchangeResult))) {
-                                Log.other("悦动健康🚑️兑换权益[" + itemName + "]#消耗[" + cost + "g健康能量]");
-                                currentEnergy -= cost;
-                            }
-                        }
-                    }
-                }
-                page++;
-            }
-        } catch (Exception e) {
-            Log.err(TAG, "exchangeBenefits err:", e);
-        }
-    }
-
-    /**
      * 检查是否可进行能量泵前进
      *
      * @param branchId 分支ID
@@ -2316,14 +2251,10 @@ public class AntSports extends ModelTask {
             }
             // 处理基础信息相关任务
             queryBaseInfoAndProcess();
-            // 兑换权益
-            if (QUERY_ITEM_LIST.getValue()) {
-                exchangeBenefits();
-            }
+            // 自动切岛
             if (MapListSwitch.getValue()) {
                 queryMapListSwitch();
             }
-
         } catch (Exception e) {
             Log.err(TAG, "run err:", e);
         }
@@ -2341,7 +2272,7 @@ public class AntSports extends ModelTask {
 
             //获取岛地图
             JSONObject jsonLandMap = new JSONObject(AntSportsRpcCall.queryMapList());
-            if (MessageUtil.checkSuccess("queryMapList", jsonLandMap)) {
+            if (MessageUtil.checkSuccess(TAG, jsonLandMap)) {
                 JSONObject data = jsonLandMap.getJSONObject("data");
 
                 JSONArray mapList = data.getJSONArray("mapList");
@@ -2369,7 +2300,7 @@ public class AntSports extends ModelTask {
                             //if (!status.contains("FINISH") && !newIsLandFlg) {
                             if (!status.contains("FINISH")) {
                                 JSONObject jo = new JSONObject(AntSportsRpcCall.mapChooseFree(branchId, mapId));
-                                if (MessageUtil.checkSuccess("mapChooseFree", jo)) {
+                                if (MessageUtil.checkSuccess(TAG, jo)) {
                                     Log.other("悦动健康🚑️切换到[" + mapName + "](" + mapId + ")");
                                     break;
                                 }
@@ -2393,7 +2324,7 @@ public class AntSports extends ModelTask {
     private boolean checkAuth() {
         try {
             JSONObject jsonResult = new JSONObject(AntSportsRpcCall.checkAuth());
-            if (MessageUtil.checkSuccess("NeverLandAuth", jsonResult)) {
+            if (MessageUtil.checkSuccess(TAG, jsonResult)) {
                 return jsonResult.getJSONObject("resultObj").optBoolean("authStatus");
             }
         } catch (Exception e) {
