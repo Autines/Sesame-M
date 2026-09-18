@@ -412,23 +412,48 @@ public class ApplicationHook extends XposedModule {
             } catch (Throwable t) {
                 Log.err(TAG, "hook service onDestroy err:", t);
             }
+            // ---- 宿主的前后台询问：默认仍按原逻辑"谎报"，唯独风控/滑块链路在真实后台时如实回答 ----
+            // 原先这四个 hook 一律哄宿主"你在前台"，模块的后台任务（H5/RPC）才跑得动；
+            // 副作用是滑块验证也被判定为可展示，而后台拿不到可见窗口 →
+            // 滑块界面出不来、验证流程一直等用户滑动 → 切回支付宝即卡死。
+            // 现在改为：先问宿主自己拿真值（callOriginal），只有"真在后台 + 询问方是风控/滑块链路"才说实话。
             try {
-                XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackground", XC_MethodReplacement.returnConstant(false));
+                XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackground", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        param.setResult(answerInBackgroundQuestion(param));
+                    }
+                });
             } catch (Throwable t) {
                 Log.err(TAG, "hook FgBgMonitorImpl method 1 err:", t);
             }
             try {
-                XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackground", boolean.class, XC_MethodReplacement.returnConstant(false));
+                XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackground", boolean.class, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        param.setResult(answerInBackgroundQuestion(param));
+                    }
+                });
             } catch (Throwable t) {
                 Log.err(TAG, "hook FgBgMonitorImpl method 2 err:", t);
             }
             try {
-                XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackgroundV2", XC_MethodReplacement.returnConstant(false));
+                XHelpers.findAndHookMethod("com.alipay.mobile.common.fgbg.FgBgMonitorImpl", classLoader, "isInBackgroundV2", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        param.setResult(answerInBackgroundQuestion(param));
+                    }
+                });
             } catch (Throwable t) {
                 Log.err(TAG, "hook FgBgMonitorImpl method 3 err:", t);
             }
             try {
-                XHelpers.findAndHookMethod("com.alipay.mobile.common.transport.utils.MiscUtils", classLoader, "isAtFrontDesk", classLoader.loadClass("android.content.Context"), XC_MethodReplacement.returnConstant(true));
+                XHelpers.findAndHookMethod("com.alipay.mobile.common.transport.utils.MiscUtils", classLoader, "isAtFrontDesk", classLoader.loadClass("android.content.Context"), new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        param.setResult(answerAtFrontDeskQuestion(param));
+                    }
+                });
                 Log.i(TAG, "hook MiscUtils successfully");
             } catch (Throwable t) {
                 Log.err(TAG, "hook MiscUtils err:", t);
@@ -1061,5 +1086,86 @@ public class ApplicationHook extends XposedModule {
         }
 
         return true;
+    }
+
+    // ----------------------------------------------------------------
+    // 宿主前后台询问的回答
+    // ----------------------------------------------------------------
+
+    /** 是否已提示过"如实回答"（该事件会反复出现，只留一次痕） */
+    private static volatile boolean honestAnswerLogged;
+    /** 是否已提示过"取真实状态失败"（失败原因通常固定，避免刷屏） */
+    private static volatile boolean originalCallFailedLogged;
+
+    /**
+     * 回答宿主的 {@code isInBackground()}：默认仍按原行为谎报 false（"不在后台"），
+     * 只有当宿主**真的**在后台、且询问方是风控/滑块链路时如实回答 true
+     * ——否则宿主会在后台尝试展示滑块界面，界面出不来、验证流程一直等用户滑动，切回支付宝即卡死。
+     */
+    private static boolean answerInBackgroundQuestion(XC_MethodHook.MethodHookParam param) {
+        Boolean reallyInBackground = originalBoolean(param, "isInBackground");
+        if (reallyInBackground != null && reallyInBackground && isRiskControlCaller()) {
+            noteHonestAnswerForRiskControl();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 回答宿主的 {@code isAtFrontDesk()}：默认仍按原行为谎报 true（"在前台"），
+     * 只有当宿主**真的**不在前台、且询问方是风控/滑块链路时如实回答 false。
+     */
+    private static boolean answerAtFrontDeskQuestion(XC_MethodHook.MethodHookParam param) {
+        Boolean atFrontDesk = originalBoolean(param, "isAtFrontDesk");
+        if (atFrontDesk != null && !atFrontDesk && isRiskControlCaller()) {
+            noteHonestAnswerForRiskControl();
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 调用原方法取真实返回值。
+     *
+     * @return 真值；取不到（异常 / 非布尔）时返回 null，调用方按原行为谎报
+     */
+    private static Boolean originalBoolean(XC_MethodHook.MethodHookParam param, String what) {
+        try {
+            Object result = param.callOriginal();
+            return result instanceof Boolean ? (Boolean) result : null;
+        } catch (Throwable t) {
+            if (!originalCallFailedLogged) {
+                originalCallFailedLogged = true;
+                Log.err(TAG, "取 " + what + " 真实前后台状态失败，继续按原行为谎报:", t);
+            }
+            return null;
+        }
+    }
+
+    /**
+     * 询问方是否来自风控/滑块链路（{@code com.alipay.rdssecuritysdk} 等）。
+     * <p>只在**真实后台**时才会走到这里，因此不影响前台热路径；只看最上面若干帧，够用且便宜。
+     */
+    private static boolean isRiskControlCaller() {
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        int limit = Math.min(stack.length, 12);
+        for (int i = 3; i < limit; i++) {
+            String className = stack[i].getClassName();
+            if (className.startsWith("com.alipay.rdssecuritysdk")
+                    || className.contains("captcha") || className.contains("Captcha")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void noteHonestAnswerForRiskControl() {
+        if (honestAnswerLogged) {
+            return;
+        }
+        honestAnswerLogged = true;
+        // 用 other 日志：该事件是"宿主在后台要展示风控/滑块界面"的直接证据，而 other 日志默认开启、便于核对；
+        // 运行日志（Log.record）受「查看运行日志」开关控制，很多用户是关着的，写在那里等于看不见
+        Log.other("风控/滑块链路在后台询问前后台状态：已如实回答，避免在后台创建滑块界面（界面出不来、切回支付宝卡死）");
     }
 }
