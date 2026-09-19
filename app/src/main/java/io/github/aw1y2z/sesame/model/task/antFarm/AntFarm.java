@@ -1733,10 +1733,12 @@ public class AntFarm extends ModelTask {
             JSONObject question = jo.getJSONObject("question");
             long questionId = question.getLong("questionId");
             JSONArray labels = question.getJSONArray("label");
-            String answer = AnswerAI.getAnswer(question.getString("title"), JsonUtil.jsonArrayToList(labels));
-            if (answer == null || answer.isEmpty()) {
-                answer = labels.getString(0);
+            if (labels.length() == 0) {
+                Log.record("庄园答题跳过：选项为空");
+                return false;
             }
+            // title 用 optString：缺该字段时不应让整条答题失败（AI 仍可凭选项作答）
+            String answer = AnswerAI.getAnswer(question.optString("title"), JsonUtil.jsonArrayToList(labels));
             jo = new JSONObject(DadaDailyRpcCall.submit("100", answer, questionId));
             if (!MessageUtil.checkResultCode(TAG, jo)) {
                 return false;
