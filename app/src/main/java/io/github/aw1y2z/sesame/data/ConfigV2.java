@@ -163,7 +163,10 @@ public class ConfigV2 {
             }
         }
         // 磁盘在本进程上次同步之后被别的进程改过时，先把磁盘内容合并进来再落盘
-        mergeDiskChanges(userId);
+        if (mergeDiskChanges(userId)) {
+            // 本进程没有可写内容、磁盘上的是更新版本：跳过写入，别把别人的改动覆盖掉
+            return true;
+        }
         String json = INSTANCE.toSaveStr();
         boolean success;
         if (StringUtil.isEmpty(userId)) {
@@ -324,22 +327,31 @@ public class ConfigV2 {
      * 落盘前把「磁盘上更新的内容」和「本进程自己的改动」合到一起：
      * 磁盘被别的进程改过时先重载，再把本进程改过的字段压回去，
      * 这样两边都不会丢（原来是谁最后写谁覆盖）。
+     *
+     * @return true 表示本进程没有可写内容（已采纳磁盘上的更新），调用方应跳过本次写入
      */
-    private static void mergeDiskChanges(String userId) {
+    private static boolean mergeDiskChanges(String userId) {
         try {
             File configV2File = StringUtil.isEmpty(userId) ? FileUtil.getDefaultConfigV2File() : FileUtil.getConfigV2File(userId);
             if (!configV2File.exists() || lastSyncedText == null) {
-                return;
+                return false;
             }
             String disk = FileUtil.readFromFile(configV2File);
             if (disk == null || disk.equals(lastSyncedText)) {
-                return;
+                return false;
             }
             Map<String, Object> changed = collectChangedFields();
-            if (changed.isEmpty()) {
-                return;
-            }
+            // 先重载，让本进程也看到别的进程刚写入的内容
             JsonUtil.copyMapper().readerForUpdating(INSTANCE).readValue(disk);
+            if (changed.isEmpty()) {
+                // 本进程没有改动：磁盘上的才是最新状态，直接采纳，
+                // 不能拿本进程的旧快照写回去（页面的 save() 只按 isModify 判断，
+                // 这种情况会走到这里：文件被别的进程改过，但本进程没动过任何字段）
+                lastSyncedText = disk;
+                captureBaseline();
+                Log.record("配置已被其他进程更新，本进程无改动，已重载并跳过写入");
+                return true;
+            }
             for (Map.Entry<String, Object> entry : changed.entrySet()) {
                 int separator = entry.getKey().indexOf('|');
                 ModelFields modelFields = INSTANCE.modelFieldsMap.get(entry.getKey().substring(0, separator));
@@ -352,6 +364,7 @@ public class ConfigV2 {
         } catch (Throwable t) {
             Log.printStackTrace(TAG, t);
         }
+        return false;
     }
 
     private static String fieldKey(String modelCode, String fieldCode) {
