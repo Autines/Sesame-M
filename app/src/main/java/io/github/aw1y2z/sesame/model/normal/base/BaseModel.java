@@ -52,8 +52,6 @@ public class BaseModel extends Model {
     @Getter
     private static final BooleanModelField newRpc = new BooleanModelField("newRpc", "使用新接口(最低支持v10.3.96.8100)", true);
     @Getter
-    private static final BooleanModelField debugMode = new BooleanModelField("debugMode", "开启抓包(基于新接口)", false);
-    @Getter
     private static final SelectAndCountModelField rpcRequestList = new SelectAndCountModelField("rpcRequestList", "RPC请求列表及每日执行数(慎用)", new LinkedHashMap<>(), AlipayrpcRequest::getList, "请填写每日执行次数");
     @Getter
     private static final SelectModelField rpcRequestTaskList= new SelectModelField("rpcRequestTaskList", "RPC可选任务列表(长按列表中的项仅移除用，内容需打开rpcResquest.json文件配置)", new LinkedHashSet<>(), AlipayrpcRequest::getList,"长按删除RPC列表项用");
@@ -101,7 +99,6 @@ public class BaseModel extends Model {
         modelFields.addField(timeoutRestart);
         modelFields.addField(backupConfigDays);
         modelFields.addField(newRpc);
-        modelFields.addField(debugMode);
         modelFields.addField(rpcRequestList);
         modelFields.addField(rpcRequestTaskList);
         modelFields.addField(showToast);
