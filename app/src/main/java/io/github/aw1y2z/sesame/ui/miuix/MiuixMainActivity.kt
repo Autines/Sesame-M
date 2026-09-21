@@ -717,7 +717,9 @@ fun ConfigTab(activity: MiuixMainActivity) {
                     UserIdMap.loadSelf(userId)
                     val userEntity = UserIdMap.get(userId)
                     val label = UserIdMap.getAccountLabel(userId) ?: userId
-                    val summary = userEntity?.let { it.showName + ": " + it.account }
+                    // 副标题优先显示「昵称:账号」；新用户尚未被模块钩子同步资料（self.json 不存在）时
+                    // 回退显示 userId 本身，避免空白且仍能区分账号
+                    val summary = userEntity?.let { it.showName + ": " + it.account } ?: userId
                     list.add(Triple(userId, label, summary))
                 }
             }
