@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -416,7 +417,7 @@ fun HomeTab(activity: MiuixMainActivity) {
         fontSize = 32.sp,
         fontWeight = FontWeight.Bold,
         color = MiuixTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+        modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
     )
     Spacer(Modifier.height(16.dp))
 
@@ -441,12 +442,12 @@ fun HomeTab(activity: MiuixMainActivity) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = "$version (${io.github.aw1y2z.sesame.BuildConfig.VERSION_CODE})",
-                    fontSize = 14.sp,
+                    style = MiuixTheme.textStyles.body2,
                     color = Color(0xFF2E7D32)
                 )
                 Text(
                     text = "API 102",
-                    fontSize = 14.sp,
+                    style = MiuixTheme.textStyles.body2,
                     color = Color(0xFF2E7D32)
                 )
             }
@@ -463,10 +464,9 @@ fun HomeTab(activity: MiuixMainActivity) {
     }
     Spacer(Modifier.height(16.dp))
 
-    SmallTitle(text = "模块状态")
+    SmallTitle(text = "运行环境")
     CardColumn {
-        StatusRow("模块状态", if (activated) "已激活" else "未激活")
-        StatusRow("版本", version)
+        // 不再放「模块状态」「版本」两行：顶部绿色 banner 已经显示激活状态与版本，重复
         StatusRow("SDK API", Build.VERSION.SDK_INT.toString())
         StatusRow("设备", MiuixMainActivity.getDeviceDisplayName())
         StatusRow("系统架构", Build.SUPPORTED_ABIS?.firstOrNull() ?: "")
@@ -482,20 +482,34 @@ fun HomeTab(activity: MiuixMainActivity) {
 
 @Composable
 fun StatusRow(label: String, value: String) {
+    // 左右补 16dp，对齐设置页的行（SwitchPreference/ArrowPreference 自带 insideMargin 的左右留白）；
+    // 上下**故意**保持 8dp：首页 5 行的行距拉到 16dp 会多出 ~80dp，首屏又会显示不全
+    // 字号字重取 miuix 行样式 token（标题 headline1、摘要 body2），与配置/设置页的 preference 行一致
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = label, fontSize = 15.sp, color = MiuixTheme.colorScheme.onBackground)
-        Text(text = value, fontSize = 15.sp, color = MiuixTheme.colorScheme.primary)
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.headline1,
+            color = MiuixTheme.colorScheme.onBackground
+        )
+        Text(
+            text = value,
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.primary
+        )
     }
 }
 
 @Composable
 fun StatisticsTable(activity: MiuixMainActivity) {
+    // 左右补 16dp：卡片( CardColumn )自带的 16dp 之外，再补上行内边距，
+    // 让表格文字与「模块状态」那些行的标签左边界对齐（都是 48dp），否则整块会贴着卡片边缘更靠左
+
     // 订阅 statisticsVersion：load / 广播刷新后自增,触发本表重组读取最新单例数据
     activity.statisticsVersion
     val rows = listOf(
@@ -508,12 +522,22 @@ fun StatisticsTable(activity: MiuixMainActivity) {
     val columns = listOf(TimeType.DAY, TimeType.MONTH, TimeType.YEAR)
     val headers = listOf("今日", "本月", "今年")
 
-    Column {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
         Row(Modifier.fillMaxWidth()) {
             Box(Modifier.weight(1f))
             headers.forEach { header ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(text = header, fontSize = 13.sp, color = MiuixTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                    // 列标题：与行内说明同级（body2），不再用硬编码 13sp
+                    Text(
+                        text = header,
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -525,12 +549,14 @@ fun StatisticsTable(activity: MiuixMainActivity) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(Modifier.weight(1f)) {
-                    Text(text = label, fontSize = 15.sp, color = MiuixTheme.colorScheme.onBackground)
+                    // 行标签用 headline1：与「模块状态」等 preference 行的标题同级
+                    Text(text = label, style = MiuixTheme.textStyles.headline1, color = MiuixTheme.colorScheme.onBackground)
                 }
                 columns.forEach { timeType ->
                     val value = types.sumOf { Statistics.getData(timeType, it) }
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        Text(text = value.toString(), fontSize = 15.sp, color = MiuixTheme.colorScheme.onBackground)
+                        // 数值用 body2：与 preference 行的摘要/值同级（原来硬编码 15sp，夹在 14sp/17sp 之间最显割裂）
+                        Text(text = value.toString(), style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onBackground)
                     }
                 }
             }
@@ -593,7 +619,7 @@ fun LogsTab(activity: MiuixMainActivity) {
             AppConfig.INSTANCE.enableDebugLog = it
             AppConfig.save()
             activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog("debug")
+            // 关闭时**不清空** debug 日志：抓到的包是排查证据，要清空请到日志页点「删除」
         }
         var error by remember { mutableStateOf(AppConfig.INSTANCE.enableViewErrorLog ?: true) }
         LogSwitchRow("查看异常日志", error, onClick = { openLog(activity, LogType.ERROR) }) {
@@ -615,23 +641,31 @@ fun LogsTab(activity: MiuixMainActivity) {
     Spacer(Modifier.height(16.dp))
 }
 
-/** 日志条目行：点按整行进入对应日志详情；右侧开关控制是否记录 */
+/**
+ * 日志条目行：**点按整行**进入对应日志详情，右侧开关控制是否记录。
+ * 用库的 SwitchPreference 渲染，字体（样式/字重/颜色）与设置页的行由同一组件保证一致；
+ * 它的 insideMargin 覆写为上下 8dp（库默认 16dp）以尽量贴近日志页原来的行距；
+ * 它没有 onClick 参数，所以外层再套一层可点区域实现"点整行"。
+ */
 @Composable
 fun LogSwitchRow(title: String, checked: Boolean, onClick: () -> Unit, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            fontSize = 16.sp,
-            color = MiuixTheme.colorScheme.onBackground
+    Box(Modifier.fillMaxWidth()) {
+        SwitchPreference(
+            title = title,
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            // 覆写库默认的 16dp 上下内边距，尽量贴近日志页原来的行距（左右仍是 16dp，与设置页一致）
+            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        // 库的 preference 行自带 clickable/ripple，会把触摸吞掉（实测套在外层的 clickable 收不到事件），
+        // 所以压在它**上层**盖一层透明可点区域：只盖标题侧，右侧给开关留出 72dp，
+        // 这样"点标题进日志、点开关只切开关"
+        Box(
+            Modifier
+                .matchParentSize()
+                .padding(end = 72.dp)
+                .clickable(onClick = onClick)
+        )
     }
 }
 
