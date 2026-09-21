@@ -2,6 +2,8 @@ package io.github.aw1y2z.sesame.ui.miuix
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +42,8 @@ import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ModelConfig
 import io.github.aw1y2z.sesame.data.ModelField
 import io.github.aw1y2z.sesame.data.ModelGroup
+import io.github.aw1y2z.sesame.data.ModelType
+import io.github.aw1y2z.sesame.data.task.ModelTask
 import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.EmptyModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField
@@ -174,11 +177,47 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
         list
     }
 
+    /** 执行当前分组（或全部）的任务 */
+    val onExecute = remember {
+        {
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    Log.forest("开始执行分组: ${group.getName()}")
+                    val tasks: String = if (group == ModelGroup.BASE) {
+                        // BASE 分组：执行全部任务
+                        ModelTask.startAllTask(false)
+                        "已触发全部任务"
+                    } else {
+                        // 其他分组：只执行属于该分组的任务
+                        var count = 0
+                        val allModels = Model.getModelList()
+                        for (model in allModels) {
+                            if (model == null) continue
+                            val modelGroup = model.getGroup()
+                            if (modelGroup == null) continue
+                            if (modelGroup == group && ModelType.TASK == model.getType()) {
+                                (model as? ModelTask)?.startTask(false)
+                                count++
+                            }
+                        }
+                        "已触发 $count 个任务"
+                    }
+                    ToastUtil.show(activity, tasks)
+                } catch (th: Throwable) {
+                    Log.printStackTrace(th)
+                    ToastUtil.show(activity, "执行失败: ${th.message}")
+                }
+            }
+            Unit
+        }
+    }
+
     Scaffold(
         topBar = {
             LogTopBar(
                 title = group.getName(),
-                onBack = { activity.saveAndFinish() }
+                onBack = { activity.saveAndFinish() },
+                onExecute = onExecute
             )
         },
         containerColor = MiuixTheme.colorScheme.surface
