@@ -471,6 +471,10 @@ public class FileUtil {
         return getFile(MAIN_DIRECTORY_FILE, "AntForestHuntTask.json");
     }
     
+    public static File getMonopolyTaskListMapFile() {
+        return getFile(MAIN_DIRECTORY_FILE, "MonopolyTask.json");
+    }
+    
     public static File getAntFarmDoFarmTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "AntFarmDoFarmTask.json");
     }
@@ -650,60 +654,63 @@ public class FileUtil {
     }
     
     public static boolean write2File(String s, File f) {
-        if (f.exists()) {
-            if (!f.canWrite()) {
-                try {
-                    Toast.show(f.getAbsoluteFile() + "没有写入权限！", true);
-                } catch (Throwable t) {
-                    // 「没有写入权限」已由返回 false 传达，Toast 失败只做低优先级留痕
-                    Log.debug("Toast 提示失败(没有写入权限): " + t);
-                }
-                return false;
-            }
-            if (f.isDirectory()) {
-                f.delete();
-                f.getParentFile().mkdirs();
-            }
-        }
-        else {
-            f.getParentFile().mkdirs();
-        }
-        boolean success = false;
-        FileWriter fw = null;
-        try {
-            fw = new FileWriter(f);
-            fw.write(s);
-            fw.flush();
-            success = true;
-        }
-        catch (Throwable t) {
-            Log.printStackTrace(TAG, t);
-        }
-        if (fw != null) {
+        // 只对"已存在"的文件做可写性检查：File.canWrite() 对不存在的路径恒为 false
+        // （access() 返回 ENOENT），无条件检查会让所有新文件都写不出来并误报没有写入权限。
+        if (f.exists() && !f.canWrite()) {
             try {
-                fw.close();
+                Toast.show(f.getAbsoluteFile() + "没有写入权限！", true);
+            } catch (Throwable t) {
+                // 「没有写入权限」已由返回 false 传达，Toast 失败只做低优先级留痕
+                Log.debug("Toast 提示失败(没有写入权限): " + t);
             }
-            catch (Throwable t) {
-                File parent = f.getParentFile();
-                Log.debug("write2File close failed, try recreate: " + f.getAbsolutePath()
-                        + " exists=" + f.exists()
-                        + " canWrite=" + f.canWrite()
-                        + " len=" + f.length()
-                        + " parentCanWrite=" + (parent != null && parent.canWrite()));
+            return false;
+        }
+        if (f.isDirectory()) {
+            f.delete();
+        }
+        f.getParentFile().mkdirs();
+        // 使用临时文件写入，成功后原子替换，避免写入失败时损坏原配置
+        File tmpFile = new File(f.getParentFile(), f.getName() + ".tmp");
+        boolean success = false;
+        try {
+            FileWriter fw = new FileWriter(tmpFile);
+            try {
+                fw.write(s);
+                fw.flush();
+                success = true;
+            } finally {
                 try {
-                    if (f.exists()) {
-                        f.delete();
+                    fw.close();
+                } catch (Throwable t) {
+                    Log.printStackTrace(TAG, t);
+                }
+            }
+            if (success) {
+                // 先删除原文件，再重命名临时文件（避免覆盖失败时原文件被删）
+                if (f.exists()) {
+                    f.delete();
+                }
+                success = tmpFile.renameTo(f);
+                if (!success) {
+                    // 如果 renameTo 失败（跨文件系统），尝试 copy
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            java.nio.file.Files.move(tmpFile.toPath(), f.toPath(),
+                                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                            success = true;
+                        }
+                    } catch (Throwable t) {
+                        Log.printStackTrace(TAG, t);
                     }
-                    FileWriter fw2 = new FileWriter(f);
-                    fw2.write(s);
-                    fw2.flush();
-                    fw2.close();
-                    success = true;
-                    Log.debug("write2File recreate ok: " + f.getName());
                 }
-                catch (Throwable t2) {
-                    Log.printStackTrace(TAG, t2);
-                }
+            }
+        } catch (Throwable t) {
+            Log.printStackTrace(TAG, t);
+        } finally {
+            // 清理临时文件
+            if (tmpFile.exists()) {
+                tmpFile.delete();
             }
         }
         return success;

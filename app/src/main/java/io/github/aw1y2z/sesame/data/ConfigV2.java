@@ -133,7 +133,7 @@ public class ConfigV2 {
         return true;
     }
 
-    public static Boolean save(String userId, Boolean force) {
+    public static synchronized Boolean save(String userId, Boolean force) {
         if (!force) {
             if (!isModify(userId)) {
                 return true;
