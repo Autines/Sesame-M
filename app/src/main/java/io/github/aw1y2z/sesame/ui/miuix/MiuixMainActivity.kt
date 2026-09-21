@@ -279,6 +279,19 @@ class MiuixMainActivity : MiuixBaseActivity() {
     }
 
     /** 通知支付宝进程重载共享配置（日志开关等），使开关在注入进程中即时生效 */
+    /**
+     * 让注入进程整体重启（重新初始化并重挂 hook）。
+     * 适用于改完必须重新初始化的开关，比如「使用新接口」要重挂 RPC bridge；
+     * 只是重载 AppConfig 的 broadcastReloadConfig() 不够用。
+     */
+    fun broadcastRestart() {
+        try {
+            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.restart"))
+        } catch (t: Throwable) {
+            Log.printStackTrace(t)
+        }
+    }
+
     fun broadcastReloadConfig() {
         try {
             sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.reloadConfig"))
@@ -397,7 +410,7 @@ fun MainScreen(activity: MiuixMainActivity) {
             when (selectedTab) {
                 0 -> HomeTab(activity)
                 1 -> LogsTab(activity)
-                2 -> ConfigTab()
+                2 -> ConfigTab(activity)
                 3 -> SettingsTab(activity)
             }
         }
@@ -682,7 +695,7 @@ fun openLog(activity: MiuixMainActivity, logType: LogType) {
 }
 
 @Composable
-fun ConfigTab() {
+fun ConfigTab(activity: MiuixMainActivity) {
     val context = LocalContext.current
     val items = remember {
         // (userId, 标题, 副标题)：标题固定为「账号N」保证单行不换行，昵称/账号放副标题
@@ -726,6 +739,70 @@ fun ConfigTab() {
                     context.startActivity(intent)
                 }
             )
+        }
+    }
+    Spacer(Modifier.height(16.dp))
+
+    // 模块功能：全局配置（不分账号），与上面的「按账号配置」并列放在配置页更合理
+    SmallTitle(text = "模块功能")
+    CardColumn {
+        // 这几项原先是「按账号」存在账号配置里，现改为全局配置 AppConfig（模块级，不分账号）
+        var newRpc by remember { mutableStateOf(AppConfig.INSTANCE.newRpc ?: true) }
+        BooleanSwitch("使用新接口", newRpc, summary = "最低支持 v10.3.96.8100") {
+            AppConfig.INSTANCE.newRpc = it
+            AppConfig.save()
+            newRpc = it
+            // 换接口要重挂 RPC bridge，必须让注入进程整体重启（只重载配置不够）
+            activity.broadcastRestart()
+        }
+        var showToast by remember { mutableStateOf(AppConfig.INSTANCE.showToast ?: true) }
+        BooleanSwitch("气泡提示", showToast) {
+            AppConfig.INSTANCE.showToast = it
+            AppConfig.save()
+            showToast = it
+            activity.broadcastReloadConfig()
+        }
+        // 气泡纵向偏移：一级界面没有整数控件，用 ArrowPreference 展开输入框，输入即保存
+        var toastOffsetY by remember { mutableStateOf((AppConfig.INSTANCE.toastOffsetY ?: 0).toString()) }
+        var offsetExpanded by remember { mutableStateOf(false) }
+        ArrowPreference(
+            title = "气泡纵向偏移",
+            summary = if (toastOffsetY.isEmpty()) "0 px（正数向下）" else "$toastOffsetY px（正数向下）",
+            onClick = { offsetExpanded = !offsetExpanded }
+        )
+        if (offsetExpanded) {
+            top.yukonga.miuix.kmp.basic.TextField(
+                value = toastOffsetY,
+                onValueChange = { text ->
+                    // 只接受整数（允许开头一个负号），改完立刻写回并让注入进程重载
+                    val filtered = text.filterIndexed { index, c -> c.isDigit() || (c == '-' && index == 0) }
+                    toastOffsetY = filtered
+                    filtered.toIntOrNull()?.let { value ->
+                        AppConfig.INSTANCE.toastOffsetY = value
+                        AppConfig.save()
+                        activity.broadcastReloadConfig()
+                    }
+                },
+                // 不要 label：它会作为浮动小标题显示在输入框内部（与上方行标题重复）；单位说明放到上面的 summary 里
+                label = "",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+        var enableOnGoing by remember { mutableStateOf(AppConfig.INSTANCE.enableOnGoing ?: false) }
+        BooleanSwitch("开启状态栏禁删", enableOnGoing) {
+            AppConfig.INSTANCE.enableOnGoing = it
+            AppConfig.save()
+            enableOnGoing = it
+            activity.broadcastReloadConfig()
+        }
+        var closeCaptchaDialogVPN by remember { mutableStateOf(AppConfig.INSTANCE.closeCaptchaDialogVPN ?: true) }
+        BooleanSwitch("屏蔽VPN/代理弹窗", closeCaptchaDialogVPN) {
+            AppConfig.INSTANCE.closeCaptchaDialogVPN = it
+            AppConfig.save()
+            closeCaptchaDialogVPN = it
+            activity.broadcastReloadConfig()
         }
     }
     Spacer(Modifier.height(16.dp))
@@ -838,9 +915,10 @@ fun SettingsTab(activity: MiuixMainActivity) {
 }
 
 @Composable
-fun BooleanSwitch(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun BooleanSwitch(title: String, checked: Boolean, summary: String? = null, onCheckedChange: (Boolean) -> Unit) {
     SwitchPreference(
         title = title,
+        summary = summary,
         checked = checked,
         onCheckedChange = onCheckedChange
     )

@@ -582,7 +582,7 @@ public class ApplicationHook extends XposedModule {
                         }
                     }, 2000);
                 }
-                if (BaseModel.getNewRpc().getValue()) {
+                if (AppConfig.INSTANCE.getNewRpc()) {
                     rpcBridge = new NewRpcBridge();
                 } else {
                     rpcBridge = new OldRpcBridge();
@@ -631,7 +631,7 @@ public class ApplicationHook extends XposedModule {
         if (!AppConfig.INSTANCE.getEnableDebugLog()) {
             return;
         }
-        if (!BaseModel.getNewRpc().getValue()) {
+        if (!AppConfig.INSTANCE.getNewRpc()) {
             Log.i(TAG, "抓包需要开启「使用新接口」，已跳过");
             return;
         }
