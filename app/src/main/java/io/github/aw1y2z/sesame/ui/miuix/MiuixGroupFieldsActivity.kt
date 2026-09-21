@@ -2,8 +2,6 @@ package io.github.aw1y2z.sesame.ui.miuix
 
 import android.content.Intent
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,8 +40,6 @@ import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ModelConfig
 import io.github.aw1y2z.sesame.data.ModelField
 import io.github.aw1y2z.sesame.data.ModelGroup
-import io.github.aw1y2z.sesame.data.ModelType
-import io.github.aw1y2z.sesame.data.task.ModelTask
 import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.EmptyModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField
@@ -52,6 +48,7 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.SelectAndCountOneModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectOneModelField
 import io.github.aw1y2z.sesame.util.Log
+import io.github.aw1y2z.sesame.util.StringUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -121,6 +118,19 @@ class MiuixGroupFieldsActivity : MiuixBaseActivity() {
         if (!ConfigV2.isModify(userId)) return
         if (ConfigV2.save(userId, true)) {
             ToastUtil.show(this, "保存成功！")
+            sendRestartIfNeeded()
+        }
+    }
+
+    private fun sendRestartIfNeeded() {
+        if (!StringUtil.isEmpty(userId)) {
+            try {
+                val intent = Intent("com.eg.android.AlipayGphone.sesame.restart")
+                intent.putExtra("userId", userId)
+                sendBroadcast(intent)
+            } catch (th: Throwable) {
+                Log.printStackTrace(th)
+            }
         }
     }
 }
@@ -177,36 +187,22 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
         list
     }
 
-    /** 执行当前分组（或全部）的任务 */
+    /**
+     * 执行当前分组的任务。
+     * 本进程是模块 App 的 UI 进程，没有 libxposed 类（ApplicationHook/hook.Toast/NotificationUtil 一碰
+     * 就 NoClassDefFoundError），任务循环也不能压在主线程上，所以只发广播让注入进程去跑。
+     * BASE 分组由注入侧解释为"执行全部任务"。
+     */
     val onExecute = remember {
         {
-            Handler(Looper.getMainLooper()).post {
-                try {
-                    Log.forest("开始执行分组: ${group.getName()}")
-                    val tasks: String = if (group == ModelGroup.BASE) {
-                        // BASE 分组：执行全部任务
-                        ModelTask.startAllTask(false)
-                        "已触发全部任务"
-                    } else {
-                        // 其他分组：只执行属于该分组的任务
-                        var count = 0
-                        val allModels = Model.getModelList()
-                        for (model in allModels) {
-                            if (model == null) continue
-                            val modelGroup = model.getGroup()
-                            if (modelGroup == null) continue
-                            if (modelGroup == group && ModelType.TASK == model.getType()) {
-                                (model as? ModelTask)?.startTask(false)
-                                count++
-                            }
-                        }
-                        "已触发 $count 个任务"
-                    }
-                    ToastUtil.show(activity, tasks)
-                } catch (th: Throwable) {
-                    Log.printStackTrace(th)
-                    ToastUtil.show(activity, "执行失败: ${th.message}")
-                }
+            try {
+                val intent = Intent("com.eg.android.AlipayGphone.sesame.execute")
+                intent.putExtra("group", group.getCode())
+                activity.sendBroadcast(intent)
+                ToastUtil.show(activity, "已发送执行请求：${group.getName()}")
+            } catch (th: Throwable) {
+                Log.printStackTrace(th)
+                ToastUtil.show(activity, "执行失败: ${th.message}")
             }
             Unit
         }

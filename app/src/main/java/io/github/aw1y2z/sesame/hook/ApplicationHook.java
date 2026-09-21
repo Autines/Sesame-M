@@ -43,6 +43,7 @@ import io.github.aw1y2z.sesame.util.compat.XC_MethodReplacement;
 import io.github.aw1y2z.sesame.BuildConfig;
 import io.github.aw1y2z.sesame.data.ConfigV2;
 import io.github.aw1y2z.sesame.data.Model;
+import io.github.aw1y2z.sesame.data.ModelGroup;
 import io.github.aw1y2z.sesame.data.RunType;
 import io.github.aw1y2z.sesame.data.TokenConfig;
 import io.github.aw1y2z.sesame.data.ViewAppInfo;
@@ -959,10 +960,23 @@ public class ApplicationHook extends XposedModule {
                         }
                         break;
                     case "com.eg.android.AlipayGphone.sesame.execute":
+                        // 配置页"执行"按钮会带 group（ModelGroup 的 code）：BASE＝全部任务，
+                        // 其余只跑该分组的任务；不带 group 时保持原行为（整轮执行）。
+                        String groupCode = intent.getStringExtra("group");
                         BroadcastReceiver.PendingResult r2 = goAsync();
                         new Thread(() -> {
                             try {
-                                initHandler(false);
+                                if (StringUtil.isEmpty(groupCode)) {
+                                    initHandler(false);
+                                } else if (ModelGroup.BASE == ModelGroup.getByCode(groupCode)) {
+                                    ModelTask.stopAllTask();
+                                    ModelTask.startAllTask(false);
+                                    Log.record("开始执行全部任务");
+                                } else {
+                                    ModelTask.stopAllTask();
+                                    int count = ModelTask.startGroupTask(groupCode);
+                                    Log.record("开始执行分组【" + ModelGroup.getName(groupCode) + "】任务: " + count + " 个");
+                                }
                             } catch (Throwable th) {
                                 Log.printStackTrace(TAG, th);
                             }
