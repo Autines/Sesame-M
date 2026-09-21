@@ -186,7 +186,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(padding)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             // ============ 配置分组目录 ============
             SmallTitle(text = "配置分组")
