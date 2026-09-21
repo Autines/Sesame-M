@@ -669,49 +669,49 @@ public class FileUtil {
             f.delete();
         }
         f.getParentFile().mkdirs();
-        // 使用临时文件写入，成功后原子替换，避免写入失败时损坏原配置
-        File tmpFile = new File(f.getParentFile(), f.getName() + ".tmp");
+        // 临时文件名带上进程/线程/纳秒：模块 App 与注入进程可能同时写同一个文件，
+        // 固定名 tmp 会被两方交叉写入，替换后得到的是损坏的目标文件
+        File tmpFile = new File(f.getParentFile(), f.getName() + ".tmp"
+                + android.os.Process.myPid() + "-" + Thread.currentThread().getId() + "-" + System.nanoTime());
+        boolean written = false;
         boolean success = false;
         try {
             FileWriter fw = new FileWriter(tmpFile);
             try {
                 fw.write(s);
                 fw.flush();
-                success = true;
+                written = true;
             } finally {
                 try {
                     fw.close();
                 } catch (Throwable t) {
+                    // 关闭失败说明数据可能没落全，按失败处理（原文件不动）
+                    written = false;
                     Log.printStackTrace(TAG, t);
-                }
-            }
-            if (success) {
-                // 先删除原文件，再重命名临时文件（避免覆盖失败时原文件被删）
-                if (f.exists()) {
-                    f.delete();
-                }
-                success = tmpFile.renameTo(f);
-                if (!success) {
-                    // 如果 renameTo 失败（跨文件系统），尝试 copy
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            java.nio.file.Files.move(tmpFile.toPath(), f.toPath(),
-                                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-                            success = true;
-                        }
-                    } catch (Throwable t) {
-                        Log.printStackTrace(TAG, t);
-                    }
                 }
             }
         } catch (Throwable t) {
             Log.printStackTrace(TAG, t);
-        } finally {
-            // 清理临时文件
-            if (tmpFile.exists()) {
-                tmpFile.delete();
+        }
+        if (written) {
+            // rename() 自身就能原子覆盖目标文件，**不要先删原文件**：
+            // 删除与重命名之间目标处于"不存在"状态，此刻进程被杀就等于配置丢了
+            success = tmpFile.renameTo(f);
+            if (!success) {
+                // renameTo 在个别挂载点上会失败：退回 REPLACE_EXISTING
+                // （不带 ATOMIC_MOVE —— 不支持原子移动的文件系统会直接抛异常）
+                try {
+                    java.nio.file.Files.move(tmpFile.toPath(), f.toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    success = true;
+                } catch (Throwable t) {
+                    Log.printStackTrace(TAG, t);
+                }
             }
+        }
+        if (!success && tmpFile.exists()) {
+            // 替换失败：删掉临时文件，保留原文件（原实现是先删原文件，两次都失败就啥都不剩）
+            tmpFile.delete();
         }
         return success;
     }
