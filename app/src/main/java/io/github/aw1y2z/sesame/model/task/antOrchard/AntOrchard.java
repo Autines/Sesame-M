@@ -113,9 +113,15 @@ public class AntOrchard extends ModelTask {
         modelFields.addField(AutoAntOrchardTaskList = new BooleanModelField("AutoAntOrchardTaskList", "农场任务 | 自动黑名单", true).setDependsOn("orchardListTask"));
         modelFields.addField(AntOrchardTaskList = new SelectModelField("AntOrchardTaskList", "农场任务 | 黑名单列表", new LinkedHashSet<>(), AlipayAntOrchardTaskList::getList).setDependsOn("AutoAntOrchardTaskList"));
         modelFields.addField(orchardSpreadManure = new BooleanModelField("orchardSpreadManure", "农场施肥 | 开启", false));
-        modelFields.addField(useBatchSpread = new BooleanModelField("useBatchSpread", "一键施肥5次", false).setDependsOn("orchardSpreadManure"));
-        modelFields.addField(orchardSpreadManureSceneList = new SelectModelField("orchardSpreadManureSceneList", "农场施肥 | 场景列表", new LinkedHashSet<>(), AlipayPlantScene::getList).setDependsOn("orchardSpreadManure"));
-        modelFields.addField(orchardSpreadManureCount = new IntegerModelField("orchardSpreadManureCount", "农场施肥 | 每日次数", 3, 1, 200).setDependsOn("orchardSpreadManure"));
+        modelFields.addField(useBatchSpread = new BooleanModelField("useBatchSpread", "一键施肥5次", false)
+                .setDependsOn("orchardSpreadManure")
+                .setDescription("每次让服务端连续施肥 5 次，消耗 5 倍肥料；肥料不足 5 倍时跳过本次"));
+        modelFields.addField(orchardSpreadManureSceneList = new SelectModelField("orchardSpreadManureSceneList", "农场施肥 | 场景列表", new LinkedHashSet<>(), AlipayPlantScene::getList)
+                .setDependsOn("orchardSpreadManure")
+                .setDescription("只对勾选且服务端已下发的场景施肥"));
+        modelFields.addField(orchardSpreadManureCount = new IntegerModelField("orchardSpreadManureCount", "农场施肥 | 每日次数", 3, 1, 200)
+                .setDependsOn("orchardSpreadManure")
+                .setDescription("按轮计：勾选「一键施肥5次」时每轮按 5 次累计，服务端每日上限 200 次"));
         modelFields.addField(drawGameCenterAward = new BooleanModelField("drawGameCenterAward", "农场乐园 | 游戏宝箱", true));
         //modelFields.addField(driveAnimalType = new ChoiceModelField("driveAnimalType", "驱赶小鸡 | 动作", DriveAnimalType.NONE, DriveAnimalType.nickNames));
         //modelFields.addField(driveAnimalList = new SelectModelField("driveAnimalList", "驱赶小鸡 | 好友列表", new LinkedHashSet<>(), AlipayUser::getList));
@@ -431,11 +437,14 @@ public class AntOrchard extends ModelTask {
         try {
             while (true) {
                 boolean hasSpread = false;
+                boolean anySceneQualified = false;
                 // 遍历可用场景进行施肥
                 for (PlantScene scene : PlantScene.getEntries()) {
-                    if (enableSceneList.contains(scene.name()) && orchardSpreadManureSceneList.contains(scene.name()) && orchardSpreadManureCount.getValue() != null && orchardSpreadManureCount.getValue() > 0) {
+                    if (enableSceneList.contains(scene.name()) && orchardSpreadManureSceneList.contains(scene.name()) && targetSpreadTimes() > 0) {
+                        anySceneQualified = true;
                         // 切换场景
                         if (!switchPlantScene(scene)) {
+                            Log.record("农场施肥⏭️切换场景失败[" + scene.name() + "]");
                             continue;
                         }
                         // 检查是否可施肥
@@ -448,6 +457,11 @@ public class AntOrchard extends ModelTask {
                             break;
                         }
                     }
+                }
+
+                // 场景没对上（服务端未下发该场景/配置里没勾）时静默跳过，留一行便于定位
+                if (!anySceneQualified) {
+                    Log.record("农场施肥⏭️场景未启用#可用" + enableSceneList + "#配置" + orchardSpreadManureSceneList);
                 }
 
                 // 查询施肥活动奖励
@@ -482,7 +496,9 @@ public class AntOrchard extends ModelTask {
 
             JSONObject taobaoData = new JSONObject(jo.getString("taobaoData"));
             int cost = taobaoData.getInt("currentCost");
-            Log.farm("芭芭农场🌳" + scene.nickname() + "施肥#消耗[" + cost + "g肥料]");
+            boolean batch = Boolean.TRUE.equals(useBatchSpread.getValue());
+            Log.farm("芭芭农场🌳" + scene.nickname() + "施肥#消耗[" + cost + "g肥料]"
+                    + (batch ? "#一键5次" : "") + "#目标[" + targetSpreadTimes() + "次]");
 
             // 检查施肥进度
             if (taobaoData.has("currentStage")) {
@@ -523,6 +539,25 @@ public class AntOrchard extends ModelTask {
         return ""; // 返回空字符串而不是null
     }
 
+    /** 主场景服务端每日施肥次数上限（`wateringLeftTimes` 是剩余次数） */
+    private static final int MAIN_SPREAD_DAILY_LIMIT = 200;
+
+    /** 一键施肥一次顶 5 次（服务端按单次累加已施肥次数） */
+    private static final int BATCH_SPREAD_SIZE = 5;
+
+    /**
+     * 「每日次数」折算成服务端的单次施肥次数目标：勾了一键5次就 ×5，再封顶服务端主场景日上限。
+     * <p>服务端的已施肥次数按单次计（批量一次 +5），不折算的话次数=5 时一次批量就撞上限、循环立刻结束。
+     */
+    private int targetSpreadTimes() {
+        Integer limit = orchardSpreadManureCount.getValue();
+        int times = limit == null ? 0 : Math.max(limit, 0);
+        if (Boolean.TRUE.equals(useBatchSpread.getValue())) {
+            times *= BATCH_SPREAD_SIZE;
+        }
+        return Math.min(times, MAIN_SPREAD_DAILY_LIMIT);
+    }
+
     /**
      * 检查是否可以施肥
      */
@@ -532,8 +567,8 @@ public class AntOrchard extends ModelTask {
             return false;
         }
 
-        Integer limit = orchardSpreadManureCount.getValue();
-        if (limit == null || limit <= 0) {
+        int limit = targetSpreadTimes();
+        if (limit <= 0) {
             return false;
         }
 
@@ -549,8 +584,20 @@ public class AntOrchard extends ModelTask {
                     int happyPoint = Integer.parseInt(accountInfo.getString("happyPoint"));
                     int wateringCost = accountInfo.getInt("wateringCost");
                     int leftTimes = accountInfo.getInt("wateringLeftTimes");
+                    int usedTimes = MAIN_SPREAD_DAILY_LIMIT - leftTimes;
 
-                    return happyPoint >= wateringCost && (200 - leftTimes) < limit;
+                    // 一键5次时服务端一次要消耗 5 倍肥料，余额判据必须按批量算，否则会发出注定失败的请求
+                    boolean batch = Boolean.TRUE.equals(useBatchSpread.getValue());
+                    int needCost = batch ? wateringCost * BATCH_SPREAD_SIZE : wateringCost;
+                    if (happyPoint < needCost) {
+                        Log.record("农场施肥⏭️肥料不足[" + happyPoint + "/" + needCost + "g]" + (batch ? "#一键5次" : ""));
+                        return false;
+                    }
+                    if (usedTimes >= limit) {
+                        Log.record("农场施肥⏭️已达次数上限[" + usedTimes + "/" + limit + "]");
+                        return false;
+                    }
+                    return true;
 
                 case yeb:
                     // 余额宝场景施肥检查
