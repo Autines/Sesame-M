@@ -11,6 +11,7 @@ import io.github.aw1y2z.sesame.data.task.ModelTask;
 import io.github.aw1y2z.sesame.hook.ApplicationHook;
 import io.github.aw1y2z.sesame.hook.Toast;
 import io.github.aw1y2z.sesame.model.base.TaskCommon;
+import io.github.aw1y2z.sesame.model.base.TaskAlternative;
 import io.github.aw1y2z.sesame.data.modelFieldExt.BooleanModelField;
 import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField;
 import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField;
@@ -225,10 +226,9 @@ public class AntOrchard extends ModelTask {
                 }
                 queryOptionalPlay();
             }
-            // 处理返访奖励
-            //if (!Status.hasFlagToday("orchardWidgetDailyAward")) {
-            //    receiveOrchardVisitAward();
-            //}
+            // 处理回访/浏览奖励：官方每次进农场都会调一次（2026-09-22 抓包实证）；
+            // 不再加"每日一次"标记——首调可能在奖励还没产生时就把当天标记掉，反而漏领
+            receiveOrchardVisitAward();
 
             return true;
         } catch (Throwable t) {
@@ -700,6 +700,8 @@ public class AntOrchard extends ModelTask {
 
                 // 处理已完成的任务奖励（已在triggerTbTask中统一处理）
             }
+            // 核对本轮 doFarmTask 的结果（响应不可信，以任务列表为准）
+            verifyPendingTasksByList();
         } catch (Throwable t) {
             Log.err(TAG, "handleTaskList err:", t);
         }
@@ -744,15 +746,11 @@ public class AntOrchard extends ModelTask {
                 }
 
                 for (int cnt = 0; cnt < timesToDo; cnt++) {
-                    // 注意：这里taskId作为taskType参数传递，因为你的RPC方法要求taskType
-                    String result = AntOrchardRpcCall.finishTask(sceneCode, taskId);
-                    JSONObject finishResponse = new JSONObject(result);
-                    //检查并标记黑名单任务
-                    MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardTaskList", title, finishResponse);
-                    if (MessageUtil.checkResultCode(TAG, finishResponse)) {
-                        Log.farm("肥料任务🧾完成[" + title + "]第" + (rightsTimes + cnt + 1) + "次");
+                    // taskId 当作 taskType 传给 finishTask（该 RPC 的参数名就叫 taskType）
+                    String via = finishTaskTwice(sceneCode, title, taskId);
+                    if (via != null) {
+                        Log.farm("肥料任务🧾完成[" + title + "]第" + (rightsTimes + cnt + 1) + "次#" + via);
                     } else {
-                        Log.record("失败：芭芭农场广告任务📺[" + title + "] " + finishResponse.optString("desc"));
                         break;
                     }
                     TimeUtil.sleep(500);
@@ -762,30 +760,98 @@ public class AntOrchard extends ModelTask {
 
             // 处理触发型任务
             if ("TRIGGER".equals(actionType) || "ADD_HOME".equals(actionType) || "PUSH_SUBSCRIBE".equals(actionType)) {
-                // 注意：这里taskId作为taskType参数传递
-                String result = AntOrchardRpcCall.finishTask(sceneCode, taskId);
-                JSONObject finishResponse = new JSONObject(result);
-                //检查并标记黑名单任务
-                MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardTaskList", title, finishResponse);
-                if (MessageUtil.checkResultCode(TAG, finishResponse)) {
-                    Log.farm("肥料任务🧾完成[" + title + "]");
+                // taskId 当作 taskType 传递
+                String via = finishTaskTwice(sceneCode, title, taskId);
+                if (via != null) {
+                    Log.farm("肥料任务🧾完成[" + title + "]#" + via);
                 }
                 return true;
             }
 
             //配合黑名单的兜底操作
-            String result = AntOrchardRpcCall.finishTask(sceneCode, taskId);
-            JSONObject finishResponse = new JSONObject(result);
-            //检查并标记黑名单任务
-            MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardTaskList", title, finishResponse);
-            if (MessageUtil.checkResultCode(TAG, finishResponse)) {
-                Log.farm("肥料任务🧾完成[" + title + "]");
+            String via = finishTaskTwice(sceneCode, title, taskId);
+            if (via != null) {
+                Log.farm("肥料任务🧾完成[" + title + "]#" + via);
             }
             return true;
         } catch (Throwable t) {
             Log.err(TAG, "finishOrchardTask err:", t);
             return false;
         }
+    }
+
+    /**
+     * `doFarmTask` 已发出、但响应不足以判定成败的任务：{@code taskId -> 标题}。
+     * <p>由 {@link #verifyPendingTasksByList()} 在列表处理完后用任务列表状态核对。
+     */
+    private static final LinkedHashMap<String, String> pendingVerifyTasks = new LinkedHashMap<>();
+
+    /** 同轮核对配置（见 TaskAlternative.verify） */
+    private static final TaskAlternative.VerifyConfig VERIFY_CFG = new TaskAlternative.VerifyConfig(
+            "AntOrchard", "AntOrchardTaskList", "农场肥料任务", "肥料任务", "🧾完成", true, msg -> Log.farm(msg));
+
+    /**
+     * 完成任务（两条腿）：先 {@code finishTask}，不成功再用 {@code taskId} 当 bizKey 走 doFarmTask
+     * （响应不可信，见 {@link TaskAlternative}）。
+     *
+     * @return 生效的接口名（finishTask / doFarmTask）；两条都失败或异常返回 null
+     */
+    private static String finishTaskTwice(String sceneCode, String taskTitle, String taskId) {
+        try {
+            JSONObject finishResponse = new JSONObject(AntOrchardRpcCall.finishTask(sceneCode, taskId));
+            if (MessageUtil.checkSuccess(TAG, finishResponse)) {
+                return "finishTask";
+            }
+            JSONObject doFarmResponse = new JSONObject(AntOrchardRpcCall.doFarmTask(taskId, sceneCode));
+            if (MessageUtil.checkSuccess(TAG, doFarmResponse)) {
+                return "doFarmTask";
+            }
+            // 400000040 可能已被另一种实现方案做成，不拉黑、记 pending 交给列表核对；其它错误码=真做不了，照常拉黑
+            if (!MessageUtil.isUnsupportedRpc(finishResponse)) {
+                MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardTaskList", taskTitle, finishResponse);
+            } else {
+                // doFarmTask 的响应对这类任务**不可信**：实测回 102「服务器正在开小差」但任务其实被做成了
+                // （rightsTimes 0→1、状态转 RECEIVED）；也有同样回 102 而真没做成的。
+                // 所以既不能据响应判失败（会把做成的任务拉黑），也不能判成功（真做不了的会每轮白试）：
+                // 记下来，由 handleTaskList 在列表处理完后**按任务列表状态核对**
+                pendingVerifyTasks.put(taskId, taskTitle);
+            }
+            Log.farm("肥料任务🕓已触发[" + taskTitle + "]#finishTask=" + finishResponse.optString("code")
+                    + "#doFarmTask=" + TaskAlternative.describe(doFarmResponse) + "，结果以任务列表为准");
+        } catch (Throwable t) {
+            Log.err(TAG, "finishTaskTwice err:", t);
+        }
+        return null;
+    }
+
+    /**
+     * 核对「已触发但响应不可信」的任务：等几秒后重拉任务列表，**仍未完成**的才计入自动拉黑。
+     * <p>为什么以任务列表为准：见 {@link #finishTaskTwice} 的注释——响应会撒谎（回 102 但已做成），
+     * 服务端是异步推进状态的，只有任务列表的 {@code taskStatus} 才是最终判据。
+     */
+    private static void verifyPendingTasksByList() {
+        TaskAlternative.verify(pendingVerifyTasks, VERIFY_CFG, () -> {
+            JSONObject jo = new JSONObject(AntOrchardRpcCall.orchardListTask());
+            if (!MessageUtil.checkResultCode(TAG, jo)) {
+                return null;
+            }
+            JSONArray taskArray = jo.optJSONArray("taskList");
+            if (taskArray == null) {
+                return null;
+            }
+            Set<String> stillTodo = new HashSet<>();
+            for (int i = 0; i < taskArray.length(); i++) {
+                JSONObject task = taskArray.optJSONObject(i);
+                if (task == null || !TaskStatus.TODO.name().equals(task.optString("taskStatus"))) {
+                    continue;
+                }
+                String taskId = task.optString("taskId", "");
+                if (!taskId.isEmpty()) {
+                    stillTodo.add(taskId);
+                }
+            }
+            return stillTodo;
+        });
     }
 
     /**
@@ -1127,37 +1193,29 @@ public class AntOrchard extends ModelTask {
     }
 
     /**
-     * 领取小组件回访奖励
+     * 领取小组件回访/浏览奖励。
+     * <p>实测（2026-09-22 抓包 logs/chk_orchard 14:20:10，官方每次进入农场都会调）服务端返回
+     * {@code {"canCollect":false,"manureCount":0,"needManualReceive":false,"success":true}}——
+     * **没有 `orchardVisitAwardList` 结构**。原先按该字段解析，永远走"无奖励"分支并打误导性日志，
+     * 调用点也因此被注释掉，导致这块奖励一直没领过。现按真实字段解析。
      */
     private void receiveOrchardVisitAward() {
         try {
             String response = AntOrchardRpcCall.receiveOrchardVisitAward();
             JSONObject jo = new JSONObject(response);
-
-            if (!jo.optBoolean("success", false)) {
+            if (!MessageUtil.checkSuccess(TAG, jo)) {
                 Log.record("领取回访奖励失败: " + response);
                 return;
             }
-
-            JSONArray awardList = jo.optJSONArray("orchardVisitAwardList");
-            if (awardList == null || awardList.length() == 0) {
-                Log.record("领取回访奖励失败: 无奖励，可能已领取过");
-                Status.flagToday("orchardWidgetDailyAward", userId);
-                return;
+            int manureCount = jo.optInt("manureCount", 0);
+            boolean canCollect = jo.optBoolean("canCollect", false);
+            boolean needManualReceive = jo.optBoolean("needManualReceive", false);
+            if (manureCount > 0) {
+                Log.farm("回访奖励🎖️领取肥料*" + manureCount);
+            } else if (canCollect || needManualReceive) {
+                Log.farm("回访奖励🎖️有待领奖励[canCollect=" + canCollect + "#需手动领取=" + needManualReceive + "]");
             }
-
-            for (int i = 0; i < awardList.length(); i++) {
-                JSONObject awardObj = awardList.optJSONObject(i);
-                if (awardObj == null) {
-                    continue;
-                }
-
-                int awardCount = awardObj.optInt("awardCount", 0);
-                String awardDesc = awardObj.optString("awardDesc", "");
-
-                Log.farm("回访奖励[" + awardDesc + "] " + awardCount + " g肥料");
-            }
-            Status.flagToday("orchardWidgetDailyAward", userId);
+            // 无奖励时不打日志：官方每次进农场都会调一次，属正常空返回
         } catch (Throwable t) {
             Log.err(TAG, "receiveOrchardVisitAward err:", t);
         }
