@@ -3,7 +3,6 @@ package io.github.aw1y2z.sesame.data;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
-import io.github.aw1y2z.sesame.data.task.ModelTask;
 import io.github.aw1y2z.sesame.entity.UserEntity;
 import io.github.aw1y2z.sesame.util.*;
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap;
@@ -46,7 +45,7 @@ public class ConfigV2 {
 
     public void setModelFieldsMap(Map<String, ModelFields> newModels) {
         modelFieldsMap.clear();
-        Map<String, ModelConfig> modelConfigMap = ModelTask.getModelConfigMap();
+        Map<String, ModelConfig> modelConfigMap = Model.getAllModelConfig();
         if (newModels == null) {
             newModels = new HashMap<>();
         }
@@ -168,6 +167,28 @@ public class ConfigV2 {
             return true;
         }
         String json = INSTANCE.toSaveStr();
+
+        // ⚠️ 这里会把「默认账号」的空 userId 改写成字面量 "默认"（为了日志好看），
+        // 但**不能把这具改写后的 userId 传给滚动备份**：backupConfigV2WithRolling 是按
+        // userId 拼路径的（config/<userId>/config_v2.json），传 "默认" 会去找一个永远不存在的
+        // 目录（默认账号的原文件在根目录 config_v2.json），后果是
+        // **默认账号每次保存都跳过滚动备份 + 每次写一条 ERROR**。
+        // 实测（09-22 模拟器）：`原配置文件不存在，跳过备份: …/config/默认/config_v2.json`
+        final String originalUserId = userId;
+
+        // ========== 落盘**之前**先做一次滚动备份（真正的「写前快照」） ==========
+        // 上游原本把备份放在写盘成功之后，那样备份到的是**刚写进去的新内容** ——
+        // 万一这次保存本身就是坏的（例如写进了默认值），bak/ 槽位会被当场污染，救不回来。
+        // 实测（09-22 模拟器）：改一个开关保存后，bak/ 里的槽位与新文件逐字段一致，
+        // 里面没有「保存前的样子」。挪到写盘前，槽位里才是上一次正确的配置。
+        // 原文件尚不存在（新账号首次保存）时跳过：此时没有可备份的内容，也不算异常。
+        File configV2File = StringUtil.isEmpty(originalUserId)
+                ? FileUtil.getDefaultConfigV2File()
+                : FileUtil.getConfigV2File(originalUserId);
+        if (configV2File != null && configV2File.exists()) {
+            FileUtil.backupConfigV2WithRolling(originalUserId);
+        }
+
         boolean success;
         if (StringUtil.isEmpty(userId)) {
             userId = "默认";
@@ -176,11 +197,9 @@ public class ConfigV2 {
             success = FileUtil.setConfigV2File(userId, json);
         }
         
-        // ========== 新增：保存成功后触发滚动备份 ==========
         if (success) {
             lastSyncedText = json;
             captureBaseline();
-            FileUtil.backupConfigV2WithRolling(userId);
         }
         
         Log.record("保存配置: " + userId);
@@ -197,12 +216,9 @@ public class ConfigV2 {
                 userName = "默认";
             } else {
                 configV2File = FileUtil.getConfigV2File(userId);
-                UserEntity userEntity = UserIdMap.get(userId);
-                if (userEntity == null) {
-                    userName = userId;
-                } else {
-                    userName = userEntity.getShowName();
-                }
+                // 统一走 UserIdMap.getShowName：昵称缺失时会回退成 userId，
+                // 避免日志里出现「加载配置: null」（直接在实体上取 showName 会拿到空值）
+                userName = UserIdMap.getShowName(userId);
             }
             Log.record("加载配置: " + userName);
             if (configV2File.exists()) {
@@ -372,6 +388,7 @@ public class ConfigV2 {
         }
         return false;
     }
+
 
     private static String fieldKey(String modelCode, String fieldCode) {
         return modelCode + "|" + fieldCode;

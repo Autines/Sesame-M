@@ -53,11 +53,15 @@ public abstract class ModelTask extends Model {
             MAIN_TASK_MAP.put(task, Thread.currentThread());
             Log.record("执行开始-" + task.getName());
             Log.startModuleLogCount();
+            // 标记本线程所属模块：Log 写入时会自动加 [模块名] 前缀。
+            // 各模块跑在各自的线程池线程上，ThreadLocal 天然隔离，并发交错也不会串味。
+            Log.setCurrentModule(task.getName());
             try {
                 task.run();
             } catch (Exception e) {
                 Log.printStackTrace(e);
             } finally {
+                Log.setCurrentModule(null);
                 // 本轮模块未产生任何动作时，在运行日志中给出提示
                 if (Log.stopModuleLogCount() == 0) {
                     Log.record(task.getName() + "✅本轮无操作");

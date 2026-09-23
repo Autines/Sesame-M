@@ -19,10 +19,19 @@ public class AppConfig {
 
     public static final AppConfig INSTANCE = new AppConfig();
 
+    /** 界面风格：HyperOS/Miuix 观感（历史默认，保持既有样式不变） */
+    public static final String UI_STYLE_MIUIX = "miuix";
+
+    /** 界面风格：Material Design 3（Material You，支持动态取色） */
+    public static final String UI_STYLE_MATERIAL3 = "material3";
+
     @JsonIgnore
     private boolean init;
 
     private Boolean newUI = true;
+
+    /** 界面风格，取值见 UI_STYLE_* 常量；缺省为 miuix 以保持历史观感 */
+    private String uiStyle = UI_STYLE_MIUIX;
     private Boolean languageSimplifiedChinese = true;
 
     private Boolean darkMode = false;
@@ -90,6 +99,19 @@ public class AppConfig {
 
     public void setLanguageSimplifiedChinese(Boolean value) {
         languageSimplifiedChinese = value;
+    }
+
+    /**
+     * 界面风格。必须显式声明：Lombok 的 @Data 只在 javac 阶段织入访问器，
+     * Kotlin 编译器看不到生成的方法，因此 UI 层（Kotlin）读取的字段都要有显式 getter。
+     * 取值非法或缺失时回落 HyperOS 风格，保证旧配置升级后观感不变。
+     */
+    public String getUiStyle() {
+        return uiStyle == null ? UI_STYLE_MIUIX : uiStyle;
+    }
+
+    public void setUiStyle(String value) {
+        uiStyle = value;
     }
 
     public Boolean getDarkMode() {

@@ -668,6 +668,12 @@ public class AntSports extends ModelTask {
         if (Status.hasFlagToday("sport::treasureBoxLimit")) {
             return false;
         }
+        // 当日该接口已被风控挑战拦截过：不再为「拿宝箱」走小步。
+        // 否则会陷入死循环 —— 宝箱没真领到，下次查邮件列表数量仍 <20，于是每轮重复
+        // 「走小步 → 领宝箱 → 被拒」，实测可空转 101 分钟、284 次失败。
+        if (Status.hasFlagToday("sport::treasureBoxRiskBlock")) {
+            return false;
+        }
         try {
             JSONObject jo = new JSONObject(AntSportsRpcCall.queryMailList());
             if (!MessageUtil.checkResultCode(TAG, jo)) {
@@ -797,7 +803,10 @@ public class AntSports extends ModelTask {
         try {
             for (int i = 0; i < treasureBoxList.length(); i++) {
                 JSONObject treasureBox = treasureBoxList.getJSONObject(i);
-                receiveEvent(treasureBox.getString("boxNo"));
+                if (!receiveEvent(treasureBox.getString("boxNo"))) {
+                    // 该接口已被风控拦截：剩余宝箱注定同样失败，立即停手（当日不再尝试）
+                    break;
+                }
                 TimeUtil.sleep(1000);
             }
         } catch (Throwable t) {
@@ -805,16 +814,29 @@ public class AntSports extends ModelTask {
         }
     }
 
-    private static void receiveEvent(String eventBillNo) {
+    /**
+     * 领取宝箱事件。
+     *
+     * @return {@code true} 可继续（成功或普通失败）；{@code false} 命中风控挑战，
+     * 调用方应立即停止后续领取，并当日熔断该接口。
+     */
+    private static boolean receiveEvent(String eventBillNo) {
         try {
             JSONObject jo = new JSONObject(AntSportsRpcCall.receiveEvent(eventBillNo));
             if (MessageUtil.checkSuccess(TAG, jo)) {
                 jo = jo.getJSONObject("data");
                 parseRewardsByJSONArrayRewards(jo.getJSONArray("rewards"), 0);
+                return true;
+            }
+            if (MessageUtil.isRiskControl(jo)) {
+                Status.flagToday("sport::treasureBoxRiskBlock");
+                Log.record("风控🚫[宝箱领取]接口已被拦截，本日暂停领取宝箱（行走照常）");
+                return false;
             }
         } catch (Throwable t) {
             Log.err(TAG, "receiveEvent err:", t);
         }
+        return true;
     }
 
     private static void parseRewardsByJSONArrayRewards(JSONArray rewards, int rewardsType) {

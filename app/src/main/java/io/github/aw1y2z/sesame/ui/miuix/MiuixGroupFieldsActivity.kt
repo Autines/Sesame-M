@@ -2,69 +2,46 @@ package io.github.aw1y2z.sesame.ui.miuix
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import io.github.aw1y2z.sesame.data.ConfigPreload
 import io.github.aw1y2z.sesame.data.ConfigV2
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ModelConfig
 import io.github.aw1y2z.sesame.data.ModelField
 import io.github.aw1y2z.sesame.data.ModelGroup
-import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField
-import io.github.aw1y2z.sesame.data.modelFieldExt.EmptyModelField
-import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField
-import io.github.aw1y2z.sesame.data.modelFieldExt.SelectAndCountModelField
-import io.github.aw1y2z.sesame.data.modelFieldExt.SelectAndCountOneModelField
-import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField
-import io.github.aw1y2z.sesame.data.modelFieldExt.SelectOneModelField
+import io.github.aw1y2z.sesame.ui.theme.LocalUiStyle
+import io.github.aw1y2z.sesame.ui.theme.M3_PER_ITEM_CARDS
+import io.github.aw1y2z.sesame.ui.theme.SESAME_CARD_CORNER
+import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
+import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
+import io.github.aw1y2z.sesame.ui.theme.SesameText
+import io.github.aw1y2z.sesame.ui.theme.SesameTopBar
+import io.github.aw1y2z.sesame.ui.theme.UiStyle
+import io.github.aw1y2z.sesame.ui.theme.sesameCardShape
+import io.github.aw1y2z.sesame.ui.theme.sesameGroupedShape
+import io.github.aw1y2z.sesame.ui.theme.sesameSurface
+import io.github.aw1y2z.sesame.ui.theme.sesameSurfaceContainer
 import io.github.aw1y2z.sesame.util.Log
 import io.github.aw1y2z.sesame.util.StringUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.CheckboxPreference
-import top.yukonga.miuix.kmp.preference.RadioButtonPreference
-import top.yukonga.miuix.kmp.preference.SliderPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import kotlin.math.roundToInt
 
 /**
  * 配置字段页（三级）：显示某个分组下的所有配置字段。
@@ -84,23 +61,24 @@ class MiuixGroupFieldsActivity : MiuixBaseActivity() {
         super.onCreate(savedInstanceState)
         userId = intent.getStringExtra(EXTRA_USER_ID)
         groupCode = intent.getStringExtra(EXTRA_GROUP_CODE)
+        // 返回键走 OnBackPressedDispatcher（原因见 MiuixSettingsActivity）：
+        // 本页的落盘全靠退出流程，覆盖 onBackPressed() 在 targetSdk 36 上等于不保存。
+        onBackPressedDispatcher.addCallback(this) {
+            save()
+            finish()
+        }
         setAppContent {
             groupCode?.let { code ->
                 val group = ModelGroup.entries.find { it.name == code }
                 if (group != null) {
                     GroupFieldsContent(activity = this, userId = userId, groupCode = code, group = group)
                 } else {
-                    top.yukonga.miuix.kmp.basic.Text("分组不存在: $code", color = MiuixTheme.colorScheme.error)
+                    top.yukonga.miuix.kmp.basic.Text("分组不存在: $code")
                 }
             } ?: run {
-                top.yukonga.miuix.kmp.basic.Text("缺少参数", color = MiuixTheme.colorScheme.error)
+                top.yukonga.miuix.kmp.basic.Text("缺少参数")
             }
         }
-    }
-
-    override fun onBackPressed() {
-        save()
-        super.onBackPressed()
     }
 
     /** 顶部返回按钮与系统返回统一入口：先保存再退出。 */
@@ -115,7 +93,12 @@ class MiuixGroupFieldsActivity : MiuixBaseActivity() {
      * 确认有改动后走 force=true，避免 ConfigV2.save() 内部再做一次全量序列化比较。
      */
     fun save() {
-        if (userId == null) return
+        // ⚠️ 这里不要写 `if (userId == null) return`。
+        // 「默认账号」的 userId 本来就是 null，配置读写会退回默认配置文件
+        // （ConfigV2.isModify/save 内部已做了 isEmpty(userId) → 默认文件的处理）。
+        // 判空直接 return 会让默认账号下本页的改动既不落盘、也不给任何提示：
+        // 用户改完开关返回，界面看着像保存了，实际磁盘没写，
+        // 只有再退回二级配置页时才顺带落盘一次——表现为「提示晚一步」。
         if (!ConfigV2.isModify(userId)) return
         if (ConfigV2.save(userId, true)) {
             ToastUtil.show(this, "保存成功！")
@@ -211,13 +194,13 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
 
     Scaffold(
         topBar = {
-            LogTopBar(
+            SesameTopBar(
                 title = group.getName(),
                 onBack = { activity.saveAndFinish() },
                 onExecute = onExecute
             )
         },
-        containerColor = MiuixTheme.colorScheme.surface
+        containerColor = sesameSurface()
     ) { padding ->
         // 按分区（Header）归组：一个分组 = 一张 CardColumn（四角 16dp 圆角、行无缝），
         // 与一级页「一张卡里排多行」完全一致；行作为 Card 的子项，背景/裁剪/按压观感都由它负责。
@@ -243,22 +226,26 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            contentPadding = PaddingValues(vertical = 8.dp)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            // M3 下每行是一张独立卡，靠行间距分开；Miuix 下多行共享一张连续卡，
+            // 必须零间距，否则卡面会被切成一截一截。
+            verticalArrangement = if (LocalUiStyle.current == UiStyle.MATERIAL3 && M3_PER_ITEM_CARDS) {
+                Arrangement.spacedBy(8.dp)
+            } else {
+                Arrangement.Top
+            }
         ) {
-            items(sections.size) { index ->
-                val (title, fields) = sections[index]
-                title?.let { SmallTitle(text = it) }
-                CardColumn {
-                    fields.forEach { fieldRow ->
-                        GroupFieldRow(
-                            activity = activity,
-                            userId = userId,
-                            groupCode = groupCode,
-                            row = fieldRow,
-                            onDependencyChanged = { depVersion++ }
-                        )
-                    }
+            items(rows, key = { it.key }) { row ->
+                when (row) {
+                    is GroupFieldsRow.Header -> SesameSectionTitle(text = row.title)
+                    is GroupFieldsRow.Field -> GroupFieldRow(
+                        activity = activity,
+                        userId = userId,
+                        groupCode = groupCode,
+                        row = row,
+                        onDependencyChanged = { depVersion++ }
+                    )
                 }
             }
         }
@@ -266,8 +253,15 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
 }
 
 /**
- * 单个字段行。相邻行背景一致、圆角只在一组字段的首尾外露，
- * 因此视觉上仍是一张连续的卡片，但每一行都能被 LazyColumn 独立复用/回收。
+ * 单个字段行的卡片外观。
+ *
+ * 两套风格对「字段列表」的表达不同：
+ * - `MIUIX`：相邻行背景一致、圆角只在首尾外露 → 视觉上是一张连续大卡，
+ *   同时每一行仍能被 LazyColumn 独立复用/回收；
+ * - `MATERIAL3`：每行一张**独立卡**（四角全圆角），行间距由 LazyColumn 提供。
+ *
+ * 「行自持内边距」的模型两套风格一致：Miuix 的 ArrowPreference 需要外层 16dp
+ * 水平留白，M3 的行组件已自带 16dp，因此这里只负责形状与背景。
  */
 @Composable
 private fun GroupFieldRow(
@@ -277,15 +271,32 @@ private fun GroupFieldRow(
     row: GroupFieldsRow.Field,
     onDependencyChanged: () -> Unit
 ) {
-    // 不再自己画背景：行的容器由外层 CardColumn（= 库的 Card）统一负责，
-    // 与一级页一样是「一张卡里排多行」，行的左右缩进交给行自身的 insideMargin
+    val m3 = LocalUiStyle.current == UiStyle.MATERIAL3
+    val perItem = m3 && M3_PER_ITEM_CARDS
+    val shape = if (perItem) {
+        sesameCardShape()
+    } else {
+        sesameGroupedShape(
+            first = row.first,
+            last = row.last,
+            radius = if (m3) SESAME_CARD_CORNER else 16.dp
+        )
+    }
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(sesameSurfaceContainer(), shape)
+            // 首尾内边距只在「连续大卡」模式下需要（把卡面顶到组边界）；
+            // 独立卡自带完整圆角，行内容的高度由行组件自己保证。
+            .padding(
+                top = if (row.first && !perItem) 8.dp else 0.dp,
+                bottom = if (row.last && !perItem) 8.dp else 0.dp
+            )
     ) {
         val field = row.field
         when (field.type) {
             "SELECT", "SELECT_ONE", "SELECT_AND_COUNT", "SELECT_AND_COUNT_ONE" -> {
-                ArrowPreference(
+                SesameClickRow(
                     title = field.name ?: "",
                     summary = field.description,
                     onClick = {

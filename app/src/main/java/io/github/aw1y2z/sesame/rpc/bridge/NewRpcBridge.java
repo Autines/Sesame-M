@@ -34,11 +34,6 @@ public class NewRpcBridge implements RpcBridge {
     private Method newRpcCallMethod;
 
     @Override
-    public RpcVersion getVersion() {
-        return RpcVersion.NEW;
-    }
-
-    @Override
     public void load() throws Exception {
         loader = ApplicationHook.getClassLoader();
         try {

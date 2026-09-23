@@ -40,6 +40,9 @@ public class AntFarm extends ModelTask {
     private static final String TAG = AntFarm.class.getSimpleName();
     /** 家庭分享：当日累计"邀请全部失败"次数 */
     private static final String FLAG_FAMILY_SHARE_FAIL_COUNT = "antFarm::familyShareToFriends::failCount";
+
+    /** 风控当日熔断标记：doFarmTask 接口命中风控挑战后置位，当日不再逐个试剩余饲料任务 */
+    private static final String FLAG_DO_FARM_TASK_RISK_BLOCK = "farm::doFarmTaskRiskBlock";
     /** 家庭分享：当日最多尝试几次，超过后当天不再重试（避免每轮任务都重发邀请请求） */
     private static final int MAX_FAMILY_SHARE_ATTEMPT = 3;
     /** 小鸡所在空间标识：家庭空间。睡觉/起床靠它区分走家庭接口还是个人小屋接口 */
@@ -1835,6 +1838,12 @@ public class AntFarm extends ModelTask {
                 isDoTask = doAnswerTask(title);
             } else {
                 JSONObject jodoFarmTask = new JSONObject(AntFarmRpcCall.doFarmTask(bizKey));
+                // 风控挑战：自动过滑块在支付宝 12.12.x 上不可用，该接口当日已废。
+                // 置当日标记，由 listFarmTask 中止剩余任务（本次照常走完下面的错误记录，便于日志留痕）。
+                if (MessageUtil.isRiskControl(jodoFarmTask)) {
+                    Status.flagToday(FLAG_DO_FARM_TASK_RISK_BLOCK);
+                    Log.record("风控🚫[庄园饲料任务]接口已被拦截，本日中止剩余任务");
+                }
                 //检查并标记黑名单任务（此处是庄园饲料任务，应写入饲料黑名单而非抽抽乐）
                 MessageUtil.checkResultCodeAndMarkTaskBlackList("AntFarmDoFarmTaskList", title, jodoFarmTask);
                 if (MessageUtil.checkResultCode(TAG, jodoFarmTask)) {

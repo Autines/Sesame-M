@@ -4,8 +4,10 @@ apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 android {
     def version = project.getProperties().get("version")
     if (version == null || "unspecified".equalsIgnoreCase(version)) {
-        // 默认版本号；正式发布时由 CI 通过 -Pversion=<tag> 覆盖
-        version = "1.0.0"
+        // 版本名固定为**上游最新发布版**，保证一眼看出本地构建基于上游哪一版；
+        // 本地改动不进版本名，只体现在构建号（versionCode = git 提交数，每提交一次自动 +1）。
+        // 上游的 CI 用 -Pversion=<tag> 覆盖，本地构建沿用这个默认值即可。
+        version = "1.1.9"
     }
     project.ext.appVersion = version
     def gitCommitHash = "unknown"
@@ -23,8 +25,11 @@ android {
     defaultConfig {
         applicationId "io.github.aw1y2z.sesame"
         minSdk 26
-        //noinspection ExpiredTargetSdkVersion
-        targetSdk 34
+        // 36 = Android 16。升到这个目标版本后系统启用「预测式返回」，
+        // 不再调用 Activity.onBackPressed()，各页面已统一改走 OnBackPressedDispatcher。
+        targetSdk 36
+        // 构建号：跟随 git 提交数，改一次代码提交一次就自动 +1，不需要手改；
+        // 同时保证数值单调递增，能直接覆盖安装（也是和上游官方包区分的一处）
         versionCode gitCommitCount
         versionName version
 
@@ -47,11 +52,28 @@ android {
             ext.applicationType = "Normal"
         }
     }
+    signingConfigs {
+        // 本地 release 包的签名。
+        //
+        // 用 Android SDK 自带的 debug 密钥：和手机上一直安装的 debug 包是同一把钥匙，
+        // 可以直接覆盖安装，LSPosed 里已授权的模块也不用重新配置。
+        // （AGP 只会自动给 debug 构建类型签名，release 不配就是未签名包，装不上。）
+        //
+        // 上游 CI 不受影响：它在 gradle 构建完成后另外用 apksigner 签（见
+        // .github/workflows/release.yml），用的是仓库 secrets 里的正式密钥。
+        localRelease {
+            storeFile file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
     buildTypes {
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.localRelease
         }
     }
     // 按 ABI 拆分 APK：仅发布 arm 主流架构，保留 universal 全架构兜底包
@@ -111,4 +133,8 @@ dependencies {
     implementation "top.yukonga.miuix.kmp:miuix-ui:0.9.4"
     implementation "top.yukonga.miuix.kmp:miuix-preference:0.9.4"
     implementation "androidx.compose.material:material-icons-extended:1.7.6"
+    // Material Design 3（界面风格可选：设置 → 界面风格 → Material Design 3）
+    implementation "androidx.compose.material3:material3:1.4.0"
+    // Compose Foundation Pager（HorizontalPager，底部 Tab 滑动切换；与上面的 material-icons-extended 同属 Compose 1.7.6）
+    implementation "androidx.compose.foundation:foundation:1.7.6"
 }

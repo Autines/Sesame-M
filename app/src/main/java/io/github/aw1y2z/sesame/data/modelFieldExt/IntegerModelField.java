@@ -1,17 +1,7 @@
 package io.github.aw1y2z.sesame.data.modelFieldExt;
 
 
-import android.content.Context;
-import android.view.Gravity;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.LinearLayout;
-
-import androidx.core.content.ContextCompat;
-
 import lombok.Getter;
-import io.github.aw1y2z.sesame.R;
 import io.github.aw1y2z.sesame.data.ModelField;
 import io.github.aw1y2z.sesame.util.Log;
 
@@ -72,11 +62,6 @@ public class IntegerModelField extends ModelField<Integer> {
             newValue = Math.min(maxLimit, newValue);
         }
         this.value = newValue;
-    }
-
-    @Override
-    public View getView(Context context) {
-        return null;
     }
 
     @Getter

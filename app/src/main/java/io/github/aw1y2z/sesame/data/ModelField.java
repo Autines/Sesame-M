@@ -1,24 +1,13 @@
 package io.github.aw1y2z.sesame.data;
 
-import android.content.Context;
-import android.view.Gravity;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-
-import androidx.core.content.ContextCompat;
-
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.io.Serializable;
 import java.lang.reflect.Type;
 import java.util.Objects;
 
-import io.github.aw1y2z.sesame.R;
 import io.github.aw1y2z.sesame.util.JsonUtil;
 import io.github.aw1y2z.sesame.util.Log;
-import io.github.aw1y2z.sesame.util.ToastUtil;
 import io.github.aw1y2z.sesame.util.TypeUtil;
 import lombok.Data;
 
@@ -224,22 +213,6 @@ public class ModelField<T> implements Serializable {
 
     public void reset() {
         value = defaultValue;
-    }
-
-    @JsonIgnore
-    public View getView(Context context) {
-        TextView btn = new TextView(context);
-        btn.setText(getName());
-        btn.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        btn.setTextColor(ContextCompat.getColor(context, R.color.button));
-        btn.setBackground(ContextCompat.getDrawable(context, R.drawable.button));
-        btn.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        btn.setMinHeight(150);
-        btn.setMaxHeight(180);
-        btn.setPaddingRelative(40, 0, 40, 0);
-        btn.setAllCaps(false);
-        btn.setOnClickListener(v -> ToastUtil.show(context, "无配置项"));
-        return btn;
     }
 
 }

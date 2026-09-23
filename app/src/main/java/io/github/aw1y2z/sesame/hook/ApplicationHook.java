@@ -60,7 +60,6 @@ import io.github.aw1y2z.sesame.rpc.bridge.NewRpcBridge;
 import io.github.aw1y2z.sesame.rpc.bridge.OldRpcBridge;
 import io.github.aw1y2z.sesame.data.AppConfig;
 import io.github.aw1y2z.sesame.rpc.bridge.RpcBridge;
-import io.github.aw1y2z.sesame.rpc.bridge.RpcVersion;
 import io.github.aw1y2z.sesame.rpc.intervallimit.RpcIntervalLimit;
 import io.github.aw1y2z.sesame.util.ClassUtil;
 import io.github.aw1y2z.sesame.util.FileUtil;
@@ -134,9 +133,6 @@ public class ApplicationHook extends XposedModule {
     private static BaseTask mainTask;
 
     private static RpcBridge rpcBridge;
-
-    @Getter
-    private static RpcVersion rpcVersion;
 
     private static PowerManager.WakeLock wakeLock;
 
@@ -301,8 +297,6 @@ public class ApplicationHook extends XposedModule {
                                 if (!init) {
                                     return;
                                 }
-                                Log.record("应用版本：" + alipayVersion.getVersionString());
-                                Log.record("模块版本：" + modelVersion);
                                 Log.record("开始执行");
                                 try {
                                     int checkInterval = BaseModel.getCheckInterval().getValue();
@@ -623,7 +617,6 @@ public class ApplicationHook extends XposedModule {
                     rpcBridge = new OldRpcBridge();
                 }
                 rpcBridge.load();
-                rpcVersion = rpcBridge.getVersion();
                 if (BaseModel.getStayAwake().getValue()) {
                     try {
                         PowerManager pm = (PowerManager) service.getSystemService(Context.POWER_SERVICE);
@@ -768,7 +761,6 @@ public class ApplicationHook extends XposedModule {
                     wakeLock = null;
                 }
                 if (rpcBridge != null) {
-                    rpcVersion = null;
                     rpcBridge.unload();
                     rpcBridge = null;
                 }

@@ -6,18 +6,18 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,13 +28,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.R
 import io.github.aw1y2z.sesame.data.ViewAppInfo
+import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
+import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
+import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameText
+import io.github.aw1y2z.sesame.ui.theme.sesamePrimary
 import io.github.aw1y2z.sesame.util.ToastUtil
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** 关于应用二级页:图标 + 项目名 + 版本 + 链接/维护者信息,与其它二级页统一风格(LogTopBar)。 */
+/** 关于应用二级页：图标 + 项目名 + 版本 + 链接/维护者信息，与其它二级页统一风格。 */
 class MiuixAboutActivity : MiuixBaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,21 +46,16 @@ class MiuixAboutActivity : MiuixBaseActivity() {
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AboutScreen(activity: MiuixAboutActivity) {
-    Scaffold(
-        topBar = {
-            LogTopBar(
-                title = "关于",
-                onBack = { activity.finish() }
-            )
-        },
-        containerColor = MiuixTheme.colorScheme.surface
+    SesameDetailScaffold(
+        title = "关于",
+        onBack = { activity.finish() }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(padding)
                 // 左右留白与其它页面保持一致，否则卡片会顶到屏幕两边
                 .padding(horizontal = 16.dp)
@@ -70,7 +66,7 @@ fun AboutScreen(activity: MiuixAboutActivity) {
                 modifier = Modifier
                     .size(96.dp)
                     .clip(CircleShape)
-                    .background(MiuixTheme.colorScheme.primary)
+                    .background(sesamePrimary())
             ) {
                 Image(
                     painter = painterResource(R.drawable.logo),
@@ -79,24 +75,26 @@ fun AboutScreen(activity: MiuixAboutActivity) {
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Text(
+            SesameText(
                 text = ViewAppInfo.getAppTitle(),
                 fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = MiuixTheme.colorScheme.onBackground
+                fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(4.dp))
-            Text(
+            SesameText(
                 text = "版本: ${ViewAppInfo.getAppVersion()}",
                 fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                color = io.github.aw1y2z.sesame.ui.theme.sesameOnSurfaceVariant()
             )
             Spacer(Modifier.height(24.dp))
-            CardColumn {
-                ArrowPreference(
-                    title = "在 GitHub 查看源码",
-                    onClick = { openWebUrl(activity, "https://github.com/aw1y2z/Sesame-M") }
-                )
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                SesameCardGroup {
+                    SesameClickRow(
+                        title = "在 GitHub 查看源码",
+                        icon = Icons.Outlined.Code,
+                        onClick = { openWebUrl(activity, "https://github.com/aw1y2z/Sesame-M") }
+                    )
+                }
             }
         }
     }

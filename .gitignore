@@ -64,3 +64,9 @@ fastlane/readme.md
 
 Xposed-Modules-Repo/
 plugin/
+
+# 本地 UI 调试产物（模拟器/真机截图、临时工具脚本、注入用的假日志）
+/tmpshot/
+/tmptools/
+/tools/
+/*.png

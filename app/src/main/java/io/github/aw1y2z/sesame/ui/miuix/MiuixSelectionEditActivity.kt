@@ -2,11 +2,10 @@ package io.github.aw1y2z.sesame.ui.miuix
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -15,21 +14,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,9 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.data.ConfigV2
-import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ModelField
 import io.github.aw1y2z.sesame.data.ModelFields
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectAndCountModelField
@@ -49,15 +39,18 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectOneModelField
 import io.github.aw1y2z.sesame.entity.IdAndName
 import io.github.aw1y2z.sesame.entity.KVNode
+import io.github.aw1y2z.sesame.ui.theme.SesameCheckRow
+import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
+import io.github.aw1y2z.sesame.ui.theme.SesameInlineEditor
+import io.github.aw1y2z.sesame.ui.theme.SesameListCard
+import io.github.aw1y2z.sesame.ui.theme.SesameRadioListRow
+import io.github.aw1y2z.sesame.ui.theme.SesameSearchField
+import io.github.aw1y2z.sesame.ui.theme.SesameSliderRow
+import io.github.aw1y2z.sesame.ui.theme.SesameTopBar
+import io.github.aw1y2z.sesame.ui.theme.sesameSurface
 import io.github.aw1y2z.sesame.util.Log
 import io.github.aw1y2z.sesame.util.ToastUtil
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.preference.CheckboxPreference
-import top.yukonga.miuix.kmp.preference.RadioButtonPreference
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
@@ -92,6 +85,12 @@ class MiuixSelectionEditActivity : MiuixBaseActivity() {
         groupCode = intent.getStringExtra(EXTRA_GROUP_CODE)
         fieldCode = intent.getStringExtra(EXTRA_FIELD_CODE)
         modelCode = intent.getStringExtra(EXTRA_MODEL_CODE)
+        // 返回键走 OnBackPressedDispatcher（原因见 MiuixSettingsActivity）：
+        // 本页靠退出流程提交未保存的编辑，覆盖 onBackPressed() 在 targetSdk 36 上会静默丢失改动。
+        onBackPressedDispatcher.addCallback(this) {
+            saveHandler?.invoke()
+            finish()
+        }
         setAppContent {
             val modelCodeVal = modelCode
             val fieldCodeVal = fieldCode
@@ -112,11 +111,6 @@ class MiuixSelectionEditActivity : MiuixBaseActivity() {
                 top.yukonga.miuix.kmp.basic.Text("缺少参数")
             }
         }
-    }
-
-    override fun onBackPressed() {
-        saveHandler?.invoke()
-        finish()
     }
 
     /** 顶部返回按钮与系统返回统一入口：先保存再退出。 */
@@ -235,7 +229,9 @@ fun SelectionEditContent(
                 csmf?.add(sel.firstOrNull() ?: "", counts[sel.firstOrNull()] ?: 1)
             }
         }
-        val saved = if (userId != null) ConfigV2.save(userId, true) else false
+        // userId 为 null = 「默认账号」，ConfigV2 会落到默认配置文件；
+        // 这里不能判空，否则默认账号下保存必定走到 else 分支、误报「保存失败」。
+        val saved = ConfigV2.save(userId, true)
         Log.i("SelectionEdit", "applyAndSave: field=${field.code}, saved=$saved, value=${configField.value}")
         if (saved) {
             // 本页的保存是"退出时隐式落盘"，成功不弹气泡（失败才提示）
@@ -261,18 +257,17 @@ fun SelectionEditContent(
 
     Scaffold(
         topBar = {
-            LogTopBar(
+            SesameTopBar(
                 title = field.name ?: "",
                 // 无改动时静默退出，不再提示"没有未保存的更改"
                 onBack = { activity.saveAndFinish() }
             )
         },
-        containerColor = MiuixTheme.colorScheme.surface
+        containerColor = sesameSurface()
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
@@ -283,33 +278,25 @@ fun SelectionEditContent(
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextField(
+                    SesameSearchField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        label = "",
-                        modifier = Modifier.weight(1f),
-                        leadingIcon = {
-                            top.yukonga.miuix.kmp.basic.Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Filled.Search,
-                                contentDescription = "搜索",
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier.padding(start = 12.dp)
-                            )
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    "×",
-                                    fontSize = 16.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    modifier = Modifier.padding(end = 12.dp).clickable { searchQuery = "" }
-                                )
-                            }
-                        }
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
-            Column(
+            // 列表为空时不能渲染 SesameListCard：卡内 LazyColumn 只有 4dp 的上下
+            // contentPadding，没有任何子项时整张卡会塌缩成一条灰色细条
+            // （搜索无结果时必现）。空态改用 SesameEmptyState，语义也更清楚。
+            if (filteredOptions.isEmpty()) {
+                SesameEmptyState(
+                    text = if (searchQuery.isBlank()) "没有可选项" else "没有匹配的项",
+                    hint = if (searchQuery.isBlank()) null else "换个关键词试试",
+                    modifier = Modifier.weight(1f)
+                )
+                return@Column
+            }
+            SesameListCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false)
@@ -327,68 +314,53 @@ fun SelectionEditContent(
                     items(count = sortedOptions.size, key = { idx -> sortedOptions[idx].id }) { idx ->
                         val opt = sortedOptions[idx]
                         val isChecked = sel.contains(opt.id)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (single) {
-                                RadioButtonPreference(
-                                    title = opt.name,
-                                    selected = isChecked,
-                                    onClick = {
-                                        sel = setOf(opt.id)
-                                        dirty = true
-                                    }
-                                )
-                            } else {
-                                CheckboxPreference(
-                                    title = opt.name,
-                                    checked = isChecked,
-                                    onCheckedChange = { checked ->
-                                        if (checked) {
-                                            sel = sel + opt.id
-                                            if (!counts.containsKey(opt.id)) {
-                                                counts = counts + (opt.id to (initialCounts[opt.id] ?: defaultCount))
-                                            }
-                                        } else {
-                                            sel = sel - opt.id
+                        if (single) {
+                            SesameRadioListRow(
+                                title = opt.name,
+                                selected = isChecked,
+                                onClick = {
+                                    sel = setOf(opt.id)
+                                    dirty = true
+                                }
+                            )
+                        } else {
+                            SesameCheckRow(
+                                title = opt.name,
+                                checked = isChecked,
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        sel = sel + opt.id
+                                        if (!counts.containsKey(opt.id)) {
+                                            counts = counts + (opt.id to (initialCounts[opt.id] ?: defaultCount))
                                         }
-                                        dirty = true
+                                    } else {
+                                        sel = sel - opt.id
                                     }
-                                )
-                            }
+                                    dirty = true
+                                }
+                            )
                         }
                         if (withCount && isChecked) {
                             key(opt.id) {
                                 if (useInputBox) {
+                                    // 上游为「合种浇水」这类按克填写的字段改成输入框；
+                                    // 渲染仍走本地组件集（MiuixTextField / MD3 OutlinedTextField），
+                                    // 不退回上游那套裸 TextField，否则 MD3 风格下会跳出观感
                                     var text by remember(opt.id) { mutableStateOf((counts[opt.id] ?: defaultCount).toString()) }
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            "数量(克)",
-                                            fontSize = 14.sp,
-                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                                        )
-                                        TextField(
-                                            value = text,
-                                            onValueChange = { input ->
-                                                val filtered = input.filter { it.isDigit() }
-                                                text = filtered
-                                                counts = counts + (opt.id to (filtered.toIntOrNull() ?: 0))
-                                                dirty = true
-                                            },
-                                            label = "",
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
+                                    SesameInlineEditor(
+                                        value = text,
+                                        onValueChange = { input ->
+                                            val filtered = input.filter { it.isDigit() }
+                                            text = filtered
+                                            counts = counts + (opt.id to (filtered.toIntOrNull() ?: 0))
+                                            dirty = true
+                                        },
+                                        label = "数量(克)",
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                    )
                                 } else {
                                     var sliderValue by remember(opt.id) { mutableFloatStateOf((counts[opt.id] ?: defaultCount).toFloat()) }
-                                    SliderPreference(
+                                    SesameSliderRow(
                                         title = "数量",
                                         value = sliderValue,
                                         valueRange = run {

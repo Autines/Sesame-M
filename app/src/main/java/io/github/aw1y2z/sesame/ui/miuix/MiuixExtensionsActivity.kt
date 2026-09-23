@@ -3,39 +3,35 @@ package io.github.aw1y2z.sesame.ui.miuix
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DirectionsWalk
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import io.github.aw1y2z.sesame.data.TokenConfig
+import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
+import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
+import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
+import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameInputDialog
+import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
+import io.github.aw1y2z.sesame.ui.theme.sesameGroupHorizontalPadding
 import io.github.aw1y2z.sesame.util.ToastUtil
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MiuixExtensionsActivity : MiuixBaseActivity() {
 
@@ -62,15 +58,10 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
     var inputMode by remember { mutableStateOf<String?>(null) }
     var inputText by remember { mutableStateOf("") }
 
-    Scaffold(
-        topBar = {
-            LogTopBar(
-                title = "扩展功能",
-                onBack = { activity.finish() }
-            )
-        },
-        containerColor = MiuixTheme.colorScheme.surface
-    ) { padding ->
+    SesameDetailScaffold(
+        title = "扩展功能",
+        onBack = { activity.finish() }
+    ) { padding: PaddingValues ->
         Column(
             Modifier
                 .fillMaxSize()
@@ -78,8 +69,8 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            SmallTitle(text = "森林查询")
-            CardColumn {
+            SesameSectionTitle(text = "森林查询")
+            SesameCardGroup {
                 val forestButtons = listOf(
                     "查询浇水列表" to ("antForest" to "getWateredItems"),
                     "查询被浇列表" to ("antForest" to "getWateringItems"),
@@ -90,8 +81,9 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                     "填入浇水好友" to ("antForest" to "fillWateredFriendList")
                 )
                 forestButtons.forEach { (label, pair) ->
-                    ArrowPreference(
+                    SesameClickRow(
                         title = label,
+                        icon = Icons.Outlined.Search,
                         onClick = {
                             activity.sendItemsBroadcast(pair.first, pair.second, null)
                             ToastUtil.show(context, "已发送查询请求，请在森林日志查看结果！")
@@ -99,33 +91,37 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
 
-            SmallTitle(text = "自定义走路路径")
-            CardColumn {
-                ArrowPreference(
+            SesameSectionTitle(text = "自定义走路路径")
+            SesameCardGroup {
+                SesameClickRow(
                     title = "设置自定义走路路径(list)",
+                    icon = Icons.Outlined.DirectionsWalk,
                     onClick = { inputMode = "list"; inputText = "" }
                 )
-                ArrowPreference(
+                SesameClickRow(
                     title = "设置自定义走路路径(queue)",
+                    icon = Icons.Outlined.DirectionsWalk,
                     onClick = { inputMode = "queue"; inputText = "" }
                 )
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
 
-            SmallTitle(text = "其他")
-            CardColumn {
-                ArrowPreference(
+            SesameSectionTitle(text = "其他")
+            SesameCardGroup {
+                SesameClickRow(
                     title = "清空光盘行动图片",
+                    icon = Icons.Outlined.Image,
                     onClick = { showDishDialog = true }
                 )
             }
 
             if (showDishDialog) {
-                ConfirmDialog(
+                SesameConfirmDialog(
                     title = "清空光盘行动图片",
                     text = "确认清空 ${TokenConfig.getDishImageCount()} 组光盘行动图片？",
+                    destructive = true,
                     onConfirm = {
                         showDishDialog = false
                         if (TokenConfig.clearDishImage()) {
@@ -139,47 +135,34 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
             }
 
             if (inputMode != null) {
-                Dialog(onDismissRequest = { inputMode = null }) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .background(MiuixTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-                            .padding(16.dp)
-                    ) {
-                        Column {
-                            Text(
-                                if (inputMode == "list") "设置自定义走路路径(list)" else "设置自定义走路路径(queue)",
-                                color = MiuixTheme.colorScheme.onBackground
+                val mode = inputMode
+                SesameInputDialog(
+                    title = if (mode == "list") "设置自定义走路路径(list)"
+                    else "设置自定义走路路径(queue)",
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    label = "路径ID",
+                    onDismiss = { inputMode = null },
+                    secondaryAction = if (mode == "queue") {
+                        "清空队列" to {
+                            activity.sendItemsBroadcast(
+                                "setCustomWalkPathIdQueue",
+                                "clearCustomWalkPathIdQueue",
+                                null
                             )
-                            Spacer(Modifier.height(8.dp))
-                            TextField(
-                                value = inputText,
-                                onValueChange = { inputText = it },
-                                label = "路径ID",
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                if (inputMode == "queue") {
-                                    TextButton(text = "清空队列", onClick = {
-                                        activity.sendItemsBroadcast("setCustomWalkPathIdQueue", "clearCustomWalkPathIdQueue", null)
-                                        inputMode = null
-                                    })
-                                    Spacer(Modifier.width(8.dp))
-                                }
-                                TextButton(text = "添加", onClick = {
-                                    val text = inputText.trim()
-                                    if (inputMode == "list") {
-                                        activity.sendItemsBroadcast("setCustomWalkPathIdList", "addCustomWalkPathId", text)
-                                    } else {
-                                        activity.sendItemsBroadcast("setCustomWalkPathIdQueue", "addCustomWalkPathIdQueue", text)
-                                    }
-                                    inputMode = null
-                                })
-                            }
+                            inputMode = null
                         }
+                    } else null,
+                    primaryAction = "添加" to {
+                        val text = inputText.trim()
+                        if (mode == "list") {
+                            activity.sendItemsBroadcast("setCustomWalkPathIdList", "addCustomWalkPathId", text)
+                        } else {
+                            activity.sendItemsBroadcast("setCustomWalkPathIdQueue", "addCustomWalkPathIdQueue", text)
+                        }
+                        inputMode = null
                     }
-                }
+                )
             }
         }
     }

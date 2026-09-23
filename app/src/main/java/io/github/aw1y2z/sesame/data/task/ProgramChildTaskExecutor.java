@@ -36,7 +36,7 @@ public class ProgramChildTaskExecutor implements ChildTaskExecutor {
                             return;
                         }
                     }
-                    childTask.run();
+                    runWithModule(childTask);
                 } catch (Exception e) {
                     Log.printStackTrace(e);
                     //Log.record("任务模块:" + modelTaskId + " 异常子任务:" + id);
@@ -49,7 +49,7 @@ public class ProgramChildTaskExecutor implements ChildTaskExecutor {
             future = threadPoolExecutor.submit(() -> {
                 //Log.i("任务模块:" + modelTaskId + " 添加子任务:" + id);
                 try {
-                    childTask.run();
+                    runWithModule(childTask);
                 } catch (Exception e) {
                     Log.printStackTrace(e);
                     //Log.record("任务模块:" + getName() + " 异常子任务:" + childTask.getId());
@@ -61,6 +61,27 @@ public class ProgramChildTaskExecutor implements ChildTaskExecutor {
         }
         childTask.setCancelTask(() -> future.cancel(true));
         return true;
+    }
+
+    /**
+     * 在子任务线程上执行，并临时接管「当前模块」上下文。
+     * <p>
+     * 子任务跑在独立的线程池线程上，而 {@link Log#CURRENT_MODULE} 是 ThreadLocal，
+     * 因此子线程里读不到主任务设置的模块名，日志就会丢掉 [模块名] 前缀
+     * （典型如「收取能量🪂」这类蹲点收取子任务）。
+     * 这里统一在子任务执行期间补上上下文，跑完立刻恢复，避免线程被复用后串味。
+     */
+    private static void runWithModule(ModelTask.ChildModelTask childTask) {
+        ModelTask modelTask = childTask.getModelTask();
+        String moduleName = modelTask == null ? null : modelTask.getName();
+        String previous = Log.getCurrentModule();
+        Log.setCurrentModule(moduleName);
+        try {
+            childTask.run();
+        } finally {
+            // 恢复原值而不是直接清空：线程池线程可能被复用，也可能正处于嵌套任务中
+            Log.setCurrentModule(previous);
+        }
     }
 
     @Override

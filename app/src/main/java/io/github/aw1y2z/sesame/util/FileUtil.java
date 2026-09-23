@@ -25,7 +25,8 @@ public class FileUtil {
     
     // 备份相关配置（可根据需求调整n值，比如n=3则A/B/C循环）
     private static int BACKUP_MAX_COUNT = 5; // 配置读取失败时的默认值
-    private static final String BACKUP_DIR_NAME = "bak"; // 备份子目录名
+    // 公开给 BackupUtil：完整备份要把这个目录排除在外（见 BackupUtil 类注释）
+    public static final String BACKUP_DIR_NAME = "bak"; // 备份子目录名
     public static final String BACKUP_FILE_PREFIX = "config_v2_";
     public static final String BACKUP_FILE_EXT = ".json";
     
@@ -282,7 +283,11 @@ public class FileUtil {
     }
     
     public static File getUserConfigDirectoryFile(String userId) {
-        File configDir = new File(CONFIG_DIRECTORY_FILE, userId);
+        File configDir = accountDirectory(userId);
+        if (isNoAccountPath(configDir)) {
+            // 没有账号：不建目录。读取侧拿到的是不存在的路径，写入侧会直接跳过。
+            return configDir;
+        }
         if (configDir.exists()) {
             if (configDir.isFile()) {
                 configDir.delete();
@@ -339,41 +344,70 @@ public class FileUtil {
         return getFile(MAIN_DIRECTORY_FILE, "accountIndex.json");
     }
     
+    /**
+     * 「当前没有账号」时的占位目录。
+     * <p>默认账号的 userId 就是 null（跳转设置页时不带 extra），而
+     * {@code new File(CONFIG_DIRECTORY_FILE, null)} 会直接抛 NullPointerException ——
+     * 被 {@code StringMapStore.load} 的 catch 吞掉后，只在 error 日志里留下 7 段堆栈
+     * （{@code ConfigPreload.prepare} 里正好 7 个账号维度的 load），界面照常但排查时很吵。
+     * <p>这里统一改用一个固定的占位目录：它永远不存在 → 读取得到空串、表仍被清空（与修复前结果一致）；
+     * 写入被 {@link #write2File} 跳过 → 不会凭空造出脏目录（历史遗留的 {@code config/null/} 就是这么来的）。
+     * <p>⚠️ 只用于**账号维度**的文件。默认账号的配置文件（config_v2.json）走
+     * {@link #getDefaultConfigV2File()}，与占位目录无关，不要混用。
+     */
+    private static final File NO_ACCOUNT_DIRECTORY = new File(CONFIG_DIRECTORY_FILE, ".no-account");
+
+    /**
+     * 账号维度的目录定位：userId 为空时返回占位目录；绝不 {@code new File(dir, null)}。
+     */
+    private static File accountDirectory(String userId) {
+        if (StringUtil.isEmpty(userId)) {
+            return NO_ACCOUNT_DIRECTORY;
+        }
+        return new File(CONFIG_DIRECTORY_FILE, userId);
+    }
+
+    /**
+     * 是否落在「没有账号」的占位目录下：读当空、写跳过、不建目录。
+     */
+    private static boolean isNoAccountPath(File file) {
+        return file != null && NO_ACCOUNT_DIRECTORY.equals(file.getParentFile());
+    }
+
     public static File getSelfIdFile(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "self.json");
+        return getFile(accountDirectory(userId), "self.json");
     }
     
     public static File getFriendIdMapFile(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "friend.json");
+        return getFile(accountDirectory(userId), "friend.json");
     }
     
     public static File runtimeInfoFile(String userId) {
-        File runtimeInfoFile = new File(CONFIG_DIRECTORY_FILE + "/" + userId, "runtimeInfo.json");
-        return ensureFileExists(runtimeInfoFile);
+        return ensureFileExists(getFile(accountDirectory(userId), "runtimeInfo.json"));
     }
     
     public static File getCooperationIdMapFile(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "cooperation.json");
+        return getFile(accountDirectory(userId), "cooperation.json");
     }
     
     public static File getVitalityBenefitIdMap(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "vitalityBenefit.json");
+        return getFile(accountDirectory(userId), "vitalityBenefit.json");
     }
     
     public static File getGameCenterMallItemMap(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "gameCenterMallItem.json");
+        return getFile(accountDirectory(userId), "gameCenterMallItem.json");
     }
     
     public static File getFarmOrnamentsIdMapFile(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "farmOrnaments.json");
+        return getFile(accountDirectory(userId), "farmOrnaments.json");
     }
     
     public static File getMemberBenefitIdMapFile(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "memberBenefit.json");
+        return getFile(accountDirectory(userId), "memberBenefit.json");
     }
     
     public static File getPromiseSimpleTemplateIdMapFile(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "promiseSimpleTemplate.json");
+        return getFile(accountDirectory(userId), "promiseSimpleTemplate.json");
     }
     
     /**
@@ -398,6 +432,10 @@ public class FileUtil {
      * <p>⚠️ 同理：这里必须自己做 exists/createNewFile，不能改成调用自身。
      */
     private static File ensureFileExists(File file) {
+        if (isNoAccountPath(file)) {
+            // 没有账号：不落地空文件，也不去建占位目录
+            return file;
+        }
         if (!file.exists()) {
             try {
                 file.createNewFile();
@@ -408,7 +446,7 @@ public class FileUtil {
     }
 
     public static File getStatusFile(String userId) {
-        return getFile(new File(CONFIG_DIRECTORY_FILE, userId), "status.json");
+        return getFile(accountDirectory(userId), "status.json");
     }
     
     public static File getStatisticsFile() {
@@ -654,6 +692,11 @@ public class FileUtil {
     }
     
     public static boolean write2File(String s, File f) {
+        if (isNoAccountPath(f)) {
+            // 没有账号可写：直接跳过，避免下面的 mkdirs 凭空造出占位目录。
+            // 返回 true 表示「没有出错」，免得上层把「无需写入」当成「保存失败」提示用户。
+            return true;
+        }
         // 只对"已存在"的文件做可写性检查：File.canWrite() 对不存在的路径恒为 false
         // （access() 返回 ENOENT），无条件检查会让所有新文件都写不出来并误报没有写入权限。
         if (f.exists() && !f.canWrite()) {

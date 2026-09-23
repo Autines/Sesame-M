@@ -46,7 +46,14 @@ public class MessageUtil {
     private static final Map<String, int[]> SERVER_BUSY_LOG_COUNT = new ConcurrentHashMap<>();
 
     /**
-     * 是否服务端繁忙：`resultCode=102` 或文案为"服务器正在开小差"。
+     * 服务端繁忙 / 限流的文案关键字。
+     * <p>⚠️ 实测「人气太旺啦，请稍后再试」同样带 `errorTip=1009`，但它是**限流**不是风控挑战
+     * —— 若不在这里拦住，会被 {@link #isRiskControl} 按错误码误判成风控（详见该方法注释）。
+     */
+    private static final String[] SERVER_BUSY_KEYWORDS = {"服务器正在开小差", "人气太旺"};
+
+    /**
+     * 是否服务端繁忙：`resultCode=102` 或命中 {@link #SERVER_BUSY_KEYWORDS} 文案。
      * <p>这类错误是临时性的，既不该拉黑，也不该几秒内连续重试。
      * <p>对调用方的用途：命中后可在"本轮"内放弃后续同类调用（见 {@code AntFarm.listFarmTask} 的领奖）。
      */
@@ -57,7 +64,78 @@ public class MessageUtil {
         if ("102".equals(jo.optString("resultCode", "").trim())) {
             return true;
         }
-        return jo.optString("memo", "").contains("服务器正在开小差");
+        for (String keyword : SERVER_BUSY_KEYWORDS) {
+            if (anyFieldContains(jo, keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 风控挑战：错误码所在的字段（各接口字段不统一） */
+    private static final String[] RISK_CONTROL_CODE_FIELDS = {"errorTip", "error", "errorCode", "errorNo"};
+
+    /** 风控挑战：服务端文案关键字 */
+    private static final String[] RISK_CONTROL_KEYWORDS = {"为了保障您的操作安全", "请进行验证后继续"};
+
+    /**
+     * 风控挑战日志降噪：同一模块累计打印满该次数后，后续风控错误不再打印。
+     */
+    private static final int RISK_CONTROL_LOG_LIMIT = 2;
+    /** tag → 已打印过的风控次数（只增不减，进程重启即清零） */
+    private static final Map<String, int[]> RISK_CONTROL_LOG_COUNT = new ConcurrentHashMap<>();
+
+    /**
+     * 是否命中风控挑战（要求人工安全验证）。
+     * <p>服务端原话「为了保障您的操作安全，请进行验证后继续。」，错误码 <b>1009</b>。
+     * <p>这类错误**模块无法自动完成** —— 自动过滑块在支付宝 12.12.x 上不可用（启动日志会打印
+     * 「目标应用版本[12.12.16.8000]高于[10.6.58.99999]不支持自动过滑块验证」）。
+     * <p>识别它的意义在于让调用方**按接口熔断**：命中后当日不再调用该接口。
+     * 09-20 的实测教训是运动宝箱接口被风控后仍每 21 秒重试一次、连续空转 101 分钟共 284 次失败。
+     */
+    public static boolean isRiskControl(JSONObject jo) {
+        if (jo == null) {
+            return false;
+        }
+        // ⚠️ 先排除「限流/繁忙」：它们**也**带 errorTip=1009，但不是风控挑战。
+        // 09-20 实测会员 signPageTaskList 返回
+        // {"error":1009,"errorMessage":"人气太旺啦，请稍后再试","errorTip":"1009"}，
+        // 若只按错误码判定就会被当成风控 —— 调用方会据此把接口熔断一整天（误伤）。
+        if (isServerBusy(jo)) {
+            return false;
+        }
+        for (String field : RISK_CONTROL_CODE_FIELDS) {
+            if ("1009".equals(jo.optString(field, "").trim())) {
+                return true;
+            }
+        }
+        for (String keyword : RISK_CONTROL_KEYWORDS) {
+            if (anyFieldContains(jo, keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 风控错误是否还应该打印日志：同一 tag 前 {@link #RISK_CONTROL_LOG_LIMIT} 次打印，
+     * 之后静默（最后一次打印时提示「已按接口熔断」，免得看日志的人以为风控消失了）。
+     */
+    private static boolean shouldLogRiskControl(String tag) {
+        String key = StringUtil.isEmpty(tag) ? UNKNOWN_TAG : tag;
+        int printed;
+        synchronized (MessageUtil.class) {
+            int[] state = RISK_CONTROL_LOG_COUNT.computeIfAbsent(key, k -> new int[]{0});
+            if (state[0] >= RISK_CONTROL_LOG_LIMIT) {
+                return false;
+            }
+            state[0]++;
+            printed = state[0];
+        }
+        if (printed == RISK_CONTROL_LOG_LIMIT) {
+            Log.i(key, "风控🚫本模块风控验证已累计" + printed + "次，后续风控日志不再打印（接口已按当日熔断）");
+        }
+        return true;
     }
 
     /** 在多个文案字段里找关键字（各接口字段不统一，不能只扫 desc） */
@@ -86,8 +164,12 @@ public class MessageUtil {
                 Log.i(tag, jo.toString());
                 return;
             }
-            Log.record(tag + " error:" + memo);
-            Log.i(memo, jo.toString());
+            if (isRiskControl(jo) && !shouldLogRiskControl(tag)) {
+                return;
+            }
+            // 同一次失败只写一行：原先「友好文案」与「原始应答」各占一行，而完整应答在
+            // 异常日志的 `new rpc response` 行里本就有一份，运行日志没必要再存两行。
+            Log.record(tag + " error:" + memo + ", " + jo);
         } catch (Throwable t) {
             Log.err(TAG, "printErrorMessage err:", t);
         }

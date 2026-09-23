@@ -15,9 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,26 +27,46 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.BatteryAlert
+import androidx.compose.material.icons.outlined.BatterySaver
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Smartphone
+import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.WifiTethering
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -59,8 +77,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.R
 import io.github.aw1y2z.sesame.data.AppConfig
+import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.RunType
 import io.github.aw1y2z.sesame.data.ViewAppInfo
+import io.github.aw1y2z.sesame.ui.theme.SesameCard
+import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
+import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
+import io.github.aw1y2z.sesame.ui.theme.SesameExpandRow
+import io.github.aw1y2z.sesame.ui.theme.SesameInfoRow
+import io.github.aw1y2z.sesame.ui.theme.SesameInlineEditor
+import io.github.aw1y2z.sesame.ui.theme.SesameNavBar
+import io.github.aw1y2z.sesame.ui.theme.SesameNavItem
+import io.github.aw1y2z.sesame.ui.theme.SesamePageTitle
+import io.github.aw1y2z.sesame.ui.theme.SesameRadioRow
+import io.github.aw1y2z.sesame.ui.theme.SesameScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
+import io.github.aw1y2z.sesame.ui.theme.SesameStatusCard
+import io.github.aw1y2z.sesame.ui.theme.SesameSwitchRow
+import io.github.aw1y2z.sesame.ui.theme.SesameText
+import io.github.aw1y2z.sesame.ui.theme.UiStyle
+import io.github.aw1y2z.sesame.ui.theme.sesameGroupHorizontalPadding
+import io.github.aw1y2z.sesame.ui.theme.sesameOnSurfaceVariant
+import io.github.aw1y2z.sesame.ui.theme.sesamePrimary
 import io.github.aw1y2z.sesame.util.FileUtil
 import io.github.aw1y2z.sesame.util.LanguageUtil
 import io.github.aw1y2z.sesame.util.Log
@@ -70,15 +108,7 @@ import io.github.aw1y2z.sesame.util.Statistics.DataType
 import io.github.aw1y2z.sesame.util.Statistics.TimeType
 import io.github.aw1y2z.sesame.util.ToastUtil
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap
-import top.yukonga.miuix.kmp.basic.NavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarItem
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Switch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference
+import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
 import java.util.Calendar
@@ -175,6 +205,11 @@ class MiuixMainActivity : MiuixBaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 日志 Tab 要按配置分组列出各项入口，需要模型注册表。
+        // 用「按需、非破坏性」的初始化：只有在注册表还是空的时候才建，
+        // 已有注册表（例如已由 MiuixSettingsActivity 加载过真实配置）一律原样保留。
+        // ⚠️ 不要改成 initAllModel()——那会重建整张注册表、把已加载的配置值清成默认值。
+        Model.initAllModelIfNeeded()
         // runType 被模块置为 MODEL（onModuleLoaded）时立即刷新界面，无需手动加载配置
         ViewAppInfo.setRunTypeListener {
             runOnUiThread {
@@ -368,54 +403,87 @@ class MiuixMainActivity : MiuixBaseActivity() {
     }
 }
 
+/**
+ * 一级页面骨架：底部导航 + 可滚动内容区。
+ * 组件全部来自 ui.theme 的风格无关组件集，因此 HyperOS / Material 3 两套风格共用同一份页面代码。
+ */
 @Composable
 fun MainScreen(activity: MiuixMainActivity) {
-    val context = LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) }
+    // 用 rememberSaveable：切换界面风格会 recreate() 重建整个页面，
+    // 若用普通 remember，重建后这里会退回 0，用户刚点开的设置页又被弹回首页。
+    // rememberSaveable 会随 Activity 的实例状态一起恢复，滚动位置同理（rememberScrollState 自带）。
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
-    Scaffold(
+    // 每个 Tab 各记各的滚动位置。4 个 Tab 共用同一个外层滚动容器，若也共用一份 ScrollState，
+    // 「日志」滚到中间再切「配置」，配置会停在同一高度（长页切短页还会看到下方一片空白）。
+    // rememberScrollState() 底层是 saveable，切界面风格 recreate 后各 Tab 的位置也能各自恢复。
+    val homeScroll = rememberScrollState()
+    val logsScroll = rememberScrollState()
+    val configScroll = rememberScrollState()
+    val settingsScroll = rememberScrollState()
+
+    // 底部 Tab 用 HorizontalPager 承载：左右滑动切页带过渡动画，切走再切回各页滚动位置不变。
+    // pagerState 与 selectedTab 双向同步——点底部导航 → 平滑滚到对应页；手指滑动 → 高亮跟随。
+    // ⚠️ 关键修复：点导航用 animateScrollToPage 跨多页滑动时，pagerState.currentPage 会依次经过中间页，
+    // 若直接回写 selectedTab 会反向取消动画、把 pager 卡在半页（"界面卡在一部分"）。
+    // 因此用 isProgrammaticScroll 锁：程序化滑动期间不接受 pager 回灌的页码，避免双向 effect 打架。
+    val pagerState = rememberPagerState(initialPage = selectedTab) { 4 }
+    var isProgrammaticScroll by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage == selectedTab) return@LaunchedEffect
+        isProgrammaticScroll = true
+        try {
+            pagerState.animateScrollToPage(selectedTab)
+        } finally {
+            isProgrammaticScroll = false
+        }
+    }
+    LaunchedEffect(pagerState.currentPage) {
+        if (!isProgrammaticScroll && selectedTab != pagerState.currentPage) {
+            selectedTab = pagerState.currentPage
+        }
+    }
+
+    SesameScaffold(
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = Icons.Filled.Home,
-                    label = "首页"
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = Icons.Filled.Description,
-                    label = "日志"
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = Icons.Filled.Tune,
-                    label = "配置"
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    icon = Icons.Filled.Settings,
-                    label = "设置"
-                )
-            }
-        },
-        containerColor = MiuixTheme.colorScheme.surface
+            SesameNavBar(
+                items = listOf(
+                    SesameNavItem(Icons.Filled.Home, "首页"),
+                    SesameNavItem(Icons.Filled.Description, "日志"),
+                    SesameNavItem(Icons.Filled.Tune, "配置"),
+                    SesameNavItem(Icons.Filled.Settings, "设置")
+                ),
+                // 选中态绑 selectedTab（点击即定为目标页，不会经过中间页闪烁）；
+                // 手指滑动时第二个 LaunchedEffect 会把 selectedTab 跟到当前页，高亮仍跟随手指。
+                selected = selectedTab,
+                onSelect = { selectedTab = it }
+            )
+        }
     ) { padding ->
-        Column(
-            Modifier
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            when (selectedTab) {
-                0 -> HomeTab(activity)
-                1 -> LogsTab(activity)
-                2 -> ConfigTab(activity)
-                3 -> SettingsTab(activity)
+        ) { page ->
+            val scroll = when (page) {
+                0 -> homeScroll
+                1 -> logsScroll
+                2 -> configScroll
+                else -> settingsScroll
+            }
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scroll)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                when (page) {
+                    0 -> HomeTab(activity)
+                    1 -> LogsTab(activity)
+                    2 -> ConfigTab(activity)
+                    3 -> SettingsTab(activity)
+                }
             }
         }
     }
@@ -423,102 +491,39 @@ fun MainScreen(activity: MiuixMainActivity) {
 
 @Composable
 fun HomeTab(activity: MiuixMainActivity) {
-    val context = LocalContext.current
     // 订阅 Compose state：onServiceBind / 状态广播到达时会自动重组刷新首页状态
     val activated = activity.uiRunType == RunType.MODEL
-    val appTitle = ViewAppInfo.getAppTitle()
     val version = ViewAppInfo.getAppVersion()
 
-    Text(
-        text = "Sesame-M",
-        fontSize = 32.sp,
-        fontWeight = FontWeight.Bold,
-        color = MiuixTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
+    // 不传 bottomPadding：组件默认 12dp，与上游本次把标题下间距由 4dp 调到 12dp 的意图一致
+    SesamePageTitle(text = "Sesame-M")
+
+    SesameStatusCard(
+        activated = activated,
+        statusText = if (activated) "已激活" else "已关闭",
+        lines = listOf(
+            "$version (${io.github.aw1y2z.sesame.BuildConfig.VERSION_CODE})",
+            "API 102"
+        ),
+        icon = Icons.Filled.CheckCircle
     )
-    Spacer(Modifier.height(16.dp))
 
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFE8F5E9), RoundedCornerShape(16.dp))
-            .padding(16.dp)
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = if (activated) "已激活" else "已关闭",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2E7D32)
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "$version (${io.github.aw1y2z.sesame.BuildConfig.VERSION_CODE})",
-                    style = MiuixTheme.textStyles.body2,
-                    color = Color(0xFF2E7D32)
-                )
-                Text(
-                    text = "API 102",
-                    style = MiuixTheme.textStyles.body2,
-                    color = Color(0xFF2E7D32)
-                )
-            }
-            if (activated) {
-                Image(
-                    imageVector = Icons.Filled.CheckCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    alignment = Alignment.Center,
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color(0xFF2E7D32))
-                )
-            }
+    // 分组之间的垂直节奏由 SesameSectionTitle 自带的上下留白负责，
+    // 页面不再手动插 Spacer —— 避免间距值散落在各处、改一处破一屏。
+    // 标题沿用上游改后的「运行环境」：顶部状态卡已显示激活状态与版本，此处不再重复那两行。
+    SesameSectionTitle(text = "运行环境")
+    SesameCardGroup {
+        SesameInfoRow("SDK API", Build.VERSION.SDK_INT.toString())
+        SesameInfoRow("设备", MiuixMainActivity.getDeviceDisplayName())
+        SesameInfoRow("系统架构", Build.SUPPORTED_ABIS?.firstOrNull() ?: "")
+    }
+
+    SesameSectionTitle(text = "数据统计")
+    SesameCardGroup {
+        // 统计表不是列表行，拿不到行组件自带的卡片外观，显式包一层。
+        SesameCard {
+            StatisticsTable(activity)
         }
-    }
-    Spacer(Modifier.height(16.dp))
-
-    SmallTitle(text = "运行环境")
-    CardColumn {
-        // 不再放「模块状态」「版本」两行：顶部绿色 banner 已经显示激活状态与版本，重复
-        StatusRow("SDK API", Build.VERSION.SDK_INT.toString())
-        StatusRow("设备", MiuixMainActivity.getDeviceDisplayName())
-        StatusRow("系统架构", Build.SUPPORTED_ABIS?.firstOrNull() ?: "")
-    }
-    Spacer(Modifier.height(16.dp))
-
-    SmallTitle(text = "数据统计")
-    CardColumn {
-        StatisticsTable(activity)
-    }
-    Spacer(Modifier.height(16.dp))
-}
-
-@Composable
-fun StatusRow(label: String, value: String) {
-    // 左右补 16dp，对齐设置页的行（SwitchPreference/ArrowPreference 自带 insideMargin 的左右留白）；
-    // 上下**故意**保持 8dp：首页 5 行的行距拉到 16dp 会多出 ~80dp，首屏又会显示不全
-    // 字号字重取 miuix 行样式 token（标题 headline1、摘要 body2），与配置/设置页的 preference 行一致
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MiuixTheme.textStyles.headline1,
-            color = MiuixTheme.colorScheme.onBackground
-        )
-        Text(
-            text = value,
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.primary
-        )
     }
 }
 
@@ -542,19 +547,23 @@ fun StatisticsTable(activity: MiuixMainActivity) {
     Column(
         Modifier
             .fillMaxWidth()
-            // 上下补 16dp：卡片本身不带内边距（各部分自备留白），不补的话表头会贴住卡片上边缘
-            .padding(horizontal = 16.dp, vertical = 16.dp)
+            // 水平内边距沿用本地的自适应实现；上下留白由表头(8/4)与行(8)自带的节奏负责，
+            // 不再叠加上游的 16dp —— 否则表头 16 与末行 8+16 会不对称。
+            .padding(horizontal = sesameGroupHorizontalPadding())
     ) {
-        Row(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 4.dp)
+        ) {
             Box(Modifier.weight(1f))
             headers.forEach { header ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    // 列标题：与行内说明同级（body2），不再用硬编码 13sp
-                    Text(
+                    SesameText(
                         text = header,
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = sesameOnSurfaceVariant()
                     )
                 }
             }
@@ -563,18 +572,18 @@ fun StatisticsTable(activity: MiuixMainActivity) {
             Row(
                 Modifier
                     .fillMaxWidth()
+                    // 与 SesameInfoRow 的只读行节奏对齐（上下 8dp），
+                    // 否则同一屏里两个卡片的行距不一致，看起来「一松一紧」。
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(Modifier.weight(1f)) {
-                    // 行标签用 headline1：与「模块状态」等 preference 行的标题同级
-                    Text(text = label, style = MiuixTheme.textStyles.headline1, color = MiuixTheme.colorScheme.onBackground)
+                    SesameText(text = label, fontSize = 14.sp)
                 }
                 columns.forEach { timeType ->
                     val value = types.sumOf { Statistics.getData(timeType, it) }
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        // 数值用 body2：与 preference 行的摘要/值同级（原来硬编码 15sp，夹在 14sp/17sp 之间最显割裂）
-                        Text(text = value.toString(), style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onBackground)
+                        SesameText(text = value.toString(), fontSize = 14.sp)
                     }
                 }
             }
@@ -584,110 +593,151 @@ fun StatisticsTable(activity: MiuixMainActivity) {
 
 @Composable
 fun LogsTab(activity: MiuixMainActivity) {
-    Text(
-        text = "日志",
-        fontSize = 32.sp,
-        fontWeight = FontWeight.Bold,
-        color = MiuixTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
-    )
+    SesamePageTitle(text = "日志")
 
-    SmallTitle(text = "分类记录")
-    CardColumn {
-        var forest by remember { mutableStateOf(AppConfig.INSTANCE.enableForestLog ?: true) }
-        LogSwitchRow("森林记录", forest, onClick = { openLog(activity, LogType.FOREST) }) {
-            forest = it
-            AppConfig.INSTANCE.enableForestLog = it
-            AppConfig.save()
-            activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog("forest")
-        }
-        var farm by remember { mutableStateOf(AppConfig.INSTANCE.enableFarmLog ?: true) }
-        LogSwitchRow("庄园记录", farm, onClick = { openLog(activity, LogType.FARM) }) {
-            farm = it
-            AppConfig.INSTANCE.enableFarmLog = it
-            AppConfig.save()
-            activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog("farm")
-        }
-        var goldenBeans by remember { mutableStateOf(AppConfig.INSTANCE.enableGoldenBeansLog ?: true) }
-        LogSwitchRow("金豆记录", goldenBeans, onClick = { openLog(activity, LogType.GOLDENBEANS) }) {
-            goldenBeans = it
-            AppConfig.INSTANCE.enableGoldenBeansLog = it
-            AppConfig.save()
-            activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog("goldenbeans")
-        }
-        var other by remember { mutableStateOf(AppConfig.INSTANCE.enableOtherLog ?: true) }
-        LogSwitchRow("其他记录", other, onClick = { openLog(activity, LogType.OTHER) }) {
-            other = it
-            AppConfig.INSTANCE.enableOtherLog = it
-            AppConfig.save()
-            activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog("other")
+    // ── 分类记录：每个配置分组一个条目（森林/庄园/新村/农场/金豆/运动/会员/其他） ──
+    // 8 个分组里只有 4 个有自己的日志文件（forest / farm / goldenbeans / other），
+    // 另外 4 个（新村/农场 → farm.log，运动/会员 → other.log）与父项**共用文件**，
+    // 拿不到独立开关（开关是按文件给的）。于是把它们渲染成父项下的**轻量子项**、
+    // 只给查看入口 —— 把「共用关系」画出来，用户才不会以为这几行漏了开关。
+    SesameSectionTitle(text = "分类记录")
+    SesameCardGroup {
+        for (parent in LogType.toggleableCategories) {
+            CategoryParentRow(activity, parent)
+            for (child in LogType.childrenOf(parent)) {
+                CategoryViewRow(activity, child, isChild = true)
+            }
         }
     }
-    Spacer(Modifier.height(16.dp))
 
-    SmallTitle(text = "系统记录")
-    CardColumn {
+    SesameSectionTitle(text = "系统记录")
+    SesameCardGroup {
         var debug by remember { mutableStateOf(AppConfig.INSTANCE.enableDebugLog ?: false) }
-        LogSwitchRow("抓包记录", debug, onClick = { openLog(activity, LogType.DEBUG) }) {
-            debug = it
-            AppConfig.INSTANCE.enableDebugLog = it
-            AppConfig.save()
-            activity.broadcastReloadConfig()
-            // 关闭时**不清空** debug 日志：抓到的包是排查证据，要清空请到日志页点「删除」
-        }
+        SesameSwitchRow(
+            title = "抓包记录",
+            icon = Icons.Outlined.WifiTethering,
+            checked = debug,
+            onCheckedChange = {
+                debug = it
+                AppConfig.INSTANCE.enableDebugLog = it
+                AppConfig.save()
+                activity.broadcastReloadConfig()
+                // 关闭时**不清空** debug 日志：抓到的包是排查证据，要清空请到日志页点「删除」
+            },
+            onClick = { openLog(activity, LogType.DEBUG) }
+        )
         var error by remember { mutableStateOf(AppConfig.INSTANCE.enableViewErrorLog ?: true) }
-        LogSwitchRow("查看异常日志", error, onClick = { openLog(activity, LogType.ERROR) }) {
-            error = it
-            AppConfig.INSTANCE.enableViewErrorLog = it
-            AppConfig.save()
-            activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog("error")
-        }
+        SesameSwitchRow(
+            title = "查看异常日志",
+            icon = Icons.Outlined.BugReport,
+            checked = error,
+            onCheckedChange = {
+                error = it
+                AppConfig.INSTANCE.enableViewErrorLog = it
+                AppConfig.save()
+                activity.broadcastReloadConfig()
+                if (!it) FileUtil.clearLog("error")
+            },
+            onClick = { openLog(activity, LogType.ERROR) }
+        )
         var runtime by remember { mutableStateOf(AppConfig.INSTANCE.enableViewRuntimeLog ?: true) }
-        LogSwitchRow("查看运行日志", runtime, onClick = { openLog(activity, LogType.RUNTIME) }) {
-            runtime = it
-            AppConfig.INSTANCE.enableViewRuntimeLog = it
-            AppConfig.save()
-            activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog("runtime")
-        }
+        SesameSwitchRow(
+            title = "查看运行日志",
+            icon = Icons.Outlined.Terminal,
+            checked = runtime,
+            onCheckedChange = {
+                runtime = it
+                AppConfig.INSTANCE.enableViewRuntimeLog = it
+                AppConfig.save()
+                activity.broadcastReloadConfig()
+                if (!it) FileUtil.clearLog("runtime")
+            },
+            onClick = { openLog(activity, LogType.RUNTIME) }
+        )
     }
-    Spacer(Modifier.height(16.dp))
 }
 
 /**
- * 日志条目行：**点按整行**进入对应日志详情，右侧开关控制是否记录。
- * 用库的 SwitchPreference 渲染，字体（样式/字重/颜色）与设置页的行由同一组件保证一致；
- * 它的 insideMargin 覆写为上下 8dp（库默认 16dp）以尽量贴近日志页原来的行距；
- * 它没有 onClick 参数，所以外层再套一层可点区域实现"点整行"。
+ * 「分类记录」里有独立日志文件、可开关的分组行（森林 / 庄园 / 金豆 / 其他）。
+ *
+ * `showArrow = false`：开关本身就是行尾控件（MD3 的常规），不再并排一个箭头 ——
+ * 两者并存会让行尾显得拥挤。同一张卡里的**子项**才用箭头，行的角色因此一眼可分。
  */
 @Composable
-fun LogSwitchRow(title: String, checked: Boolean, onClick: () -> Unit, onCheckedChange: (Boolean) -> Unit) {
-    Box(Modifier.fillMaxWidth()) {
-        SwitchPreference(
-            title = title,
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            // 覆写库默认的 16dp 上下内边距，尽量贴近日志页原来的行距（左右仍是 16dp，与设置页一致）
-            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-        )
-        // 库的 preference 行自带 clickable/ripple，会把触摸吞掉（实测套在外层的 clickable 收不到事件），
-        // 所以压在它**上层**盖一层透明可点区域：只盖标题侧，右侧给开关留出 72dp，
-        // 这样"点标题进日志、点开关只切开关"
-        Box(
-            Modifier
-                .matchParentSize()
-                .padding(end = 72.dp)
-                .clickable(onClick = onClick)
-                // 这层盖在库的 SwitchPreference 之上，miuix 0.9.4 的 semantics 合并会把下层的行标题吞掉
-                // （无障碍树里读不到「森林记录」等标题），这里把标题补回语义
-                .semantics { contentDescription = title }
-        )
-    }
+private fun CategoryParentRow(activity: MiuixMainActivity, entry: LogType) {
+    val toggle = categoryToggleOf(entry) ?: return
+    var enabled by remember { mutableStateOf(toggle.getValue() ?: true) }
+    SesameSwitchRow(
+        title = entry.displayName,
+        icon = groupIconOf(entry.groupCode.orEmpty()),
+        checked = enabled,
+        showArrow = false,
+        onCheckedChange = {
+            enabled = it
+            toggle.setValue(it)
+            AppConfig.save()
+            activity.broadcastReloadConfig()
+            if (!it) FileUtil.clearLog(toggle.logName)
+        },
+        onClick = { openLog(activity, entry) }
+    )
+}
+
+/**
+ * 「分类记录」里与父项共用日志文件、因而没有独立开关的分组行
+ * （新村 / 农场 / 运动 / 会员）。渲染成内缩的轻量子项，只给查看入口。
+ */
+@Composable
+private fun CategoryViewRow(activity: MiuixMainActivity, entry: LogType, isChild: Boolean) {
+    SesameClickRow(
+        title = entry.displayName,
+        icon = groupIconOf(entry.groupCode.orEmpty()),
+        isChild = isChild,
+        onClick = { openLog(activity, entry) }
+    )
+}
+
+/**
+ * 分类记录的开关描述子。
+ *
+ * 只有**有独立日志文件**的分组才有开关（`AppConfig` 里也只有这 4 个日志开关）。
+ * 新村/农场/运动/会员与父项**共用同一个文件**（新村/农场 → farm.log，运动/会员 → other.log），
+ * 开关是按文件给的，给它们各配一个就会变成「拨一个动两行」，因此返回 null ——
+ * 页面把它们渲染成父项下的缩进子项，只作查看入口（见 [LogType.categoryTree]）。
+ */
+private class CategoryToggle(
+    /** 分类日志文件名前缀，用于关闭时按前缀清空（见 FileUtil.clearLog） */
+    val logName: String,
+    private val getter: () -> Boolean?,
+    private val setter: (Boolean) -> Unit
+) {
+    fun getValue(): Boolean? = getter()
+    fun setValue(value: Boolean) = setter(value)
+}
+
+/** 取该分类对应的开关；没有独立开关的分组返回 null */
+private fun categoryToggleOf(logType: LogType): CategoryToggle? = when (logType) {
+    LogType.FOREST -> CategoryToggle(
+        "forest",
+        { AppConfig.INSTANCE.enableForestLog },
+        { AppConfig.INSTANCE.enableForestLog = it }
+    )
+    LogType.FARM -> CategoryToggle(
+        "farm",
+        { AppConfig.INSTANCE.enableFarmLog },
+        { AppConfig.INSTANCE.enableFarmLog = it }
+    )
+    LogType.GOLDENBEANS -> CategoryToggle(
+        "goldenbeans",
+        { AppConfig.INSTANCE.enableGoldenBeansLog },
+        { AppConfig.INSTANCE.enableGoldenBeansLog = it }
+    )
+    LogType.OTHER -> CategoryToggle(
+        "other",
+        { AppConfig.INSTANCE.enableOtherLog },
+        { AppConfig.INSTANCE.enableOtherLog = it }
+    )
+    else -> null
 }
 
 /** 打开日志查看器(显示指定日志类型的全部条目) */
@@ -719,9 +769,16 @@ fun ConfigTab(activity: MiuixMainActivity) {
                     val label = UserIdMap.getAccountLabel(userId) ?: userId
                     // 副标题优先显示「昵称:账号」；新用户尚未被模块钩子同步资料（self.json 不存在）时
                     // 回退显示 userId 本身，避免空白且仍能区分账号
-                    // 副标题优先显示「昵称:账号」；昵称缺失时只显示账号，不再出现字面 "null"
-                    val summary = userEntity?.let { ue ->
-                        ue.showName?.let { name -> "$name: ${ue.account}" } ?: (ue.account ?: userId)
+                    // 名字/账号任一缺失时跳过，不要拼出字面 "null"（宿主资料可能只同步到一半）
+                    val summary = userEntity?.let { e ->
+                        val name = e.showName?.takeIf { it.isNotBlank() }
+                        val acct = e.account?.takeIf { it.isNotBlank() }
+                        when {
+                            name != null && acct != null -> "$name: $acct"
+                            name != null -> name
+                            acct != null -> acct
+                            else -> null
+                        }
                     } ?: userId
                     list.add(Triple(userId, label, summary))
                 }
@@ -732,20 +789,15 @@ fun ConfigTab(activity: MiuixMainActivity) {
         list
     }
 
-    Text(
-        text = "配置",
-        fontSize = 32.sp,
-        fontWeight = FontWeight.Bold,
-        color = MiuixTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
-    )
+    SesamePageTitle(text = "配置")
 
-    SmallTitle(text = "配置管理")
-    CardColumn {
+    SesameSectionTitle(text = "配置管理")
+    SesameCardGroup {
         items.forEach { (userId, title, summary) ->
-            ArrowPreference(
+            SesameClickRow(
                 title = title,
                 summary = summary,
+                icon = Icons.Outlined.AccountCircle,
                 onClick = {
                     val intent = Intent(context, MiuixSettingsActivity::class.java)
                     if (userId != null) intent.putExtra("userId", userId)
@@ -754,106 +806,156 @@ fun ConfigTab(activity: MiuixMainActivity) {
             )
         }
     }
-    Spacer(Modifier.height(16.dp))
-
-    // 模块功能：全局配置（不分账号），与上面的「按账号配置」并列放在配置页更合理
-    SmallTitle(text = "模块功能")
-    CardColumn {
+    // 模块功能：全局配置（不分账号），与上面的「按账号配置」并列放在配置页更合理。
+    // 上游本版新增该分区；渲染沿用本地的双风格组件集，行为/字段与上游一致。
+    SesameSectionTitle(text = "模块功能")
+    SesameCardGroup {
         // 这几项原先是「按账号」存在账号配置里，现改为全局配置 AppConfig（模块级，不分账号）
         var newRpc by remember { mutableStateOf(AppConfig.INSTANCE.newRpc ?: true) }
-        BooleanSwitch("使用新接口", newRpc, summary = "最低支持 v10.3.96.8100") {
-            AppConfig.INSTANCE.newRpc = it
-            AppConfig.save()
-            newRpc = it
-            // 换接口要重挂 RPC bridge，必须让注入进程整体重启（只重载配置不够）
-            activity.broadcastRestart()
-        }
+        SesameSwitchRow(
+            title = "使用新接口",
+            summary = "最低支持 v10.3.96.8100",
+            icon = Icons.Outlined.Sync,
+            checked = newRpc,
+            onCheckedChange = {
+                AppConfig.INSTANCE.newRpc = it
+                AppConfig.save()
+                newRpc = it
+                // 换接口要重挂 RPC bridge，必须让注入进程整体重启（只重载配置不够）
+                activity.broadcastRestart()
+            }
+        )
         var showToast by remember { mutableStateOf(AppConfig.INSTANCE.showToast ?: true) }
-        BooleanSwitch("气泡提示", showToast) {
-            AppConfig.INSTANCE.showToast = it
-            AppConfig.save()
-            showToast = it
-            activity.broadcastReloadConfig()
-        }
-        // 气泡纵向偏移：一级界面没有整数控件，用 ArrowPreference 展开输入框，输入即保存
+        SesameSwitchRow(
+            title = "气泡提示",
+            icon = Icons.Outlined.ChatBubbleOutline,
+            checked = showToast,
+            onCheckedChange = {
+                AppConfig.INSTANCE.showToast = it
+                AppConfig.save()
+                showToast = it
+                activity.broadcastReloadConfig()
+            }
+        )
+        // 气泡纵向偏移：一级界面没有整数控件，用可展开行 + 行内输入框
         var toastOffsetY by remember { mutableStateOf((AppConfig.INSTANCE.toastOffsetY ?: 0).toString()) }
         var offsetExpanded by remember { mutableStateOf(false) }
-        ArrowPreference(
+        SesameExpandRow(
             title = "气泡纵向偏移",
-            summary = if (toastOffsetY.isEmpty()) "0 px（正数向下）" else "$toastOffsetY px（正数向下）",
+            summary = "${if (toastOffsetY.isEmpty()) "0" else toastOffsetY} px（正数向下）",
+            expandable = true,
+            icon = Icons.Outlined.SwapVert,
             onClick = { offsetExpanded = !offsetExpanded }
         )
         if (offsetExpanded) {
-            top.yukonga.miuix.kmp.basic.TextField(
+            SesameInlineEditor(
                 value = toastOffsetY,
                 onValueChange = { text ->
-                    // 只接受整数（允许开头一个负号），改完立刻写回并让注入进程重载
-                    val filtered = text.filterIndexed { index, c -> c.isDigit() || (c == '-' && index == 0) }
-                    toastOffsetY = filtered
-                    filtered.toIntOrNull()?.let { value ->
-                        AppConfig.INSTANCE.toastOffsetY = value
-                        AppConfig.save()
-                        activity.broadcastReloadConfig()
-                    }
+                    // 只接受整数（允许开头一个负号）
+                    toastOffsetY = text.filterIndexed { index, c -> c.isDigit() || (c == '-' && index == 0) }
                 },
-                // 不要 label：它会作为浮动小标题显示在输入框内部（与上方行标题重复）；单位说明放到上面的 summary 里
-                label = "",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                isError = toastOffsetY.isNotEmpty() && toastOffsetY.toIntOrNull() == null,
+                supportingText = "单位为像素，正数向下、负数向上"
             )
         }
+        // 输入即生效：值先落内存，停手 300ms 后统一写盘并通知宿主。
+        // 不在每次按键里直接 save()——那是「全量序列化 + 写盘 + 备份检查」，
+        // 紧随其后的广播还会打断输入；debounce 之后一段连续输入通常只落盘一次。
+        LaunchedEffect(toastOffsetY) {
+            val parsed = toastOffsetY.toIntOrNull() ?: return@LaunchedEffect
+            if (parsed == AppConfig.INSTANCE.toastOffsetY) return@LaunchedEffect
+            delay(300)
+            AppConfig.INSTANCE.toastOffsetY = parsed
+            AppConfig.save()
+            activity.broadcastReloadConfig()
+        }
         var enableOnGoing by remember { mutableStateOf(AppConfig.INSTANCE.enableOnGoing ?: false) }
-        BooleanSwitch("开启状态栏禁删", enableOnGoing) {
-            AppConfig.INSTANCE.enableOnGoing = it
-            AppConfig.save()
-            enableOnGoing = it
-            activity.broadcastReloadConfig()
-        }
+        SesameSwitchRow(
+            title = "开启状态栏禁删",
+            icon = Icons.Outlined.Security,
+            checked = enableOnGoing,
+            onCheckedChange = {
+                AppConfig.INSTANCE.enableOnGoing = it
+                AppConfig.save()
+                enableOnGoing = it
+                activity.broadcastReloadConfig()
+            }
+        )
         var closeCaptchaDialog by remember { mutableStateOf(AppConfig.INSTANCE.closeCaptchaDialog ?: true) }
-        BooleanSwitch("屏蔽部分弹窗", closeCaptchaDialog) {
-            AppConfig.INSTANCE.closeCaptchaDialog = it
-            AppConfig.save()
-            closeCaptchaDialog = it
-            activity.broadcastReloadConfig()
-        }
+        SesameSwitchRow(
+            title = "屏蔽部分弹窗",
+            icon = Icons.Outlined.Block,
+            checked = closeCaptchaDialog,
+            onCheckedChange = {
+                AppConfig.INSTANCE.closeCaptchaDialog = it
+                AppConfig.save()
+                closeCaptchaDialog = it
+                activity.broadcastReloadConfig()
+            }
+        )
     }
-    Spacer(Modifier.height(16.dp))
 }
 
 @Composable
 fun SettingsTab(activity: MiuixMainActivity) {
     val context = LocalContext.current
 
-    Text(
-        text = "设置",
-        fontSize = 32.sp,
-        fontWeight = FontWeight.Bold,
-        color = MiuixTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
+    SesamePageTitle(text = "设置")
+
+    // ── 界面风格：双设计语言切换，切换后 recreate 让整套页面按新风格重建 ──
+    SesameSectionTitle(text = "界面风格")
+    // 选中项要跨 recompose / recreate 保留，状态声明在卡片组之外
+    var uiStyle by remember { mutableStateOf(UiStyle.current()) }
+    SesameCardGroup {
+        UiStyle.entries.forEach { style ->
+            SesameRadioRow(
+                title = style.label,
+                icon = if (style == UiStyle.MATERIAL3) Icons.Outlined.Palette else Icons.Outlined.Smartphone,
+                selected = uiStyle == style,
+                onClick = {
+                    if (uiStyle != style) {
+                        uiStyle = style
+                        AppConfig.INSTANCE.uiStyle = style.code
+                        AppConfig.save()
+                        activity.recreate()
+                    }
+                }
+            )
+        }
+    }
+    // 风格说明放在卡片**下方**：它注解的是整个分组，混在卡内会被读成最后一项的副标题。
+    SesameText(
+        text = uiStyle.summary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+        fontSize = 12.sp,
+        color = sesameOnSurfaceVariant()
     )
 
-    SmallTitle(text = "功能设置")
-    CardColumn {
-        ArrowPreference(
+    SesameSectionTitle(text = "功能设置")
+    SesameCardGroup {
+        SesameClickRow(
             title = "好友统计",
+            icon = Icons.Outlined.Groups,
             onClick = { context.startActivity(Intent(context, MiuixFriendStatsActivity::class.java)) }
         )
-        ArrowPreference(
+        SesameClickRow(
             title = "扩展功能",
+            icon = Icons.Outlined.Extension,
             onClick = { context.startActivity(Intent(context, MiuixExtensionsActivity::class.java)) }
         )
     }
-    Spacer(Modifier.height(16.dp))
 
-    SmallTitle(text = "系统设置")
-    CardColumn {
+    SesameSectionTitle(text = "系统设置")
+    SesameCardGroup {
         // 文件权限申请引导
         val hasFilePerm = activity.hasPermission
         if (!hasFilePerm) {
-            ArrowPreference(
+            SesameClickRow(
                 title = "申请文件权限",
                 summary = "模块需要文件权限才能正常运行",
+                icon = Icons.Outlined.FolderOpen,
                 onClick = {
                     try {
                         PermissionUtil.checkOrRequestFilePermissions(activity)
@@ -865,30 +967,55 @@ fun SettingsTab(activity: MiuixMainActivity) {
             )
         }
         var iconHidden by remember { mutableStateOf(activity.isIconHidden()) }
-        BooleanSwitch("隐藏图标", iconHidden) {
-            activity.toggleHideIcon()
-            iconHidden = activity.isIconHidden()
-        }
-        var darkMode by remember { mutableStateOf(AppConfig.INSTANCE.darkMode ?: false) }
-        BooleanSwitch("深色模式", darkMode) {
-            AppConfig.INSTANCE.darkMode = it
-            AppConfig.save()
-            darkMode = it
-            activity.recreate()
-        }
+        SesameSwitchRow(
+            title = "隐藏图标",
+            icon = Icons.Outlined.VisibilityOff,
+            checked = iconHidden,
+            onCheckedChange = {
+                activity.toggleHideIcon()
+                iconHidden = activity.isIconHidden()
+            }
+        )
+        // 「跟随系统设置」必须先声明：下面「深色模式」的可用状态由它决定。
+        // 两者不是并列关系——跟随系统开着时，深色模式的值根本不参与取色计算
+        // （见 SesameTheme.sesameIsDark），此时让它可点等于让用户白点，必须置灰。
         var followSystem by remember { mutableStateOf(AppConfig.INSTANCE.followSystem ?: true) }
-        BooleanSwitch("跟随系统设置", followSystem) {
-            AppConfig.INSTANCE.followSystem = it
-            AppConfig.save()
-            followSystem = it
-            activity.recreate()
-        }
+        var darkMode by remember { mutableStateOf(AppConfig.INSTANCE.darkMode ?: false) }
+        SesameSwitchRow(
+            title = "深色模式",
+            icon = Icons.Outlined.DarkMode,
+            checked = darkMode,
+            enabled = !followSystem,
+            summary = if (followSystem) "需先关闭下方「跟随系统设置」" else null,
+            onCheckedChange = {
+                AppConfig.INSTANCE.darkMode = it
+                AppConfig.save()
+                darkMode = it
+                activity.recreate()
+            }
+        )
+        SesameSwitchRow(
+            title = "跟随系统设置",
+            icon = Icons.Outlined.Sync,
+            checked = followSystem,
+            onCheckedChange = {
+                AppConfig.INSTANCE.followSystem = it
+                AppConfig.save()
+                followSystem = it
+                activity.recreate()
+            }
+        )
         var batteryPerm by remember { mutableStateOf(AppConfig.INSTANCE.batteryPerm ?: true) }
-        BooleanSwitch("为支付宝申请后台运行权限", batteryPerm) {
-            AppConfig.INSTANCE.batteryPerm = it
-            AppConfig.save()
-            batteryPerm = it
-        }
+        SesameSwitchRow(
+            title = "为支付宝申请后台运行权限",
+            icon = Icons.Outlined.BatterySaver,
+            checked = batteryPerm,
+            onCheckedChange = {
+                AppConfig.INSTANCE.batteryPerm = it
+                AppConfig.save()
+                batteryPerm = it
+            }
+        )
         if (batteryPerm) {
             val hasPerm = try {
                 val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
@@ -897,8 +1024,9 @@ fun SettingsTab(activity: MiuixMainActivity) {
                 false
             }
             if (!hasPerm) {
-                ArrowPreference(
+                SesameClickRow(
                     title = "立即申请权限",
+                    icon = Icons.Outlined.BatteryAlert,
                     onClick = {
                         try {
                             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -914,29 +1042,21 @@ fun SettingsTab(activity: MiuixMainActivity) {
             }
         }
     }
-    Spacer(Modifier.height(16.dp))
 
-    SmallTitle(text = "关于")
-    CardColumn {
-        ArrowPreference(
+    SesameSectionTitle(text = "关于")
+    SesameCardGroup {
+        SesameClickRow(
             title = "关于应用",
+            icon = Icons.Outlined.Info,
             onClick = { context.startActivity(Intent(context, MiuixAboutActivity::class.java)) }
         )
     }
-    Spacer(Modifier.height(16.dp))
-
 }
 
-@Composable
-fun BooleanSwitch(title: String, checked: Boolean, summary: String? = null, onCheckedChange: (Boolean) -> Unit) {
-    SwitchPreference(
-        title = title,
-        summary = summary,
-        checked = checked,
-        onCheckedChange = onCheckedChange
-    )
-}
-
+/**
+ * 二级页沿用的分组容器（Miuix 实现）。
+ * 二级页面尚未迁移到风格组件集，此处保持原有实现，待后续按页迁移后统一替换为 SesameCardGroup。
+ */
 @Composable
 fun CardColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     // Card 只传 modifier：preference 行直接作为子项，行的左右缩进交给行自身的 insideMargin。

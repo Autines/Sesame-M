@@ -1,12 +1,9 @@
 package io.github.aw1y2z.sesame.data;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.aw1y2z.sesame.data.modelFieldExt.BooleanModelField;
@@ -17,10 +14,6 @@ import lombok.Getter;
 
 public abstract class Model {
 
-    private static final Map<String, ModelConfig> modelConfigMap = new LinkedHashMap<>();
-
-    private static final Map<String, ModelConfig> readOnlyModelConfigMap = Collections.unmodifiableMap(modelConfigMap);
-
     private static final Map<ModelGroup, Map<String, ModelConfig>> groupModelConfigMap = new LinkedHashMap<>();
 
     private static final Map<Class<? extends Model>, Model> modelMap = new ConcurrentHashMap<>();
@@ -29,10 +22,6 @@ public abstract class Model {
 
     @Getter
     private static final Model[] modelArray = new Model[modelClazzList.size()];
-
-    private static final List<Model> modelList = Arrays.asList(modelArray);
-
-    private static final List<Model> readOnlyModelList = Collections.unmodifiableList(modelList);
 
     private final BooleanModelField enableField;
 
@@ -68,22 +57,6 @@ public abstract class Model {
 
     public void destroy() {}
 
-    public static Map<String, ModelConfig> getModelConfigMap() {
-        return readOnlyModelConfigMap;
-    }
-
-    public static Set<ModelGroup> getGroupModelConfigGroupSet() {
-        return groupModelConfigMap.keySet();
-    }
-
-    public static List<Map<String, ModelConfig>> getGroupModelConfigMapList() {
-        List<Map<String, ModelConfig>> list = new ArrayList<>();
-        for (Map<String, ModelConfig> modelConfigMap : groupModelConfigMap.values()) {
-            list.add(Collections.unmodifiableMap(modelConfigMap));
-        }
-        return list;
-    }
-
     public static Map<String, ModelConfig> getGroupModelConfig(ModelGroup modelGroup) {
         Map<String, ModelConfig> map = groupModelConfigMap.get(modelGroup);
         if (map == null) {
@@ -92,17 +65,21 @@ public abstract class Model {
         return Collections.unmodifiableMap(map);
     }
 
-    public static Boolean hasModel(Class<? extends Model> modelClazz) {
-        return modelMap.containsKey(modelClazz);
+    /**
+     * 把所有分组里的 ModelConfig 摊平成一张表（modelCode -> ModelConfig）。
+     * 供只需「拿到全部已注册模型」的场景使用，例如 ConfigV2 重建配置字段表。
+     */
+    public static Map<String, ModelConfig> getAllModelConfig() {
+        Map<String, ModelConfig> all = new LinkedHashMap<>();
+        for (Map<String, ModelConfig> groupMap : groupModelConfigMap.values()) {
+            all.putAll(groupMap);
+        }
+        return Collections.unmodifiableMap(all);
     }
 
     @SuppressWarnings("unchecked")
     public static <T extends Model> T getModel(Class<T> modelClazz) {
         return (T) modelMap.get(modelClazz);
-    }
-
-    public static List<Model> getModelList() {
-        return readOnlyModelList;
     }
 
     public static synchronized void initAllModel() {
@@ -115,18 +92,39 @@ public abstract class Model {
                 modelArray[i] = model;
                 modelMap.put(modelClazz, model);
                 String modelCode = modelConfig.getCode();
-                modelConfigMap.put(modelCode, modelConfig);
                 ModelGroup group = modelConfig.getGroup();
-                Map<String, ModelConfig> modelConfigMap = groupModelConfigMap.get(group);
-                if (modelConfigMap == null) {
-                    modelConfigMap = new LinkedHashMap<>();
-                    groupModelConfigMap.put(group, modelConfigMap);
+                Map<String, ModelConfig> groupMap = groupModelConfigMap.get(group);
+                if (groupMap == null) {
+                    groupMap = new LinkedHashMap<>();
+                    groupModelConfigMap.put(group, groupMap);
                 }
-                modelConfigMap.put(modelCode, modelConfig);
+                groupMap.put(modelCode, modelConfig);
             } catch (ReflectiveOperationException e) {
                 Log.printStackTrace(e);
             }
         }
+    }
+
+    /**
+     * 注册表是否已经建好（可读 Model / ModelConfig）。
+     */
+    public static synchronized boolean isInitialized() {
+        return !groupModelConfigMap.isEmpty();
+    }
+
+    /**
+     * 非破坏性初始化：仅在注册表为空时才构建，已有注册表一律原样保留。
+     * <p>
+     * 与 {@link #initAllModel()} 的区别是**绝不重建**。重建会 new 出全新的 Model 实例，
+     * 字段值随之回到默认值，若该处没有紧接着重新加载配置，用户已保存的配置就会在保存时被默认值覆盖。
+     * 因此只有「只读注册表、不参与配置编辑」的页面（如日志页要按分组列出入口）才可以使用本方法；
+     * 配置编辑链路请继续使用 {@link #initAllModel()} 并紧跟 ConfigPreload.prepare()。
+     */
+    public static synchronized void initAllModelIfNeeded() {
+        if (!groupModelConfigMap.isEmpty()) {
+            return;
+        }
+        initAllModel();
     }
 
     public static synchronized void bootAllModel(ClassLoader classLoader) {
@@ -160,9 +158,13 @@ public abstract class Model {
                 }
                 modelArray[i] = null;
             }
-            modelMap.clear();
-            modelConfigMap.clear();
         }
+        // 清空放在循环外：它们描述的是「整张注册表」而非单个 model，放在循环里每轮重清既无意义也易误读。
+        // groupModelConfigMap 原先漏清 —— initAllModel() 会复用上一轮的 group -> map，
+        // 若某个 model 新一轮实例化失败（下方 catch），它的旧 ModelConfig 会残留在分组表里，
+        // 表现为配置页出现「幽灵分组条目」。
+        modelMap.clear();
+        groupModelConfigMap.clear();
     }
 
 }

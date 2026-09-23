@@ -4,8 +4,6 @@ import io.github.aw1y2z.sesame.entity.RpcEntity;
 
 public interface RpcBridge {
 
-    RpcVersion getVersion();
-
     void load() throws Exception;
 
     void unload();

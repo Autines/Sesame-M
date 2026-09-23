@@ -50,6 +50,52 @@ public class Log {
     };
 
     /**
+     * 当前线程正在执行的模块名（由 ModelTask 在 run() 前置位、finally 清除）。
+     *
+     * 用 InheritableThreadLocal 而非普通 ThreadLocal：模块主逻辑跑在 mainRunnable 线程上
+     * （此处已 set 模块名），而 GameTask.report() 等用 {@code new Thread()} 起的异步子线程里仍要
+     * 打 {@code Log.other("游戏进度📈"...)}，裸线程不继承 ThreadLocal 会让这些日志丢掉 [模块名] 前缀、
+     * 在查看端归不到子模块（整页 fallback 成「其他记录」）。改成可继承后，模块执行期间新建的
+     * 子线程自动带上模块名，无需在每个调用点手工补前缀。
+     *
+     * 各模块线程池（MAIN_THREAD_POOL / 子任务执行器）的线程仍由各自逻辑「显式 set + finally 还原」
+     * 管理，隔离性不依赖 TL 不继承，故不受影响；Inheritable 只影响「模块线程上新建的线程」这一路径。
+     *
+     * 写入日志时会作为前缀拼在正文上，格式：`[庄园] 肥料领取...`。
+     * 查看端据此把同一分组的多个模块拆开过滤。
+     */
+    private static final ThreadLocal<String> CURRENT_MODULE = new InheritableThreadLocal<>();
+
+    /**
+     * 标记当前线程所属模块；传入 null 或空串表示清除。
+     * 由 ModelTask.mainRunnable 在模块执行前后调用。
+     */
+    public static void setCurrentModule(String moduleName) {
+        if (moduleName == null || moduleName.isEmpty()) {
+            CURRENT_MODULE.remove();
+        } else {
+            CURRENT_MODULE.set(moduleName);
+        }
+    }
+
+    /** 取当前线程所属模块名；不在任何模块上下文中时返回 null */
+    public static String getCurrentModule() {
+        return CURRENT_MODULE.get();
+    }
+
+    /**
+     * 给日志正文加上当前模块前缀。
+     * 不在模块上下文中（如界面进程的配置加载日志）则原样返回。
+     */
+    private static String withModulePrefix(String s) {
+        String module = CURRENT_MODULE.get();
+        if (module == null || module.isEmpty()) {
+            return s;
+        }
+        return "[" + module + "] " + s;
+    }
+
+    /**
      * runtime 日志文件的共用打印机。
      * <p>5 个 tag（RUNTIME / FOREST / GOLDENBEANS / FARM / OTHER）共写同一个 runtime 文件，
      * 共用一组缓冲与后台 worker，避免多个 printer 同时写同一文件带来的行交错与线程浪费。
@@ -147,13 +193,19 @@ public class Log {
 
     /**
      * 模块日志双写（运行日志 + 分类文件）：只写开关打开的一侧，消息统一带 uid 前缀。
+     * <p>前缀顺序固定为「模块 → 账号」，即 {@code [庄园] [账号1] 投喂小鸡…}：
+     * 查看器把正文里**第一个非账号方括号**当成模块归属，所以模块必须排在最前，
+     * 账号标识随后追加（仍是脱敏的账号简称，不带 uid 与昵称）。
+     * <p>⚠️ 拼接顺序不可写成 {@code withUser(withModulePrefix(s))}：那样账号会跑到最前，
+     * 变成 {@code [账号1][庄园] …}，查看器会把「账号1」误判成模块名，
+     * 分组页（新村/农场/运动/会员）会因为这些日志归属不到任何模块而整页空白。
      */
     private static void writeModuleLog(String s, boolean toRuntime, Logger runtimeTarget,
                                        boolean toFile, Logger fileTarget) {
         if (!toRuntime && !toFile) {
             return;
         }
-        String msg = withUser(s);
+        String msg = withModulePrefix(withUser(s));
         if (toRuntime) {
             runtimeTarget.i(msg);
         }
@@ -164,6 +216,7 @@ public class Log {
 
     /**
      * 错误日志双写（异常日志 + 运行日志）：消息统一带 uid 前缀。
+     * <p>同样按「模块 → 账号」顺序加前缀，便于直接看出是哪个模块抛的。
      */
     private static void writeError(String s) {
         boolean toError = io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewErrorLog();
@@ -171,11 +224,13 @@ public class Log {
         if (!toError && !toRuntime) {
             return;
         }
-        String msg = withUser(s);
+        String msg = withModulePrefix(withUser(s));
+        // 优先只写异常日志：原先「异常 + 运行」双写，同一条记录在两个文件里各存一份
+        // （实测 error.<date>.log 里 99% 的行在 runtime.<date>.log 中重复）。
+        // 仅当用户关掉「查看异常日志」时，才退回写运行日志，避免错误彻底不可见。
         if (toError) {
             errorLogger.i(msg);
-        }
-        if (toRuntime) {
+        } else {
             runtimeLogger.i(msg);
         }
     }
@@ -184,7 +239,7 @@ public class Log {
         if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
             return;
         }
-        runtimeLogger.i(withUser(s));
+        runtimeLogger.i(withModulePrefix(withUser(s)));
     }
 
     public static void i(String tag, String s) {
@@ -224,7 +279,7 @@ public class Log {
         countModuleLog();
         // 记录日志(record)已停用,只按「查看运行日志」开关写入运行日志
         if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            runtimeLogger.i(withUser(str));
+            runtimeLogger.i(withModulePrefix(withUser(str)));
         }
     }
 
@@ -237,7 +292,7 @@ public class Log {
         if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
             return;
         }
-        runtimeLogger.i(withUser(tag + ", " + s));
+        runtimeLogger.i(withModulePrefix(withUser(tag + ", " + s)));
     }
 
     public static void forest(String s) {
@@ -268,7 +323,7 @@ public class Log {
         if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableDebugLog()) {
             return;
         }
-        debugLogger.d(withUser(s));
+        debugLogger.d(withModulePrefix(withUser(s)));
     }
 
     public static void error(String s) {

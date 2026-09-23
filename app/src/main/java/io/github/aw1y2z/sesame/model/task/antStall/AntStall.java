@@ -711,7 +711,10 @@ public class AntStall extends ModelTask {
                     //【木兰市集】逛精选好物
                     JSONObject jo = new JSONObject(AntStallRpcCall.xlightPlugin());
                     if (!jo.has("playingResult")) {
-                        Log.i(TAG, "taskList.xlightPlugin err:" + jo.optString("resultDesc"));
+                        // 失败应答里真正给原因的是 errorMsg（实测如 "this is a cheating traffic"），
+                        // 原先只取 resultDesc，而这个字段在该应答里不存在 → 日志一直显示 err:null，看不出真因。
+                        Log.i(TAG, "taskList.xlightPlugin err:"
+                                + jo.optString("errorMsg", jo.optString("resultDesc")));
                         return false;
                     }
                     jo = jo.getJSONObject("playingResult");
