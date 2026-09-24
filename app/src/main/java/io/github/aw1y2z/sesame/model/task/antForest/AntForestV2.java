@@ -4440,9 +4440,9 @@ public class AntForestV2 extends ModelTask {
         return false;
     }
 
-    // 个人主页 nextAction=="Team"（未在组队）；团队主页 nextAction=="Cultivate"。"是否在组队" = nextAction != "Team"
+    // nextAction=="Cultivate" 才是已在组队；字段缺失或其它值一律视为未组队（fail-safe）
     private static boolean isTeam(JSONObject homeObj) {
-        return !"Team".equals(homeObj.optString("nextAction", ""));
+        return "Cultivate".equals(homeObj.optString("nextAction", ""));
     }
 
     private static void loveteam(int waterNum) {
