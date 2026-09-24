@@ -159,6 +159,7 @@ public enum GameTask {
      */
     public void report(String gameType,int eggCount) {
         int totalNeeded = eggCount * (this.requestsPerEgg + 1); // 多1次确保网络请求不会错误
+        final String reportUid = UserIdMap.getCurrentUid();
         new Thread(() -> {
             this.cachedToken = login();
             if (this.cachedToken == null || this.cachedToken.isEmpty()) {
@@ -168,6 +169,10 @@ public enum GameTask {
 
             Log.record("开始执行🚀"+gameType+"游戏任务:目标" + eggCount + "个蛋，需请求" + totalNeeded + "次");
             for (int i = 1; i <= totalNeeded; i++) {
+                if (!java.util.Objects.equals(reportUid, UserIdMap.getCurrentUid())) {
+                    Log.record("任务流程🛑账号已切换，停止上报");
+                    break;
+                }
                 if (!executeSingleReport(gameType,i, totalNeeded)) {
                     // 具体的错误原因已在 executeSingleReport 中详细输出
                     break;

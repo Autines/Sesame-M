@@ -91,13 +91,13 @@ public class ApplicationHook extends XposedModule {
     private static final Map<String, PendingIntent> wakenAtTimeAlarmMap = new ConcurrentHashMap<>();
 
     @Getter
-    private static ClassLoader classLoader = null;
+    private static volatile ClassLoader classLoader = null;
 
     @Getter
-    private static Object microApplicationContextObject = null;
+    private static volatile Object microApplicationContextObject = null;
 
     // 新增：全局静态变量，存储当前进程名
-    public static String processName; // 供其他方法（如 startIfNeeded）调用
+    public static volatile String processName; // 供其他方法（如 startIfNeeded）调用
 
     /** 模块 App 自己的包名：须与 app/build.gradle 的 applicationId 一致，用于校验广播发送方 */
     private static final String MODULE_PACKAGE_NAME = "io.github.aw1y2z.sesame";
@@ -105,12 +105,12 @@ public class ApplicationHook extends XposedModule {
     private static final int SHELL_UID = 2000;
 
     @Getter
-    private static Context context = null; // 全局上下文，对应 Kotlin 的 appContext
+    private static volatile Context context = null; // 全局上下文，对应 Kotlin 的 appContext
     @SuppressLint("StaticFieldLeak")
-    private static Service service; // 目标 Service 实例，也是 Context 子类
+    private static volatile Service service; // 目标 Service 实例，也是 Context 子类
 
     @Getter
-    private static AlipayVersion alipayVersion = new AlipayVersion("");
+    private static volatile AlipayVersion alipayVersion = new AlipayVersion("");
 
     @Getter
     private static volatile boolean hooked = false;

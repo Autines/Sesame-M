@@ -75,6 +75,20 @@ public class IntegerModelField extends ModelField<Integer> {
     }
 
     @Override
+    public void setValue(Integer value) {
+        // 加载（Jackson）与 UI 都经此处：统一夹紧到 [minLimit, maxLimit]，避免磁盘越界值进内存
+        if (value != null) {
+            if (minLimit != null && value < minLimit) {
+                value = minLimit;
+            }
+            if (maxLimit != null && value > maxLimit) {
+                value = maxLimit;
+            }
+        }
+        super.setValue(value);
+    }
+
+    @Override
     public View getView(Context context) {
         return null;
     }

@@ -290,13 +290,37 @@ public class ConfigV2 {
         }
     }
 
+    /**
+     * 值的稳定文本形式：集合/映射先排序再拼接，避免顺序抖动把「没改」误判成「本进程改过」，
+     * 进而把旧值压回、覆盖对方进程的新值。
+     */
+    private static String stableValueText(Object value) {
+        if (value instanceof java.util.Collection) {
+            java.util.List<String> parts = new java.util.ArrayList<>();
+            for (Object item : (java.util.Collection<?>) value) {
+                parts.add(String.valueOf(item));
+            }
+            java.util.Collections.sort(parts);
+            return parts.toString();
+        }
+        if (value instanceof Map) {
+            java.util.List<String> parts = new java.util.ArrayList<>();
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+                parts.add(entry.getKey() + "=" + entry.getValue());
+            }
+            java.util.Collections.sort(parts);
+            return parts.toString();
+        }
+        return String.valueOf(value);
+    }
+
     /** 记录当前各字段的值快照，用于之后判断"本进程改过哪些字段" */
     private static void captureBaseline() {
         Map<String, String> baseline = new HashMap<>();
         for (Map.Entry<String, ModelFields> modelEntry : INSTANCE.modelFieldsMap.entrySet()) {
             for (ModelField<?> field : modelEntry.getValue().values()) {
                 if (field != null && field.getCode() != null) {
-                    baseline.put(fieldKey(modelEntry.getKey(), field.getCode()), String.valueOf(field.getValue()));
+                    baseline.put(fieldKey(modelEntry.getKey(), field.getCode()), stableValueText(field.getValue()));
                 }
             }
         }
@@ -317,7 +341,7 @@ public class ConfigV2 {
                 }
                 String key = fieldKey(modelEntry.getKey(), field.getCode());
                 String baseline = valueBaseline.get(key);
-                if (baseline == null || baseline.equals(String.valueOf(field.getValue()))) {
+                if (baseline == null || baseline.equals(stableValueText(field.getValue()))) {
                     continue;
                 }
                 changed.put(key, copyFieldValue(field.getValue()));

@@ -438,7 +438,9 @@ public class AntOrchard extends ModelTask {
      */
     private void orchardSpreadManure() {
         try {
-            while (true) {
+            // 轮次上限兜底：正常靠 !hasSpread 退出，异常时避免无界循环
+            final int MAX_SPREAD_ROUND = 50;
+            for (int round = 0; round < MAX_SPREAD_ROUND; round++) {
                 boolean hasSpread = false;
                 boolean anySceneQualified = false;
                 // 遍历可用场景进行施肥
@@ -638,7 +640,10 @@ public class AntOrchard extends ModelTask {
                     // yeb 肥料与主账号同池，仅在批量（需 5 倍）时取主账号余额做判据
                     if (batchY) {
                         JSONObject yebMain = new JSONObject(AntOrchardRpcCall.orchardSyncIndex());
-                        if (MessageUtil.checkResultCode(TAG, yebMain)) {
+                        if (!MessageUtil.checkResultCode(TAG, yebMain)) {
+                            // 同步校验失败拿不到余额：保守退回单次，避免发出注定失败的 5 倍批量
+                            batchY = false;
+                        } else {
                             JSONObject yai = yebMain.getJSONObject("farmMainAccountInfo");
                             int happyPointY = Integer.parseInt(yai.getString("happyPoint"));
                             int wateringCostY = yai.getInt("wateringCost");
