@@ -111,7 +111,7 @@ public abstract class BaseTask {
         }
         for (BaseTask childTask : childTaskMap.values()) {
             if (childTask != null) {
-                ThreadUtil.shutdownAndWait(childTask.getThread(), -1, TimeUnit.SECONDS);
+                ThreadUtil.shutdownAndWait(childTask.getThread(), 5, TimeUnit.SECONDS);
             }
         }
         thread = null;

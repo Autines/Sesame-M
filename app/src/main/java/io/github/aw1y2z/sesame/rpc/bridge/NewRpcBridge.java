@@ -179,12 +179,14 @@ public class NewRpcBridge implements RpcBridge {
                             Thread.sleep(600 + RandomUtil.delay());
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     } else if (retryInterval > 0) {
                         try {
                             Thread.sleep(retryInterval);
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     }
                 } catch (Throwable t) {
@@ -195,12 +197,14 @@ public class NewRpcBridge implements RpcBridge {
                             Thread.sleep(600 + RandomUtil.delay());
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     } else if (retryInterval > 0) {
                         try {
                             Thread.sleep(retryInterval);
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     }
                 }
@@ -291,12 +295,14 @@ public class NewRpcBridge implements RpcBridge {
                             Thread.sleep(600 + RandomUtil.delay());
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     } else if (retryInterval > 0) {
                         try {
                             Thread.sleep(retryInterval);
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     }
                 } catch (Throwable t) {
@@ -307,12 +313,14 @@ public class NewRpcBridge implements RpcBridge {
                             Thread.sleep(600 + RandomUtil.delay());
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     } else if (retryInterval > 0) {
                         try {
                             Thread.sleep(retryInterval);
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     }
                 }

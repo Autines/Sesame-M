@@ -47,10 +47,9 @@ public abstract class ModelTask extends Model {
 
         @Override
         public void run() {
-            if (MAIN_TASK_MAP.get(task) != null) {
+            if (MAIN_TASK_MAP.putIfAbsent(task, Thread.currentThread()) != null) {
                 return;
             }
-            MAIN_TASK_MAP.put(task, Thread.currentThread());
             Log.record("执行开始-" + task.getName());
             Log.startModuleLogCount();
             try {

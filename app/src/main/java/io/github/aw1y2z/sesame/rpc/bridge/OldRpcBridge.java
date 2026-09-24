@@ -126,12 +126,14 @@ public class OldRpcBridge implements RpcBridge {
                                             Thread.sleep(600 + RandomUtil.delay());
                                         } catch (InterruptedException e) {
                                             Log.printStackTrace(e);
+                                            Thread.currentThread().interrupt();
                                         }
                                     } else if (retryInterval > 0) {
                                         try {
                                             Thread.sleep(retryInterval);
                                         } catch (InterruptedException e) {
                                             Log.printStackTrace(e);
+                                            Thread.currentThread().interrupt();
                                         }
                                     }
                                 } else if (msg.contains("MMTPException")) {
@@ -147,12 +149,14 @@ public class OldRpcBridge implements RpcBridge {
                                             Thread.sleep(600 + RandomUtil.delay());
                                         } catch (InterruptedException e) {
                                             Log.printStackTrace(e);
+                                            Thread.currentThread().interrupt();
                                         }
                                     } else if (retryInterval > 0) {
                                         try {
                                             Thread.sleep(retryInterval);
                                         } catch (InterruptedException e) {
                                             Log.printStackTrace(e);
+                                            Thread.currentThread().interrupt();
                                         }
                                     }
                                     continue;

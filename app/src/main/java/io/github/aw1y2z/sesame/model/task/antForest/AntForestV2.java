@@ -2062,16 +2062,18 @@ public class AntForestV2 extends ModelTask {
             if (waterCount > 3) {
                 waterCount = 3;
             }
-            if (Status.canWaterFriendToday(uid, waterCount)) {
+            // 只补浇「配置次数 - 当日已浇」的差额，避免部分失败后被重复浇满而超出配置
+            int remainCount = waterCount - Status.getWaterFriendToday(uid);
+            if (remainCount > 0) {
                 try {
                     JSONObject jo = new JSONObject(AntForestRpcCall.queryFriendHomePage(uid));
                     TimeUtil.sleep(100);
                     if (MessageUtil.checkResultCode(TAG, jo)) {
                         String bizNo = jo.getString("bizNo");
-                        KVNode<Integer, Boolean> waterCountKVNode = returnFriendWater(uid, bizNo, waterCount, waterEnergy);
-                        waterCount = waterCountKVNode.getKey();
-                        if (waterCount > 0) {
-                            Status.waterFriendToday(uid, waterCount, taskUid);
+                        KVNode<Integer, Boolean> waterCountKVNode = returnFriendWater(uid, bizNo, remainCount, waterEnergy);
+                        int wateredCount = waterCountKVNode.getKey();
+                        if (wateredCount > 0) {
+                            Status.waterFriendToday(uid, wateredCount, taskUid);
                         }
                         if (!waterCountKVNode.getValue()) {
                             break;
@@ -2121,9 +2123,10 @@ public class AntForestV2 extends ModelTask {
                         wateredTimes = 3;
                         break label;
                     default:
+                        // 未知失败不再重发：响应丢失但已生效时，用同一 bizNo 重发会重复扣能量
                         Log.record("好友浇水🚿" + jo.getString("resultDesc"));
                         Log.i(jo.toString());
-                        break;
+                        break label;
                 }
             }
         } catch (Throwable t) {
