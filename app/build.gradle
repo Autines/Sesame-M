@@ -7,7 +7,7 @@ android {
         // 版本名固定为**上游最新发布版**，保证一眼看出本地构建基于上游哪一版；
         // 本地改动不进版本名，只体现在构建号（versionCode = git 提交数，每提交一次自动 +1）。
         // 上游的 CI 用 -Pversion=<tag> 覆盖，本地构建沿用这个默认值即可。
-        version = "1.2.2"
+        version = "1.2.4"
     }
     project.ext.appVersion = version
     def gitCommitHash = "unknown"

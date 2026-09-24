@@ -150,16 +150,18 @@ public class ConfigV2 {
         return true;
     }
 
+    /** 本进程是否有相对上次同步的字段级改动（供 UI 判断是否需要落盘/提示，不受磁盘未知键影响） */
+    public static synchronized boolean hasFieldChanges() {
+        return !valueBaseline.isEmpty() && !collectChangedFields().isEmpty();
+    }
+
     public static synchronized Boolean save(String userId, Boolean force) {
-        if (!force) {
-            // 本进程没有相对「上次同步」的改动时直接返回：此时的 INSTANCE 只是"比磁盘旧"，
-            // 落盘只会把别的进程刚写入的配置覆盖回去
-            if (!valueBaseline.isEmpty() && collectChangedFields().isEmpty()) {
-                return true;
-            }
-            if (!isModify(userId)) {
-                return true;
-            }
+        // 本进程没有任何字段级改动时直接返回：写盘只会把磁盘上本进程不认识的键整份覆盖丢失
+        if (!valueBaseline.isEmpty() && collectChangedFields().isEmpty()) {
+            return true;
+        }
+        if (!force && !isModify(userId)) {
+            return true;
         }
         // 磁盘在本进程上次同步之后被别的进程改过时，先把磁盘内容合并进来再落盘
         if (mergeDiskChanges(userId)) {
@@ -167,28 +169,17 @@ public class ConfigV2 {
             return true;
         }
         String json = INSTANCE.toSaveStr();
-
-        // ⚠️ 这里会把「默认账号」的空 userId 改写成字面量 "默认"（为了日志好看），
-        // 但**不能把这具改写后的 userId 传给滚动备份**：backupConfigV2WithRolling 是按
-        // userId 拼路径的（config/<userId>/config_v2.json），传 "默认" 会去找一个永远不存在的
-        // 目录（默认账号的原文件在根目录 config_v2.json），后果是
-        // **默认账号每次保存都跳过滚动备份 + 每次写一条 ERROR**。
-        // 实测（09-22 模拟器）：`原配置文件不存在，跳过备份: …/config/默认/config_v2.json`
-        final String originalUserId = userId;
-
-        // ========== 落盘**之前**先做一次滚动备份（真正的「写前快照」） ==========
-        // 上游原本把备份放在写盘成功之后，那样备份到的是**刚写进去的新内容** ——
-        // 万一这次保存本身就是坏的（例如写进了默认值），bak/ 槽位会被当场污染，救不回来。
-        // 实测（09-22 模拟器）：改一个开关保存后，bak/ 里的槽位与新文件逐字段一致，
-        // 里面没有「保存前的样子」。挪到写盘前，槽位里才是上一次正确的配置。
-        // 原文件尚不存在（新账号首次保存）时跳过：此时没有可备份的内容，也不算异常。
-        File configV2File = StringUtil.isEmpty(originalUserId)
+        // 写盘前固定留一份上一版（覆盖式即时快照，与「每日一次」滚动备份解耦）
+        // —— 传原始 userId：空 userId（默认账号）由 backupConfigV2WithRolling / backupConfigV2BeforeWrite
+        //    内部映射到根目录 config_v2.json；不能传字面量 "默认"，否则会去 config/默认/ 找不存在的文件
+        //    并每保存写一条 ERROR（见 09-22 实测）
+        FileUtil.backupConfigV2BeforeWrite(userId);
+        File configV2File = StringUtil.isEmpty(userId)
                 ? FileUtil.getDefaultConfigV2File()
-                : FileUtil.getConfigV2File(originalUserId);
+                : FileUtil.getConfigV2File(userId);
         if (configV2File != null && configV2File.exists()) {
-            FileUtil.backupConfigV2WithRolling(originalUserId);
+            FileUtil.backupConfigV2WithRolling(userId);
         }
-
         boolean success;
         if (StringUtil.isEmpty(userId)) {
             userId = "默认";
@@ -261,6 +252,7 @@ public class ConfigV2 {
                 }
             }
         }
+        clampAllFields();
         INSTANCE.setInit(true);
         captureBaseline();
         // 记下本次同步到的文本，供 save() 判断磁盘是否被别的进程改过
@@ -274,6 +266,20 @@ public class ConfigV2 {
             for (ModelField<?> modelField : modelFields.values()) {
                 if (modelField != null) {
                     modelField.reset();
+                }
+            }
+        }
+    }
+
+    /**
+     * 按各字段自身的刻度语义夹一遍越界值。Jackson 只认 value 属性、直接写字段，
+     * 因此校验不能放在 setValue 里（带单位换算的子类会被按错误刻度截断）。
+     */
+    private static void clampAllFields() {
+        for (ModelFields modelFields : INSTANCE.modelFieldsMap.values()) {
+            for (ModelField<?> modelField : modelFields.values()) {
+                if (modelField != null) {
+                    modelField.clampValue();
                 }
             }
         }
@@ -309,13 +315,41 @@ public class ConfigV2 {
         }
     }
 
+    /**
+     * 值的稳定文本形式：集合/映射先排序再拼接，避免顺序抖动把「没改」误判成「本进程改过」，
+     * 进而把旧值压回、覆盖对方进程的新值。
+     */
+    private static String stableValueText(Object value) {
+        if (value instanceof List) {
+            // List 的顺序就是值本身，不能排序
+            return String.valueOf(value);
+        }
+        if (value instanceof java.util.Collection) {
+            java.util.List<String> parts = new java.util.ArrayList<>();
+            for (Object item : (java.util.Collection<?>) value) {
+                parts.add(String.valueOf(item));
+            }
+            java.util.Collections.sort(parts);
+            return parts.toString();
+        }
+        if (value instanceof Map) {
+            java.util.List<String> parts = new java.util.ArrayList<>();
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+                parts.add(entry.getKey() + "=" + entry.getValue());
+            }
+            java.util.Collections.sort(parts);
+            return parts.toString();
+        }
+        return String.valueOf(value);
+    }
+
     /** 记录当前各字段的值快照，用于之后判断"本进程改过哪些字段" */
     private static void captureBaseline() {
         Map<String, String> baseline = new HashMap<>();
         for (Map.Entry<String, ModelFields> modelEntry : INSTANCE.modelFieldsMap.entrySet()) {
             for (ModelField<?> field : modelEntry.getValue().values()) {
                 if (field != null && field.getCode() != null) {
-                    baseline.put(fieldKey(modelEntry.getKey(), field.getCode()), String.valueOf(field.getValue()));
+                    baseline.put(fieldKey(modelEntry.getKey(), field.getCode()), stableValueText(field.getValue()));
                 }
             }
         }
@@ -336,7 +370,7 @@ public class ConfigV2 {
                 }
                 String key = fieldKey(modelEntry.getKey(), field.getCode());
                 String baseline = valueBaseline.get(key);
-                if (baseline == null || baseline.equals(String.valueOf(field.getValue()))) {
+                if (baseline == null || baseline.equals(stableValueText(field.getValue()))) {
                     continue;
                 }
                 changed.put(key, copyFieldValue(field.getValue()));
@@ -365,6 +399,7 @@ public class ConfigV2 {
             Map<String, Object> changed = collectChangedFields();
             // 先重载，让本进程也看到别的进程刚写入的内容
             JsonUtil.copyMapper().readerForUpdating(INSTANCE).readValue(disk);
+            clampAllFields();
             if (changed.isEmpty()) {
                 // 本进程没有改动：磁盘上的才是最新状态，直接采纳，
                 // 不能拿本进程的旧快照写回去（页面的 save() 只按 isModify 判断，

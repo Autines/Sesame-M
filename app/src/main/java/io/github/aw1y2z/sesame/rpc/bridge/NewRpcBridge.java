@@ -9,6 +9,8 @@ import io.github.aw1y2z.sesame.util.ClassUtil;
 import io.github.aw1y2z.sesame.util.Log;
 import io.github.aw1y2z.sesame.util.NotificationUtil;
 import io.github.aw1y2z.sesame.util.RandomUtil;
+import io.github.aw1y2z.sesame.util.RunGeneration;
+import io.github.aw1y2z.sesame.util.TaskCancelledException;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -109,6 +111,10 @@ public class NewRpcBridge implements RpcBridge {
 
     @Override
     public RpcEntity requestObject(RpcEntity rpcEntity, int tryCount, int retryInterval) {
+        // 本代已作废就不再发请求，避免旧代继续消耗资产
+        if (RunGeneration.isStale()) {
+            throw new TaskCancelledException();
+        }
         if (ApplicationHook.isOffline()) {
             return null;
         }
@@ -174,12 +180,14 @@ public class NewRpcBridge implements RpcBridge {
                             Thread.sleep(600 + RandomUtil.delay());
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     } else if (retryInterval > 0) {
                         try {
                             Thread.sleep(retryInterval);
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     }
                 } catch (Throwable t) {
@@ -190,12 +198,14 @@ public class NewRpcBridge implements RpcBridge {
                             Thread.sleep(600 + RandomUtil.delay());
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     } else if (retryInterval > 0) {
                         try {
                             Thread.sleep(retryInterval);
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     }
                 }
@@ -286,12 +296,14 @@ public class NewRpcBridge implements RpcBridge {
                             Thread.sleep(600 + RandomUtil.delay());
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     } else if (retryInterval > 0) {
                         try {
                             Thread.sleep(retryInterval);
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     }
                 } catch (Throwable t) {
@@ -302,12 +314,14 @@ public class NewRpcBridge implements RpcBridge {
                             Thread.sleep(600 + RandomUtil.delay());
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     } else if (retryInterval > 0) {
                         try {
                             Thread.sleep(retryInterval);
                         } catch (InterruptedException e) {
                             Log.printStackTrace(e);
+                            Thread.currentThread().interrupt();
                         }
                     }
                 }

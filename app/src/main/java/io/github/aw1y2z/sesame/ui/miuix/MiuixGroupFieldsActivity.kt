@@ -89,17 +89,16 @@ class MiuixGroupFieldsActivity : MiuixBaseActivity() {
 
     /**
      * 统一落盘入口：本页字段变更只写内存，只有真正退出时才调用这里写一次磁盘。
-     * 先用 isModify() 判断是否有改动（无改动直接短路，不写盘、不提示），
+     * 先用 hasFieldChanges() 判断是否有字段级改动（无改动直接短路，不写盘、不提示），
      * 确认有改动后走 force=true，避免 ConfigV2.save() 内部再做一次全量序列化比较。
      */
     fun save() {
         // ⚠️ 这里不要写 `if (userId == null) return`。
         // 「默认账号」的 userId 本来就是 null，配置读写会退回默认配置文件
         // （ConfigV2.isModify/save 内部已做了 isEmpty(userId) → 默认文件的处理）。
-        // 判空直接 return 会让默认账号下本页的改动既不落盘、也不给任何提示：
-        // 用户改完开关返回，界面看着像保存了，实际磁盘没写，
-        // 只有再退回二级配置页时才顺带落盘一次——表现为「提示晚一步」。
+        // 判空直接 return 会让默认账号下本页的改动既不落盘、也不给任何提示。
         if (!ConfigV2.isModify(userId)) return
+        if (!ConfigV2.hasFieldChanges()) return
         if (ConfigV2.save(userId, true)) {
             ToastUtil.show(this, "保存成功！")
             sendRestartIfNeeded()

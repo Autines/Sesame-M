@@ -215,4 +215,26 @@ public class ModelField<T> implements Serializable {
         value = defaultValue;
     }
 
+    /**
+     * 加载后按本字段自身的刻度语义夹一遍越界值，默认不处理。
+     * <p>不能放进 {@link #setValue}：那是 Jackson 的入口，带单位换算的子类会被按错误刻度截断。
+     */
+    public void clampValue() {
+    }
+
+    @JsonIgnore
+    public View getView(Context context) {
+        TextView btn = new TextView(context);
+        btn.setText(getName());
+        btn.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        btn.setTextColor(ContextCompat.getColor(context, R.color.button));
+        btn.setBackground(ContextCompat.getDrawable(context, R.drawable.button));
+        btn.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        btn.setMinHeight(150);
+        btn.setMaxHeight(180);
+        btn.setPaddingRelative(40, 0, 40, 0);
+        btn.setAllCaps(false);
+        btn.setOnClickListener(v -> ToastUtil.show(context, "无配置项"));
+        return btn;
+    }
 }
