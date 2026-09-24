@@ -151,6 +151,11 @@ public class ConfigV2 {
         return true;
     }
 
+    /** 本进程是否有相对上次同步的字段级改动（供 UI 判断是否需要落盘/提示，不受磁盘未知键影响） */
+    public static synchronized boolean hasFieldChanges() {
+        return !valueBaseline.isEmpty() && !collectChangedFields().isEmpty();
+    }
+
     public static synchronized Boolean save(String userId, Boolean force) {
         // 本进程没有任何字段级改动时直接返回：写盘只会把磁盘上本进程不认识的键整份覆盖丢失
         if (!valueBaseline.isEmpty() && collectChangedFields().isEmpty()) {

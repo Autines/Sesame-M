@@ -104,11 +104,11 @@ class MiuixSettingsActivity : MiuixBaseActivity() {
 
     /**
      * 统一落盘入口（二级/三级/四级同款实现）：
-     * 先用 isModify() 短路「无改动」的情况，确认有改动后走 force=true，
+     * 先用 hasFieldChanges() 短路「无字段级改动」的情况，确认有改动后走 force=true，
      * 避免 ConfigV2.save() 内部再重复做一次全量序列化比较。
      */
     fun save() {
-        if (!ConfigV2.isModify(userId)) return
+        if (!ConfigV2.hasFieldChanges()) return
         if (ConfigV2.save(userId, true)) {
             ToastUtil.show(this, "保存成功！")
             sendRestartIfNeeded()
