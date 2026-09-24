@@ -231,9 +231,10 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                 ToastUtil.show(context, "已导入当前账号配置")
                 activity.recreate()
             }
-        } catch (e: Exception) {
-            Log.printStackTrace(e)
-            ToastUtil.show(context, "导入失败！")
+            catch (e: Exception) {
+                Log.printStackTrace(e)
+                ToastUtil.show(context, "导入失败！")
+            }
         }
     }
 
