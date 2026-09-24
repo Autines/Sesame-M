@@ -207,13 +207,9 @@ public class TokenConfig {
             }
         } catch (Throwable t) {
             Log.printStackTrace(TAG, t);
-            Log.i(TAG, "重置Token配置");
-            try {
-                unload();
-                FileUtil.write2File(toSaveStr(), tokenConfigFile);
-            } catch (Exception e) {
-                Log.printStackTrace(TAG, t);
-            }
+            // 解析失败只回落默认值、绝不写盘：瞬时 IO 抖动或半份文件不该把 Token 缓存整份重置
+            Log.i(TAG, "解析Token配置失败，本次使用默认值（不写盘）");
+            unload();
         }
         INSTANCE.setInit(true);
         return INSTANCE;

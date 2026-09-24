@@ -152,15 +152,12 @@ public class ConfigV2 {
     }
 
     public static synchronized Boolean save(String userId, Boolean force) {
-        if (!force) {
-            // 本进程没有相对「上次同步」的改动时直接返回：此时的 INSTANCE 只是"比磁盘旧"，
-            // 落盘只会把别的进程刚写入的配置覆盖回去
-            if (!valueBaseline.isEmpty() && collectChangedFields().isEmpty()) {
-                return true;
-            }
-            if (!isModify(userId)) {
-                return true;
-            }
+        // 本进程没有任何字段级改动时直接返回：写盘只会把磁盘上本进程不认识的键整份覆盖丢失
+        if (!valueBaseline.isEmpty() && collectChangedFields().isEmpty()) {
+            return true;
+        }
+        if (!force && !isModify(userId)) {
+            return true;
         }
         // 磁盘在本进程上次同步之后被别的进程改过时，先把磁盘内容合并进来再落盘
         if (mergeDiskChanges(userId)) {
@@ -168,6 +165,8 @@ public class ConfigV2 {
             return true;
         }
         String json = INSTANCE.toSaveStr();
+        // 备份必须发生在写盘之前：写坏后备份仍是写之前的好数据
+        FileUtil.backupConfigV2WithRolling(StringUtil.isEmpty(userId) ? "默认" : userId);
         boolean success;
         if (StringUtil.isEmpty(userId)) {
             userId = "默认";
@@ -176,11 +175,9 @@ public class ConfigV2 {
             success = FileUtil.setConfigV2File(userId, json);
         }
         
-        // ========== 新增：保存成功后触发滚动备份 ==========
         if (success) {
             lastSyncedText = json;
             captureBaseline();
-            FileUtil.backupConfigV2WithRolling(userId);
         }
         
         Log.record("保存配置: " + userId);

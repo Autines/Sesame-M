@@ -54,6 +54,8 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectOneModelField
 import io.github.aw1y2z.sesame.entity.IdAndName
 import io.github.aw1y2z.sesame.entity.KVNode
+import io.github.aw1y2z.sesame.util.FileUtil
+import io.github.aw1y2z.sesame.util.JsonUtil
 import io.github.aw1y2z.sesame.util.Log
 import io.github.aw1y2z.sesame.util.StringUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
@@ -148,9 +150,13 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
         if (uri != null) {
             val file = ConfigPreload.getConfigFile(userId)
             try {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    file.outputStream().use { input.copyTo(it) }
-                }
+                val text = context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }
+                // 空内容或非法 JSON 一律拒绝，避免把半份/错误内容写进配置
+                if (text.isNullOrBlank()) throw IllegalArgumentException("empty config")
+                JsonUtil.toNode(text)
+                // 覆盖前先备份现有配置：导入内容有问题时还能回退
+                FileUtil.backupConfigV2WithRolling(if (StringUtil.isEmpty(userId)) "默认" else userId!!)
+                if (!FileUtil.write2File(text, file)) throw IllegalStateException("write config failed")
                 if (!StringUtil.isEmpty(userId)) {
                     try {
                         val intent = Intent("com.eg.android.AlipayGphone.sesame.restart")
