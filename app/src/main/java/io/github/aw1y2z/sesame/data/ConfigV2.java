@@ -248,6 +248,7 @@ public class ConfigV2 {
                 }
             }
         }
+        clampAllFields();
         INSTANCE.setInit(true);
         captureBaseline();
         // 记下本次同步到的文本，供 save() 判断磁盘是否被别的进程改过
@@ -261,6 +262,20 @@ public class ConfigV2 {
             for (ModelField<?> modelField : modelFields.values()) {
                 if (modelField != null) {
                     modelField.reset();
+                }
+            }
+        }
+    }
+
+    /**
+     * 按各字段自身的刻度语义夹一遍越界值。Jackson 只认 value 属性、直接写字段，
+     * 因此校验不能放在 setValue 里（带单位换算的子类会被按错误刻度截断）。
+     */
+    private static void clampAllFields() {
+        for (ModelFields modelFields : INSTANCE.modelFieldsMap.values()) {
+            for (ModelField<?> modelField : modelFields.values()) {
+                if (modelField != null) {
+                    modelField.clampValue();
                 }
             }
         }
@@ -380,6 +395,7 @@ public class ConfigV2 {
             Map<String, Object> changed = collectChangedFields();
             // 先重载，让本进程也看到别的进程刚写入的内容
             JsonUtil.copyMapper().readerForUpdating(INSTANCE).readValue(disk);
+            clampAllFields();
             if (changed.isEmpty()) {
                 // 本进程没有改动：磁盘上的才是最新状态，直接采纳，
                 // 不能拿本进程的旧快照写回去（页面的 save() 只按 isModify 判断，

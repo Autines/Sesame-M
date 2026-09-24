@@ -65,27 +65,28 @@ public class IntegerModelField extends ModelField<Integer> {
                 newValue = defaultValue;
             }
         }
-        if (minLimit != null) {
-            newValue = Math.max(minLimit, newValue);
-        }
-        if (maxLimit != null) {
-            newValue = Math.min(maxLimit, newValue);
-        }
-        this.value = newValue;
+        this.value = clampLimit(newValue);
     }
 
     @Override
-    public void setValue(Integer value) {
-        // 加载（Jackson）与 UI 都经此处：统一夹紧到 [minLimit, maxLimit]，避免磁盘越界值进内存
+    public void clampValue() {
         if (value != null) {
-            if (minLimit != null && value < minLimit) {
-                value = minLimit;
-            }
-            if (maxLimit != null && value > maxLimit) {
-                value = maxLimit;
-            }
+            value = clampLimit(value);
         }
-        super.setValue(value);
+    }
+
+    /** 按 [minLimit, maxLimit] 夹紧（null 表示该侧不限） */
+    protected Integer clampLimit(Integer v) {
+        if (v == null) {
+            return null;
+        }
+        if (minLimit != null && v < minLimit) {
+            v = minLimit;
+        }
+        if (maxLimit != null && v > maxLimit) {
+            v = maxLimit;
+        }
+        return v;
     }
 
     @Override
@@ -106,6 +107,15 @@ public class IntegerModelField extends ModelField<Integer> {
         @Override
         public String getType() {
             return "MULTIPLY_INTEGER";
+        }
+
+        @Override
+        public void clampValue() {
+            if (value == null || multiple == null || multiple == 0) {
+                return;
+            }
+            // min/maxLimit 是配置域（分钟）刻度：先换回分钟再夹，否则 50 分钟会被砍成 720 毫秒
+            value = clampLimit(value / multiple) * multiple;
         }
 
         @Override
