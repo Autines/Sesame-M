@@ -151,10 +151,12 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
             val file = ConfigPreload.getConfigFile(userId)
             try {
                 val text = context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }
-                // 空内容或非法 JSON 一律拒绝，避免把半份/错误内容写进配置
+                // 必须是合法的 config_v2（顶层含 modelFieldsMap）：只验 JSON 语法挡不住误选其它 JSON
                 if (text.isNullOrBlank()) throw IllegalArgumentException("empty config")
-                JsonUtil.toNode(text)
-                // 覆盖前先备份现有配置：导入内容有问题时还能回退
+                val node = JsonUtil.toNode(text) as? com.fasterxml.jackson.databind.JsonNode
+                if (node?.has("modelFieldsMap") != true) throw IllegalArgumentException("not a config_v2 json")
+                // 覆盖前先备份现有配置：即时快照与每日滚动备份各自独立
+                FileUtil.backupConfigV2BeforeWrite(userId ?: "")
                 FileUtil.backupConfigV2WithRolling(if (StringUtil.isEmpty(userId)) "默认" else userId!!)
                 if (!FileUtil.write2File(text, file)) throw IllegalStateException("write config failed")
                 if (!StringUtil.isEmpty(userId)) {

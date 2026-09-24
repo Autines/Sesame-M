@@ -438,9 +438,10 @@ public class AntOrchard extends ModelTask {
      */
     private void orchardSpreadManure() {
         try {
-            // 轮次上限兜底：正常靠 !hasSpread 退出，异常时避免无界循环
-            final int MAX_SPREAD_ROUND = 50;
-            for (int round = 0; round < MAX_SPREAD_ROUND; round++) {
+            // 轮次上限兜底：每轮最多施肥一次，按「上限/批量步长 + 余量」估算并留足两场景的量
+            final int MAX_SPREAD_ROUND = (MAIN_SPREAD_DAILY_LIMIT / BATCH_SPREAD_SIZE + 10) * 8;
+            int round = 0;
+            for (; round < MAX_SPREAD_ROUND; round++) {
                 boolean hasSpread = false;
                 boolean anySceneQualified = false;
                 // 遍历可用场景进行施肥
@@ -479,6 +480,9 @@ public class AntOrchard extends ModelTask {
                 if (!hasSpread) {
                     break;
                 }
+            }
+            if (round >= MAX_SPREAD_ROUND) {
+                Log.record("农场施肥⏭️已达单轮循环上限[" + MAX_SPREAD_ROUND + "]，本轮停止");
             }
         } catch (Throwable t) {
             Log.err(TAG, "orchardSpreadManure err:", t);

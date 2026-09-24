@@ -442,6 +442,14 @@ public class Status {
         }
     }
 
+    /** 显式清零当日浇水次数：累加语义下不能用「加 0」代替重置 */
+    public static synchronized void resetWaterFriendToday(String id, String taskUid) {
+        if (taskUid.equals(UserIdMap.getCurrentUid())) {
+            INSTANCE.waterFriendLogList.put(id, 0);
+            save();
+        }
+    }
+
     public static synchronized boolean isCompetitionDonated(String roundId) {
         return roundId != null && roundId.equals(INSTANCE.competitionDonatedRound);
     }

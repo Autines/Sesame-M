@@ -161,6 +161,10 @@ public enum GameTask {
         int totalNeeded = eggCount * (this.requestsPerEgg + 1); // 多1次确保网络请求不会错误
         final String reportUid = UserIdMap.getCurrentUid();
         new Thread(() -> {
+            if (!java.util.Objects.equals(reportUid, UserIdMap.getCurrentUid())) {
+                Log.record("任务流程🛑账号已切换，停止上报");
+                return;
+            }
             this.cachedToken = login();
             if (this.cachedToken == null || this.cachedToken.isEmpty()) {
                  Log.error("无法获取⚠️有效的Token，放弃上报任务");

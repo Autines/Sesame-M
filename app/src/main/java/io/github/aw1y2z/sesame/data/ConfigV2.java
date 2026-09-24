@@ -165,7 +165,8 @@ public class ConfigV2 {
             return true;
         }
         String json = INSTANCE.toSaveStr();
-        // 备份必须发生在写盘之前：写坏后备份仍是写之前的好数据
+        // 写盘前固定留一份上一版（覆盖式即时快照），与「每日一次」的滚动备份解耦
+        FileUtil.backupConfigV2BeforeWrite(userId);
         FileUtil.backupConfigV2WithRolling(StringUtil.isEmpty(userId) ? "默认" : userId);
         boolean success;
         if (StringUtil.isEmpty(userId)) {
@@ -295,6 +296,10 @@ public class ConfigV2 {
      * 进而把旧值压回、覆盖对方进程的新值。
      */
     private static String stableValueText(Object value) {
+        if (value instanceof List) {
+            // List 的顺序就是值本身，不能排序
+            return String.valueOf(value);
+        }
         if (value instanceof java.util.Collection) {
             java.util.List<String> parts = new java.util.ArrayList<>();
             for (Object item : (java.util.Collection<?>) value) {

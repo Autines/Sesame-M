@@ -60,14 +60,14 @@ public abstract class BaseTask {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             childTaskMap.compute(childId, (key, value) -> {
                 if (value != null) {
-                    ThreadUtil.shutdownAndWait(value.getThread(), -1, TimeUnit.SECONDS);
+                    ThreadUtil.shutdownAndWait(value.getThread(), 5, TimeUnit.SECONDS);
                 }
                 return null;
             });
         } else {
             BaseTask oldTask = childTaskMap.get(childId);
             if (oldTask != null) {
-                ThreadUtil.shutdownAndWait(oldTask.getThread(), -1, TimeUnit.SECONDS);
+                ThreadUtil.shutdownAndWait(oldTask.getThread(), 5, TimeUnit.SECONDS);
             }
             childTaskMap.remove(childId);
         }

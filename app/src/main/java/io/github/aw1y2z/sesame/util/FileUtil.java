@@ -158,6 +158,25 @@ public class FileUtil {
     }
     
     /**
+     * 写盘前的即时快照（覆盖式，不受「每日一次」限制）：与 backupConfigV2WithRolling 的
+     * 每日滚动备份解耦，保证每次覆盖配置前都留有一份上一版，写坏时可回退。
+     */
+    public static void backupConfigV2BeforeWrite(String userId) {
+        try {
+            File originalFile = StringUtil.isEmpty(userId) ? getDefaultConfigV2File() : getConfigV2File(userId);
+            if (!originalFile.exists()) {
+                return;
+            }
+            File prevFile = new File(originalFile.getParentFile(), "config_v2.prev.json");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Files.copy(originalFile.toPath(), prevFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception e) {
+            Log.printStackTrace(FileUtil.class.getSimpleName(), e);
+        }
+    }
+
+    /**
      * 执行用户config_v2的n天滚动备份（每日一次，按A→B→C顺序循环）
      *
      * @param userId 用户ID（空则为默认用户）
