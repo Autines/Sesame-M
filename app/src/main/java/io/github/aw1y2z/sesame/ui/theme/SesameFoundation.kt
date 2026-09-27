@@ -137,7 +137,7 @@ internal val M3ChildLeadingIconGap = 16.dp
 internal const val M3ChildIconAlpha = 0.75f
 
 /** MIUIX 下子项的外层缩进（库组件 ArrowPreference 没有缩进参数，只能从外层让位） */
-internal val MiuixChildRowIndent = 24.dp
+internal val MiuixChildRowIndent = 16.dp
 
 /** 行尾开关与箭头之间的间距（两者并存时用，让开关不贴住箭头） */
 internal val M3SwitchArrowGap = 4.dp
@@ -172,6 +172,22 @@ internal val M3NavIndicatorHeight = 32.dp
 
 /** MD3 图标与标签之间的间距（规范值 4dp） */
 internal val M3NavIconLabelGap = 4.dp
+
+/**
+ * 紧凑 dock 专用度量（与上面「底部导航」的 M3 规范值**分开**，不要互相替换）。
+ *
+ * dock 是自定义的紧凑形态、行高只有 56dp：若沿用 M3 的 32dp 指示器 + 4dp 间距，
+ * 图标（24dp）在该框里上下各空 4dp，再加 4dp 间距 —— 图标与文字之间实际会空出约 8dp，
+ * 在这么矮的一条胶囊里显得"图标和字分家了"。
+ *
+ * 现在：指示器 = 图标高度（上下不留白）+ 间距 **0dp** → 图标与文字直接贴合。
+ * ⚠️ 光把间距设 0 还不够：`labelMedium` 的行高比字号大，文字**上方**还留着排版自带的空白，
+ * 所以 CompactNavBar 里那行 label 显式把 `lineHeight` 设成等于 `fontSize`，两边一起压才是真的零间距。
+ *
+ * 指示器在紧凑模式下只作定位框、不带底色，所以收矮不影响选中态（选中椭圆画在整列上）。
+ */
+internal val CompactNavIndicatorHeight = 24.dp
+internal val CompactNavIconLabelGap = 0.dp
 
 /* ───────────────────────── 文本与标题 ───────────────────────── */
 

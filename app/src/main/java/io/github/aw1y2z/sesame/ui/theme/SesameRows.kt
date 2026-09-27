@@ -48,6 +48,7 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
@@ -266,20 +267,30 @@ fun SesameSelectRow(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) { expanded = true }
-                    .padding(vertical = 14.dp),
+                    // 内边距与库行组件**完全同值**：BasicComponentDefaults.InsideMargin = PaddingValues(16.dp)。
+                    // 外层 SesameCardGroup 已给 16dp，库的行组件自身又带一份 16dp；本行原本只有外层那一份，
+                    // 于是同一张卡里只有本行少缩进一档（实测差 44px ≈ 16dp）、行高也矮一截。
+                    .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    // ⚠️ 字号/字重必须取库的排版 token，不要硬写 sp。
+                    // 库的行组件（MiuixSwitchPreference / MiuixArrowPreference）都建在
+                    // BasicComponent 上，它的排版是【固定】的：
+                    //   标题 = textStyles.headline1 + FontWeight.Medium；摘要 = textStyles.body2，
+                    //   且标题与摘要之间【不再加 Spacer】（直接相邻）。
+                    // 硬写 16sp/13sp 会得到"比同卡片其它行细一档、小一号"的字，
+                    // 一张卡里两种字体观感，看起来就是"不搭"。
                     MiuixText(
                         text = title,
-                        fontSize = 16.sp,
+                        fontSize = MiuixTheme.textStyles.headline1.fontSize,
+                        fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground
                     )
                     if (!summary.isNullOrBlank()) {
-                        Spacer(Modifier.height(2.dp))
                         MiuixText(
                             text = summary,
-                            fontSize = 13.sp,
+                            fontSize = MiuixTheme.textStyles.body2.fontSize,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                         )
                     }
@@ -287,7 +298,7 @@ fun SesameSelectRow(
                 Spacer(Modifier.width(12.dp))
                 MiuixText(
                     text = selectedLabel,
-                    fontSize = 14.sp,
+                    fontSize = MiuixTheme.textStyles.body2.fontSize,
                     color = MiuixTheme.colorScheme.primary
                 )
             }
@@ -573,13 +584,19 @@ fun SesameSwitchRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(enabled = enabled, onClick = onClick)
-                .padding(vertical = 8.dp),
+                // 与库行组件**同值**：BasicComponentDefaults.InsideMargin = PaddingValues(16.dp)。
+                // 原来只有垂直 8dp：日志页同一张卡里，这些「整行可点」的开关行会比
+                // 库行（抓包记录等）少缩进 16dp、行高也矮一截，看起来不是一套。
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             MiuixText(
                 text = title,
                 modifier = Modifier.weight(1f),
-                fontSize = 16.sp,
+                // 字号/字重同样取库的排版 token（标题 = headline1 + Medium）；
+                // 硬写 16sp 且不带字重，字就比库行细一档、小一号。
+                fontSize = MiuixTheme.textStyles.headline1.fontSize,
+                fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.onBackground
             )
             MiuixSwitch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)

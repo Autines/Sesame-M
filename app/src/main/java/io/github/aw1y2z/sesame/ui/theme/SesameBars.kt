@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -90,6 +91,15 @@ fun SesameNavBar(
     transparent: Boolean = false,
     compact: Boolean = false
 ) {
+    // 紧凑模式 = 悬浮玻璃 dock 的内容层：**两套皮肤共用同一份渲染**。
+    // 不能让 Miuix 走库的 NavigationBar —— 它自带不透明容器和一套自己的度量，
+    // 会把外面的玻璃整个盖住（实测：玻璃面看不到任何模糊/折射，只剩一条通栏白底栏），
+    // 高度/间距/选中态也都与 M3 分支对不上。
+    // 玻璃才是这套观感的主角，内容层的容器必须让位。
+    if (compact) {
+        CompactNavBar(items = items, selected = selected, onSelect = onSelect)
+        return
+    }
     when (LocalUiStyle.current) {
         UiStyle.MIUIX -> MiuixNavigationBar {
             items.forEachIndexed { index, item ->
@@ -113,23 +123,11 @@ fun SesameNavBar(
                 tonalElevation = 0.dp
             ) {
                 Row(
-                    modifier = if (compact) {
-                        // 紧凑胶囊：宽度包住内容、行高压到 56dp（参考 Legado 底栏的矮胖比例）；
-                        // 不留系统导航栏内边距，间距交给外层玻璃 dock（drawBackdrop 那层）控制
-                        Modifier.height(56.dp)
-                    } else {
-                        Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .height(M3NavBarHeight)
-                    },
-                    // 紧凑模式：相邻 tab 之间只留 1 像素（改用 Arrangement.spacedBy，不再用 item
-                    // 左右内边距凑间距，否则两侧各一份、实际间距是内边距的两倍）。
-                    horizontalArrangement = if (compact) {
-                        Arrangement.spacedBy(with(LocalDensity.current) { 1.toDp() })
-                    } else {
-                        Arrangement.Start
-                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .height(M3NavBarHeight),
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     items.forEachIndexed { index, item ->
@@ -140,20 +138,8 @@ fun SesameNavBar(
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         }
-                        val itemModifier = if (compact) {
-                            // clickable 放在最外层，触摸热区 = 整个胶囊；
-                            // ⚠️ 这里【不再】留左右内边距：相邻 tab 的间距改由 Row 的
-                            // Arrangement.spacedBy(1px) 统一提供，避免"两侧各算一份"把间距翻倍。
-                            Modifier
-                                .fillMaxHeight()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    role = Role.Tab,
-                                    onClick = { onSelect(index) }
-                                )
-                        } else {
-                            Modifier
+                        Column(
+                            modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .clickable(
@@ -161,26 +147,7 @@ fun SesameNavBar(
                                     indication = null,
                                     role = Role.Tab,
                                     onClick = { onSelect(index) }
-                                )
-                        }
-                        Column(
-                            modifier = itemModifier.then(
-                                // 紧凑模式：选中高亮包住「图标+底部文字」整体（参考 bottom nav 选中态）。
-                                // ⚠️ 内边距必须【恒定】（未选中也留同样的 padding，只是底色透明），
-                                // 否则只有选中项变宽 → 整排 item 重新分配位置，切页时按钮会"挪一下"。
-                                if (compact) {
-                                    Modifier
-                                        .background(
-                                            // 浅灰中性椭圆（参考 Legado 选中态），不用 secondaryContainer（蓝）
-                                            if (isSelected) MaterialTheme.colorScheme.surfaceVariant
-                                            else Color.Transparent,
-                                            RoundedCornerShape(50)
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                                } else {
-                                    Modifier
-                                }
-                            ),
+                                ),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
@@ -190,13 +157,10 @@ fun SesameNavBar(
                             Box(
                                 modifier = Modifier
                                     // 紧凑模式指示器收窄为 48×32，让胶囊整体更贴近参考 dock 的紧凑比例
-                                    .size(
-                                        width = if (compact) 44.dp else M3NavIndicatorWidth,
-                                        height = M3NavIndicatorHeight
-                                    )
+                                    .size(width = M3NavIndicatorWidth, height = M3NavIndicatorHeight)
                                     .clip(RoundedCornerShape(M3NavIndicatorHeight / 2))
                                     .background(
-                                        if (isSelected && !compact) MaterialTheme.colorScheme.secondaryContainer
+                                        if (isSelected) MaterialTheme.colorScheme.secondaryContainer
                                         else Color.Transparent
                                     ),
                                 contentAlignment = Alignment.Center
@@ -218,6 +182,87 @@ fun SesameNavBar(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 悬浮玻璃 dock 的内容层：紧凑胶囊排布（[SesameNavBar] 的 `compact = true` 专用）。
+ *
+ * **两套皮肤共用同一份渲染**。它是一个**自定义形态**（既不是 Miuix 的底栏，也不是 M3 的
+ * NavigationBar），所以刻意不走任何库组件：
+ * - 库组件都自带不透明容器，会把外面的玻璃整个盖住（Miuix 尤其明显 —— 实测玻璃看不出
+ *   任何模糊/折射，屏幕上只是一条通栏白底栏）；
+ * - 颜色一律取 `sesame*` 语义色，所以换肤时自动跟随，不需要为两套皮肤各写一遍。
+ *
+ * 度量（与 M3 分支的历史值一致，保证玻璃开关前后观感不跳）：
+ * 行高 56dp / 相邻 tab 只留 1px / 图标指示器 44×32 / 选中态用浅灰椭圆包住「图标 + 文字」。
+ */
+@Composable
+private fun CompactNavBar(
+    items: List<SesameNavItem>,
+    selected: Int,
+    onSelect: (Int) -> Unit
+) {
+    val selectedContent = sesameOnSurface()
+    val idleContent = sesameOnSurfaceVariant()
+    Row(
+        // ⚠️ 不加 fillMaxWidth：胶囊宽度只包住内容（参考 dock 的紧凑比例）
+        modifier = Modifier.height(56.dp),
+        // 相邻 tab 之间只留 1 像素。用 Row 的 spacing 统一提供，**不要**改成 item 左右内边距，
+        // 否则两侧各算一份、实际间距是内边距的两倍。
+        horizontalArrangement = Arrangement.spacedBy(with(LocalDensity.current) { 1.toDp() }),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items.forEachIndexed { index, item ->
+            val isSelected = selected == index
+            val contentColor = if (isSelected) selectedContent else idleContent
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Tab,
+                        onClick = { onSelect(index) }
+                    )
+                    // 选中态：浅灰中性椭圆（不用 primary/secondaryContainer 的彩底，
+                    // 避免在玻璃上压出一块彩色），底色由文字色 8% 叠出，明暗两套主题自动成立。
+                    .background(
+                        if (isSelected) selectedContent.copy(alpha = 0.08f) else Color.Transparent,
+                        RoundedCornerShape(50)
+                    )
+                    // ⚠️ 内边距必须【恒定】——未选中也留同样的 padding，只是底色透明。
+                    // 否则只有选中项变宽 → 整排 item 重新分配位置，切页时按钮会"挪一下"。
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 44.dp, height = CompactNavIndicatorHeight)
+                        .clip(RoundedCornerShape(CompactNavIndicatorHeight / 2)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        tint = contentColor,
+                        modifier = Modifier.size(M3NavBarIconSize)
+                    )
+                }
+                Spacer(Modifier.height(CompactNavIconLabelGap))
+                Text(
+                    text = item.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    // 行高压到等于字号：labelMedium 的 lineHeight 比 fontSize 大，
+                    // 文字**上方**会因此多出一截空白 —— 只缩 Spacer 的话这截一直存在，
+                    // 看起来就是"间距压不下去"。压平行高后文字才真正贴住图标。
+                    lineHeight = MaterialTheme.typography.labelMedium.fontSize,
+                    color = contentColor,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -479,6 +524,77 @@ fun SesameTopBar(
                     }
                 }
             }
+        }
+    }
+}
+
+/* ───────────────────────── 缺口状态提示条 ───────────────────────── */
+
+/**
+ * 「缺少文件权限」提示条。
+ *
+ * **为什么需要它**：模块的配置与日志写在**宿主包名的 media 目录**
+ * （`/sdcard/Android/media/com.eg.android.AlipayGphone/sesame-M/`），Android 11+ 访问该目录必须持有
+ * 「所有文件访问权限」。而系统在**卸载重装后会清空这个权限、并且不会自动再询问一次** ——
+ * 用户看到的现象却是「设置改了不保存、界面还回弹」，完全无从判断原因。
+ * 所以在所有一级页的顶栏常驻一条提示，把「当前状态 + 后果 + 一键修复」放在首屏第一眼。
+ *
+ * **视觉**：走 Material 的 error-container 套路（淡色底 + 同色系图标与强调文字），
+ * 而**不用实色红底** —— 权限缺失是"需要处理的状态"，不是需要立刻停止操作的报错，
+ * 实色红会把整屏注意力都吃掉。淡底由 [sesameError] 取 10% alpha 得到，明暗两套主题自动成立。
+ *
+ * ⚠️ 本组件属于**顶栏区域**（要挡住从下方滚上来的内容），因此自带**不透明**底色；
+ * 调用方不要再把它塞进半透明容器。
+ *
+ * @param onClick 点击整条时执行的动作（通常是跳系统设置页申请权限）。
+ */
+@Composable
+fun SesamePermissionNotice(onClick: () -> Unit) {
+    val accent = sesameError()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 与顶栏同色不透明底：本组件在 topBar 区域，必须把下方滚上来的内容挡住
+            .background(sesameSurface())
+            // 左右与顶栏的水平内边距对齐（16dp），保证和标题落在同一条左缘
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(sesameCardShape())
+                .background(accent.copy(alpha = 0.10f))
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.WarningAmber,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "缺少文件权限",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = accent
+                )
+                Text(
+                    text = "设置与日志无法保存，点此开启",
+                    fontSize = 12.sp,
+                    color = sesameOnSurfaceVariant()
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "去开启",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = accent
+            )
         }
     }
 }

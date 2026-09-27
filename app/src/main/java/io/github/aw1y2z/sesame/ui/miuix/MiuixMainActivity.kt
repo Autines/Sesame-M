@@ -54,6 +54,7 @@ import io.github.aw1y2z.sesame.data.ViewAppInfo
 import io.github.aw1y2z.sesame.ui.theme.SesameNavBar
 import io.github.aw1y2z.sesame.ui.theme.SesameNavItem
 import io.github.aw1y2z.sesame.ui.theme.SesamePageTitleBar
+import io.github.aw1y2z.sesame.ui.theme.SesamePermissionNotice
 import io.github.aw1y2z.sesame.ui.theme.SesameScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameGlassDock
 import io.github.aw1y2z.sesame.util.FileUtil
@@ -121,6 +122,14 @@ class MiuixMainActivity : MiuixBaseActivity() {
         private const val MAX_RUN_TYPE_PROBE_TIMES = 5
 
         /**
+         * 自动权限引导的「已提示过」标记。
+         * 存**模块私有** SharedPreferences（`/data/data/<pkg>/shared_prefs`）——
+         * 它不需要外部存储权限，所以在还没拿到文件权限时也能正常读写。
+         */
+        private const val PERMISSION_PREFS = "sesame_ui"
+        private const val KEY_PERMISSION_PROMPTED = "permission_prompted"
+
+        /**
          * 设备显示名:优先读市场名(如 Xiaomi 13)。
          * 小米/红米及多数云手机、模拟器的 ro.product.model 只是内部型号编号(如 2211133C),
          * 多设备会显示相同,须用 ro.product.marketname 才有人类可读名称。
@@ -172,6 +181,9 @@ class MiuixMainActivity : MiuixBaseActivity() {
         // 已有注册表（例如已由 MiuixSettingsActivity 加载过真实配置）一律原样保留。
         // ⚠️ 不要改成 initAllModel()——那会重建整张注册表、把已加载的配置值清成默认值。
         Model.initAllModelIfNeeded()
+        // 首帧就取真实权限值：hasPermission 默认 false，不预置会让顶栏的
+        // 「缺少文件权限」提示条在第一帧闪一下（有权限的机器上尤其明显）
+        hasPermission = PermissionUtil.checkFilePermissions(this)
         // runType 被模块置为 MODEL（onModuleLoaded）时立即刷新界面，无需手动加载配置
         ViewAppInfo.setRunTypeListener {
             runOnUiThread {
@@ -206,7 +218,7 @@ class MiuixMainActivity : MiuixBaseActivity() {
         checkPermissionAndRefresh()
     }
 
-    /** 检查文件权限，若已授权则刷新统计；同时处理首次请求权限的场景 */
+    /** 检查文件权限，若已授权则刷新统计；无权限时负责（仅一次）自动引导 */
     private fun checkPermissionAndRefresh() {
         if (hasRequestedPermission) {
             hasRequestedPermission = false
@@ -214,11 +226,36 @@ class MiuixMainActivity : MiuixBaseActivity() {
                 hasPermission = true
                 refreshStatistics()
             }
-        } else if (!hasPermission && PermissionUtil.checkFilePermissions(this)) {
+            return
+        }
+        if (!hasPermission && PermissionUtil.checkFilePermissions(this)) {
             // 首次进入或权限刚被授予
             hasPermission = true
             refreshStatistics()
+            return
         }
+        autoPromptPermissionOnce()
+    }
+
+    /**
+     * 装机后自动引导一次「所有文件访问权限」。
+     *
+     * **为什么需要**：配置和日志写在**宿主包名的 media 目录**
+     * （`/sdcard/Android/media/<宿主包>/sesame-M/`），Android 11+ 访问它必须持有该权限；
+     * 而**卸载重装会被系统清空、且系统不会自动再询问**。用户看到的现象只是「设置改了不保存」，
+     * 只能靠猜 —— 所以在装机后第一次打开时主动跳一次系统设置页。
+     *
+     * **只跳一次**：标记存在模块私有 SharedPreferences（不需要外部存储权限），之后不再自动跳。
+     * 否则每次打开都被弹走，只想先看看界面的用户会很烦；后续靠顶部的常驻提示条，用户主动点才跳。
+     */
+    private fun autoPromptPermissionOnce() {
+        val prefs = getSharedPreferences(PERMISSION_PREFS, MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_PERMISSION_PROMPTED, false)) {
+            return
+        }
+        prefs.edit().putBoolean(KEY_PERMISSION_PROMPTED, true).apply()
+        // 稍等再跳：onResume 紧跟 onCreate，立刻 startActivity 会和启动动画打架、闪一下
+        handler.postDelayed({ PermissionUtil.checkOrRequestFilePermissions(this) }, 450)
     }
 
     override fun onRequestPermissionsResult(
@@ -478,11 +515,21 @@ fun MainScreen(activity: MiuixMainActivity) {
 
     SesameScaffold(
         topBar = {
-            SesamePageTitleBar(
-                // 标题与底部导航项同源（MAIN_TABS），不再各维护一份、靠顺序隐式对齐
-                title = MAIN_TABS.getOrElse(selectedTab) { MAIN_TABS.first() }.title,
-                scrolled = titleBarScrolled
-            )
+            Column {
+                SesamePageTitleBar(
+                    // 标题与底部导航项同源（MAIN_TABS），不再各维护一份、靠顺序隐式对齐
+                    title = MAIN_TABS.getOrElse(selectedTab) { MAIN_TABS.first() }.title,
+                    scrolled = titleBarScrolled
+                )
+                // 没拿到存储权限时，任何设置都存不下来（界面还会回弹）——这是**功能不可用**级别的状态。
+                // 只在首页提示：它属于「首次装机出现一次、处理完就消失」的状态，
+                // 铺到每个 Tab 会变成噪音（四个页面各顶一条红条，比问题本身还显眼）。
+                if (!activity.hasPermission && selectedTab == 0) {
+                    SesamePermissionNotice(
+                        onClick = { PermissionUtil.checkOrRequestFilePermissions(activity) }
+                    )
+                }
+            }
         },
         bottomBar = {
             val navBar: @Composable () -> Unit = {
