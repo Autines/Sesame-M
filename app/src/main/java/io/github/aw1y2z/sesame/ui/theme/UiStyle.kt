@@ -16,17 +16,23 @@ import io.github.aw1y2z.sesame.data.AppConfig
 enum class UiStyle(
     val code: String,
     val label: String,
-    val summary: String
+    /**
+     * 短名：用于「设置 → 主题」这类**行内展示当前值**的位置。
+     *
+     * 完整的 [label]（「Material Design 3」）在行内会被挤到换行，
+     * 而菜单里又需要能一眼分辨——短名（「Material」）两头都合适。
+     */
+    val shortLabel: String
 ) {
     MIUIX(
         code = AppConfig.UI_STYLE_MIUIX,
         label = "HyperOS 风格",
-        summary = "小米澎湃 OS 观感，保持模块原有界面"
+        shortLabel = "MiuiX"
     ),
     MATERIAL3(
         code = AppConfig.UI_STYLE_MATERIAL3,
         label = "Material Design 3",
-        summary = "Material You 设计语言，Android 12+ 跟随壁纸取色"
+        shortLabel = "Material"
     );
 
     companion object {

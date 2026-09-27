@@ -18,7 +18,20 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+
+// 液态玻璃（Kyant0/Backdrop 2.0.1，Maven Central）：
+//   内容层用 Modifier.layerBackdrop 把页面录制成「折射源」，
+//   底栏玻璃面用 Modifier.drawBackdrop 采样它，再叠 blur（磨砂）+ lens（折射/色散）+ vibrancy（增艳）。
+// 能力分级（库内实测）：模糊/阴影/高光需 API 31+，折射透镜（AGSL）需 API 33+，低于门槛静默跳过、不崩。
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -28,6 +41,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.pager.HorizontalPager
@@ -57,7 +71,9 @@ import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WifiTethering
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -88,10 +104,10 @@ import io.github.aw1y2z.sesame.ui.theme.SesameInfoRow
 import io.github.aw1y2z.sesame.ui.theme.SesameInlineEditor
 import io.github.aw1y2z.sesame.ui.theme.SesameNavBar
 import io.github.aw1y2z.sesame.ui.theme.SesameNavItem
-import io.github.aw1y2z.sesame.ui.theme.SesamePageTitle
-import io.github.aw1y2z.sesame.ui.theme.SesameRadioRow
+import io.github.aw1y2z.sesame.ui.theme.SesamePageTitleBar
 import io.github.aw1y2z.sesame.ui.theme.SesameScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
+import io.github.aw1y2z.sesame.ui.theme.SesameSelectRow
 import io.github.aw1y2z.sesame.ui.theme.SesameStatusCard
 import io.github.aw1y2z.sesame.ui.theme.SesameSwitchRow
 import io.github.aw1y2z.sesame.ui.theme.SesameText
@@ -109,6 +125,14 @@ import io.github.aw1y2z.sesame.util.Statistics.TimeType
 import io.github.aw1y2z.sesame.util.ToastUtil
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.alpha
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
 import java.util.Calendar
@@ -404,6 +428,23 @@ class MiuixMainActivity : MiuixBaseActivity() {
 }
 
 /**
+ * 一级页元数据：**顺序 = 页码索引 = 底部导航项顺序 = 顶栏标题来源**，四者必须一致。
+ *
+ * 集中在这一处，是为了消除原先的错位风险 —— 改代码前，这四件事分散在四处
+ * （顶栏标题的 `pageTitles`、导航项的 `SesameNavItem` 列表、两处 `when (page)` 的滚动状态映射、
+ * 以及 `rememberPagerState { 4 }` 里的硬编码页数），全部靠"顺序对上"隐式维持；
+ * 将来插一页、换一次顺序，漏改任何一处都会静默错位。
+ */
+private data class MainTab(val title: String, val label: String, val icon: ImageVector)
+
+private val MAIN_TABS = listOf(
+    MainTab(title = "Sesame-M", label = "首页", icon = Icons.Filled.Home),
+    MainTab(title = "日志", label = "日志", icon = Icons.Filled.Description),
+    MainTab(title = "配置", label = "配置", icon = Icons.Filled.Tune),
+    MainTab(title = "设置", label = "设置", icon = Icons.Filled.Settings)
+)
+
+/**
  * 一级页面骨架：底部导航 + 可滚动内容区。
  * 组件全部来自 ui.theme 的风格无关组件集，因此 HyperOS / Material 3 两套风格共用同一份页面代码。
  */
@@ -422,12 +463,19 @@ fun MainScreen(activity: MiuixMainActivity) {
     val configScroll = rememberScrollState()
     val settingsScroll = rememberScrollState()
 
+    // 页码 → 当前页滚动状态。原先这套 `when (page) { 0/1/2/else }` 映射在文件里**写了两遍**
+    // （订阅顶栏/底栏状态时一次、pager 内容里取一次），改一处漏一处会让底栏按旧页滚动显隐。现只此一份。
+    val pageScrolls = remember(homeScroll, logsScroll, configScroll, settingsScroll) {
+        listOf(homeScroll, logsScroll, configScroll, settingsScroll)
+    }
+    fun scrollOf(page: Int) = pageScrolls.getOrElse(page) { settingsScroll }
+
     // 底部 Tab 用 HorizontalPager 承载：左右滑动切页带过渡动画，切走再切回各页滚动位置不变。
     // pagerState 与 selectedTab 双向同步——点底部导航 → 平滑滚到对应页；手指滑动 → 高亮跟随。
     // ⚠️ 关键修复：点导航用 animateScrollToPage 跨多页滑动时，pagerState.currentPage 会依次经过中间页，
     // 若直接回写 selectedTab 会反向取消动画、把 pager 卡在半页（"界面卡在一部分"）。
     // 因此用 isProgrammaticScroll 锁：程序化滑动期间不接受 pager 回灌的页码，避免双向 effect 打架。
-    val pagerState = rememberPagerState(initialPage = selectedTab) { 4 }
+    val pagerState = rememberPagerState(initialPage = selectedTab) { MAIN_TABS.size }
     var isProgrammaticScroll by remember { mutableStateOf(false) }
     LaunchedEffect(selectedTab) {
         if (pagerState.currentPage == selectedTab) return@LaunchedEffect
@@ -444,39 +492,157 @@ fun MainScreen(activity: MiuixMainActivity) {
         }
     }
 
+    // 底栏液态玻璃悬浮效果：玻璃面（navBar 外层 Box）采样「内容层」（HorizontalPager）做折射。
+    // 开关存于 AppConfig.liquidGlassNavBar；关闭时回落为普通底栏，保持历史观感不变。
+    val glassEnabled = AppConfig.INSTANCE.liquidGlassNavBar != false
+    // Kyant0 Backdrop 的「折射源」句柄。内容层挂 Modifier.layerBackdrop(dockBackdrop) 把页面
+    // 录进它的 GraphicsLayer，底栏再用 drawBackdrop(dockBackdrop) 采样这一层。
+    val dockBackdrop = rememberLayerBackdrop()
+
+    // 底栏随滚动显隐（参考 iOS/Chrome 的「上滑收起、下滑唤出」）：
+    //   手指上滑 = 内容继续往下走 = 当前页 ScrollState.value 增大 → 收起；
+    //   手指下滑 = value 减小、或回到顶部(value<=0) → 唤出。
+    // 四个 Tab 各有一份 ScrollState，这里只订阅「当前页签」那份；pagerState.currentPage 变化时
+    // activeScroll 换对象，LaunchedEffect 以它为 key 自动重订阅，避免跨页残留旧方向的抖动。
+    val activeScroll = scrollOf(pagerState.currentPage)
+    var navBarHidden by remember { mutableStateOf(false) }
+    LaunchedEffect(activeScroll) {
+        var prev = activeScroll.value
+        snapshotFlow { activeScroll.value }.collect { v ->
+            val delta = v - prev
+            prev = v
+            when {
+                // 顶部永远露出，避免"明明到顶了还藏着一半"
+                v <= 0 -> navBarHidden = false
+                // 阈值 6px：滤掉惯性滚动里 ±1 的抖动，避免底栏高频闪动
+                delta > 6 -> navBarHidden = true
+                delta < -6 -> navBarHidden = false
+            }
+        }
+    }
+    // 收起 = 下移一个 dock 的高度（64dp 高 + 20dp 外边距，取 96dp 保证完全出屏）+ 淡出
+    val navBarOffset by animateDpAsState(
+        targetValue = if (glassEnabled && navBarHidden) 96.dp else 0.dp,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "navBarOffset"
+    )
+    val navBarAlpha by animateFloatAsState(
+        targetValue = if (glassEnabled && navBarHidden) 0f else 1f,
+        animationSpec = tween(durationMillis = 200),
+        label = "navBarAlpha"
+    )
+
+    // 顶部常驻大标题栏（对标 SukiSU Ultra 的实机效果）：标题钉在顶部不随滚动移动，
+    // 滚动后顶栏底色微微加深、把从下方穿过的内容压住。
+    // 「是否已滚动」从当前页 ScrollState 派生 —— 用 derivedStateOf 只在**跨过阈值**时触发重组，
+    // 不会因为滚动时每像素变化把整个 Scaffold 反复重组；以 activeScroll 为 key，切页时重新派生。
+    val titleBarScrolled by remember(activeScroll) { derivedStateOf { activeScroll.value > 1 } }
+
     SesameScaffold(
-        bottomBar = {
-            SesameNavBar(
-                items = listOf(
-                    SesameNavItem(Icons.Filled.Home, "首页"),
-                    SesameNavItem(Icons.Filled.Description, "日志"),
-                    SesameNavItem(Icons.Filled.Tune, "配置"),
-                    SesameNavItem(Icons.Filled.Settings, "设置")
-                ),
-                // 选中态绑 selectedTab（点击即定为目标页，不会经过中间页闪烁）；
-                // 手指滑动时第二个 LaunchedEffect 会把 selectedTab 跟到当前页，高亮仍跟随手指。
-                selected = selectedTab,
-                onSelect = { selectedTab = it }
+        topBar = {
+            SesamePageTitleBar(
+                // 标题与底部导航项同源（MAIN_TABS），不再各维护一份、靠顺序隐式对齐
+                title = MAIN_TABS.getOrElse(selectedTab) { MAIN_TABS.first() }.title,
+                scrolled = titleBarScrolled
             )
+        },
+        bottomBar = {
+            val navBar: @Composable () -> Unit = {
+                SesameNavBar(
+                    // 图标 + 文案与顶栏标题同源，顺序即页码索引（见 MAIN_TABS 注释）
+                    items = MAIN_TABS.map { SesameNavItem(it.icon, it.label) },
+                    // 选中态绑 selectedTab（点击即定为目标页，不会经过中间页闪烁）；
+                    // 手指滑动时第二个 LaunchedEffect 会把 selectedTab 跟到当前页，高亮仍跟随手指。
+                    selected = selectedTab,
+                    onSelect = { selectedTab = it },
+                    // 玻璃开启时导航栏自身不画实色底、且切成紧凑胶囊形态，外观交给玻璃面
+                    transparent = glassEnabled,
+                    compact = glassEnabled
+                )
+            }
+            if (glassEnabled) {
+                // 紧凑悬浮胶囊 dock（参考 Legado 阅读底栏形态）：不通栏，居中、只包住图标组，
+                // CircleShape 全圆角 = 悬浮感。外观全部交给 Kyant0 的玻璃面，外层不再叠描边/渐变。
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 滚动驱动的收/放：整体下移出屏 + 淡出。offset 不改变布局尺寸，
+                        // 内容区依旧是全屏铺满的折射源，不会因此抖动。
+                        .offset(y = navBarOffset)
+                        .alpha(navBarAlpha),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(bottom = 20.dp)
+                            .drawBackdrop(
+                                backdrop = dockBackdrop,
+                                shape = { CircleShape },
+                                // effects 的顺序就是叠加顺序：先增艳 → 再模糊 → 最后折射
+                                effects = {
+                                    vibrancy()
+                                    blur(10.dp.toPx())
+                                    lens(
+                                        refractionHeight = 14.dp.toPx(),
+                                        refractionAmount = 28.dp.toPx(),
+                                        depthEffect = true,
+                                        chromaticAberration = true
+                                    )
+                                },
+                                // 亮边：库自带的描边 + 斜向高光着色器（iOS 26 的"高光边"），
+                                // 比手画一圈均匀白描边更贴近参考观感。
+                                highlight = { Highlight(width = 1.dp, blurRadius = 0.5.dp) },
+                                // ⚠️ 不画 drop shadow：阴影落在玻璃身后会被一起采样进来、把整条染灰
+                                // （早期用 nadeem 库时踩过这个坑，白底页面上尤其明显）。
+                                shadow = null,
+                                // 真实模糊已经挡住背后内容，这层白只需要托一点可读性，
+                                // 不再像"模糊失效"时期那样靠 0.78 的高不透明度硬盖。
+                                onDrawSurface = { drawRect(Color.White.copy(alpha = 0.30f)) }
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        navBar()
+                    }
+                }
+            } else {
+                navBar()
+            }
         }
     ) { padding ->
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .then(
+                    // 玻璃效果开启时，内容层铺满全屏并录制成「折射源」（layerBackdrop），
+                    // 让悬浮底栏采样到身后的页面内容。
+                    if (glassEnabled) Modifier.layerBackdrop(dockBackdrop)
+                    else Modifier.padding(padding)
+                )
         ) { page ->
-            val scroll = when (page) {
-                0 -> homeScroll
-                1 -> logsScroll
-                2 -> configScroll
-                else -> settingsScroll
-            }
+            val scroll = scrollOf(page)
             Column(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(scroll)
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    // 顶部【不留白】：常驻标题栏已经给出「大标题 → 内容」的间距，
+                    // 这里再留 12dp 会让第一个分组标题离大标题过远（实测到「主题」有 59dp）。
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp)
+                    .then(
+                        // 玻璃开启时：悬浮 dock 占据底部 84dp（行高 56 + 内边距 4×2 + 距屏底 20），
+                        // 底部留白必须 > 84dp 才能让最后一项（设置页「关于」）完整露出、滑得到，
+                        // 否则会被 dock 盖住。滚动过程中卡片仍会从 dock 下方经过 → 玻璃才有东西可折射。
+                        if (glassEnabled) Modifier.padding(bottom = 100.dp)
+                        else Modifier.padding(bottom = padding.calculateBottomPadding())
+                    )
+                    .then(
+                        // 玻璃开启时内容层是「全屏铺满」的（要当折射源），所以拿不到 Scaffold 给的
+                        // topBar 内边距 —— 必须自己补顶栏高度，否则内容会滑到常驻标题栏底下被压住。
+                        // 非玻璃模式由上面那条 Modifier.padding(padding) 统一处理，这里不重复加。
+                        if (glassEnabled) Modifier.padding(top = padding.calculateTopPadding())
+                        else Modifier
+                    )
             ) {
                 when (page) {
                     0 -> HomeTab(activity)
@@ -494,9 +660,6 @@ fun HomeTab(activity: MiuixMainActivity) {
     // 订阅 Compose state：onServiceBind / 状态广播到达时会自动重组刷新首页状态
     val activated = activity.uiRunType == RunType.MODEL
     val version = ViewAppInfo.getAppVersion()
-
-    // 不传 bottomPadding：组件默认 12dp，与上游本次把标题下间距由 4dp 调到 12dp 的意图一致
-    SesamePageTitle(text = "Sesame-M")
 
     SesameStatusCard(
         activated = activated,
@@ -593,8 +756,6 @@ fun StatisticsTable(activity: MiuixMainActivity) {
 
 @Composable
 fun LogsTab(activity: MiuixMainActivity) {
-    SesamePageTitle(text = "日志")
-
     // ── 分类记录：每个配置分组一个条目（森林/庄园/新村/农场/金豆/运动/会员/其他） ──
     // 8 个分组里只有 4 个有自己的日志文件（forest / farm / goldenbeans / other），
     // 另外 4 个（新村/农场 → farm.log，运动/会员 → other.log）与父项**共用文件**，
@@ -789,8 +950,6 @@ fun ConfigTab(activity: MiuixMainActivity) {
         list
     }
 
-    SesamePageTitle(text = "配置")
-
     SesameSectionTitle(text = "配置管理")
     SesameCardGroup {
         items.forEach { (userId, title, summary) ->
@@ -896,23 +1055,54 @@ fun ConfigTab(activity: MiuixMainActivity) {
     }
 }
 
+/**
+ * 「主题样式」的三个取值。索引与 [themeModeIndex] / [themeModeFlags] 严格对应：
+ * 0 = 跟随系统，1 = 浅色，2 = 深色。
+ */
+private val THEME_MODE_LABELS = listOf("跟随系统", "浅色", "深色")
+
+/** 由「跟随系统」+「深色模式」两个既有配置推导出主题样式的下标 */
+private fun themeModeIndex(followSystem: Boolean, darkMode: Boolean): Int = when {
+    followSystem -> 0
+    darkMode -> 2
+    else -> 1
+}
+
+/**
+ * 把主题样式的下标还原成两个配置项。
+ *
+ * [currentDarkMode] 只在选「跟随系统」时用到：此时深色模式不参与取色
+ * （见 SesameTheme.sesameIsDark），保留原值可以让用户「跟随系统 → 深色」切回来时
+ * 回到自己上次选的那档，而不是被重置成浅色。
+ */
+private fun themeModeFlags(index: Int, currentDarkMode: Boolean): Pair<Boolean, Boolean> = when (index) {
+    0 -> true to currentDarkMode
+    2 -> false to true
+    else -> false to false
+}
+
 @Composable
 fun SettingsTab(activity: MiuixMainActivity) {
     val context = LocalContext.current
 
-    SesamePageTitle(text = "设置")
-
-    // ── 界面风格：双设计语言切换，切换后 recreate 让整套页面按新风格重建 ──
-    SesameSectionTitle(text = "界面风格")
+    // ── 主题：界面风格（设计语言）+ 主题样式（明暗）──
+    // 两项都是「从一组固定值里选一个」，所以统一用下拉选择行：行上只显示当前值、
+    // 点开才是候选项。相比把候选项一条条铺在页面里，页面更短、行数恒定不跳动，
+    // 也与系统设置的既有交互一致。
+    SesameSectionTitle(text = "主题")
     // 选中项要跨 recompose / recreate 保留，状态声明在卡片组之外
     var uiStyle by remember { mutableStateOf(UiStyle.current()) }
+    var followSystem by remember { mutableStateOf(AppConfig.INSTANCE.followSystem ?: true) }
+    var darkMode by remember { mutableStateOf(AppConfig.INSTANCE.darkMode ?: false) }
     SesameCardGroup {
-        UiStyle.entries.forEach { style ->
-            SesameRadioRow(
-                title = style.label,
-                icon = if (style == UiStyle.MATERIAL3) Icons.Outlined.Palette else Icons.Outlined.Smartphone,
-                selected = uiStyle == style,
-                onClick = {
+        SesameSelectRow(
+            title = "界面风格",
+            summary = "选择应用的界面风格",
+            icon = Icons.Outlined.Palette,
+            options = UiStyle.entries.map { it.shortLabel },
+            selectedIndex = UiStyle.entries.indexOf(uiStyle),
+            onSelect = { index ->
+                UiStyle.entries.getOrNull(index)?.let { style ->
                     if (uiStyle != style) {
                         uiStyle = style
                         AppConfig.INSTANCE.uiStyle = style.code
@@ -920,18 +1110,47 @@ fun SettingsTab(activity: MiuixMainActivity) {
                         activity.recreate()
                     }
                 }
-            )
-        }
+            }
+        )
+        SesameSelectRow(
+            title = "主题样式",
+            summary = "跟随系统，或固定浅色 / 深色",
+            icon = Icons.Outlined.DarkMode,
+            // 三态由「跟随系统」+「深色模式」两个既有配置**组合**表达，不新增配置项：
+            // 取色入口 SesameTheme.sesameIsDark 就是按这两个布尔算的，改数据模型只会徒增不兼容。
+            options = THEME_MODE_LABELS,
+            selectedIndex = themeModeIndex(followSystem, darkMode),
+            onSelect = { index ->
+                val (nextFollow, nextDark) = themeModeFlags(index, darkMode)
+                if (followSystem != nextFollow || darkMode != nextDark) {
+                    followSystem = nextFollow
+                    darkMode = nextDark
+                    AppConfig.INSTANCE.followSystem = nextFollow
+                    AppConfig.INSTANCE.darkMode = nextDark
+                    AppConfig.save()
+                    activity.recreate()
+                }
+            }
+        )
+        // 底栏液态玻璃：外观类开关，与「界面风格 / 主题样式」同属主题分组。
+        // 原先放在「系统设置」里 —— 但它改的是**外观**（底栏材质），不是系统行为，故挪到主题。
+        var liquidGlassNavBar by remember { mutableStateOf(AppConfig.INSTANCE.liquidGlassNavBar != false) }
+        SesameSwitchRow(
+            title = "底栏液态玻璃",
+            icon = Icons.Outlined.AutoAwesome,
+            summary = "iOS 26 风折射悬浮底栏（实验）",
+            checked = liquidGlassNavBar,
+            onCheckedChange = {
+                AppConfig.INSTANCE.liquidGlassNavBar = it
+                AppConfig.save()
+                liquidGlassNavBar = it
+                // 该配置项不可观察（普通 Java 字段，非 Compose state），重建 Activity 让新值生效
+                activity.recreate()
+            }
+        )
     }
-    // 风格说明放在卡片**下方**：它注解的是整个分组，混在卡内会被读成最后一项的副标题。
-    SesameText(
-        text = uiStyle.summary,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
-        fontSize = 12.sp,
-        color = sesameOnSurfaceVariant()
-    )
+    // 风格说明原本放在卡片下方（「Material You 设计语言…」那一行）：老板要求去掉，
+    // 分组内两项各自已带副标题，再补一段容易读成 App 的免责/宣传文案。
 
     SesameSectionTitle(text = "功能设置")
     SesameCardGroup {
@@ -976,35 +1195,10 @@ fun SettingsTab(activity: MiuixMainActivity) {
                 iconHidden = activity.isIconHidden()
             }
         )
-        // 「跟随系统设置」必须先声明：下面「深色模式」的可用状态由它决定。
-        // 两者不是并列关系——跟随系统开着时，深色模式的值根本不参与取色计算
-        // （见 SesameTheme.sesameIsDark），此时让它可点等于让用户白点，必须置灰。
-        var followSystem by remember { mutableStateOf(AppConfig.INSTANCE.followSystem ?: true) }
-        var darkMode by remember { mutableStateOf(AppConfig.INSTANCE.darkMode ?: false) }
-        SesameSwitchRow(
-            title = "深色模式",
-            icon = Icons.Outlined.DarkMode,
-            checked = darkMode,
-            enabled = !followSystem,
-            summary = if (followSystem) "需先关闭下方「跟随系统设置」" else null,
-            onCheckedChange = {
-                AppConfig.INSTANCE.darkMode = it
-                AppConfig.save()
-                darkMode = it
-                activity.recreate()
-            }
-        )
-        SesameSwitchRow(
-            title = "跟随系统设置",
-            icon = Icons.Outlined.Sync,
-            checked = followSystem,
-            onCheckedChange = {
-                AppConfig.INSTANCE.followSystem = it
-                AppConfig.save()
-                followSystem = it
-                activity.recreate()
-            }
-        )
+        // 深色/跟随系统的开关已上移为「主题 → 主题样式」的三态选择：
+        // 原来的两个开关是「一个布尔管另一个布尔」的从属关系（跟随系统开着时深色模式不参与取色），
+        // 拆成三态后每个选项都自解释，不会再出现「点了没反应」的死开关。
+        // （「底栏液态玻璃」开关同样已上移到「主题」分组 —— 它也是外观项，和界面风格/主题样式同类。）
         var batteryPerm by remember { mutableStateOf(AppConfig.INSTANCE.batteryPerm ?: true) }
         SesameSwitchRow(
             title = "为支付宝申请后台运行权限",

@@ -49,6 +49,9 @@ public class AppConfig {
     private Boolean enableViewRuntimeLog = true;
     private Boolean batteryPerm = true;
 
+    /** 底栏液态玻璃悬浮效果（iOS 26 风折射）；默认开启，由「设置 → 底栏液态玻璃」开关控制 */
+    private Boolean liquidGlassNavBar = true;
+
     // 模块级开关：原先是按账号存在 BaseModel 里，现改为全局（注入进程与模块 App 共用同一份）
     private Boolean newRpc = true;
     private Boolean showToast = true;
@@ -156,6 +159,9 @@ public class AppConfig {
 
     public Boolean getBatteryPerm() { return batteryPerm; }
     public void setBatteryPerm(Boolean value) { batteryPerm = value; }
+
+    public Boolean getLiquidGlassNavBar() { return liquidGlassNavBar; }
+    public void setLiquidGlassNavBar(Boolean value) { liquidGlassNavBar = value; }
 
     public static Boolean save() {
         if (loadFailed) {

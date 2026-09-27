@@ -89,7 +89,11 @@ fun sesameSurface(): Color = when (LocalUiStyle.current) {
     UiStyle.MATERIAL3 -> if (sesameIsDark()) {
         MaterialTheme.colorScheme.surfaceContainerLow
     } else {
-        MaterialTheme.colorScheme.surfaceContainer
+        // 浅色模式页面底色：原用 surfaceContainer(#EEEEEE) 偏灰，整屏（尤其首页大片空白）
+        // 看起来像脏灰。实测参考 app 同类页面底色为 #F4F6FB（近白），
+        // 这里改到 surfaceContainerLow(#F3F3F3)，与参考同档，同时仍比卡片(#FFFFFF)深一档，
+        // 保持「浅底白卡」的浮起关系不被推翻。
+        MaterialTheme.colorScheme.surfaceContainerLow
     }
 }
 

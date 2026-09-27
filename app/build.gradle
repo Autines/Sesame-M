@@ -137,4 +137,12 @@ dependencies {
     implementation "androidx.compose.material3:material3:1.4.0"
     // Compose Foundation Pager（HorizontalPager，底部 Tab 滑动切换；与上面的 material-icons-extended 同属 Compose 1.7.6）
     implementation "androidx.compose.foundation:foundation:1.7.6"
+
+    // 液态玻璃（iOS 26 风折射悬浮底栏）。
+    // 库选型过程：先用 NadeemIqbal/liquid-glass 0.2.3，实机像素实测证明它的模糊**完全不生效**
+    // （背景 GraphicsLayer 录制为空 → 只剩 tint），已弃用并移除依赖。
+    // 现用 Kyant0/Backdrop 2.0.1（Maven Central）：模糊 + 折射 + 色散 + 高光均实测生效。
+    // 能力分级（读库源码 androidMain/Platform.kt）：模糊/阴影/高光需 API 31+，
+    // 折射透镜（AGSL）需 API 33+；低于门槛时对应效果**静默跳过、不崩**（minSdk 26 安全）。
+    implementation "io.github.kyant0:backdrop:2.0.1"
 }

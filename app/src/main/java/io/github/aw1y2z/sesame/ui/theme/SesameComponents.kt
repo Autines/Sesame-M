@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -37,6 +38,8 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,7 +56,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,7 +69,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -296,16 +317,27 @@ fun SesameText(
     }
 }
 
-/** 一级页大标题 */
+/**
+ * 一级页大标题。
+ *
+ * @param topPadding 文字上方的留白。默认 `null` = 用本风格的既有值（MIUIX 8dp / M3 16dp）；
+ *   一级页的**常驻标题栏**（[SesamePageTitleBar]）会显式传更小的值 —— 标题栏自身已经吃过
+ *   `statusBarsPadding()`，再叠 8/16dp 会把大标题顶得太低（实测 66dp，明显偏下）。
+ * @param bottomPadding 文字下方的留白；标题栏里传小值可以收紧「大标题 → 第一个小标题」的间距。
+ */
 @Composable
-fun SesamePageTitle(text: String, bottomPadding: androidx.compose.ui.unit.Dp = 12.dp) {
+fun SesamePageTitle(
+    text: String,
+    topPadding: androidx.compose.ui.unit.Dp? = null,
+    bottomPadding: androidx.compose.ui.unit.Dp = 12.dp
+) {
     when (LocalUiStyle.current) {
         UiStyle.MIUIX -> MiuixText(
             text = text,
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
             color = MiuixTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(top = 8.dp, bottom = bottomPadding)
+            modifier = Modifier.padding(top = topPadding ?: 8.dp, bottom = bottomPadding)
         )
 
         UiStyle.MATERIAL3 -> Text(
@@ -314,8 +346,58 @@ fun SesamePageTitle(text: String, bottomPadding: androidx.compose.ui.unit.Dp = 1
             // 不加粗：MD3 的 headline 系列规范字重是 Regular，
             // 层级靠字号（32sp）+ 字距建立，加粗会立刻滑向 HyperOS 观感。
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 16.dp, bottom = bottomPadding)
+            modifier = Modifier.padding(top = topPadding ?: 16.dp, bottom = bottomPadding)
         )
+    }
+}
+
+/**
+ * 一级页「常驻大标题栏」：把 [SesamePageTitle] 钉在顶部，滚动时内容从它下方穿过。
+ *
+ * 为什么需要它：一级页的大标题原本是**滚动内容的第一项**（写在各 Tab 的 Column 里），
+ * 手指一滑就跟着滚走，页面失去标题锚点；而且它紧贴状态栏，整页看起来"顶得太靠上"。
+ *
+ * 形态对标 SukiSU Ultra 等三方应用（实机测量）：
+ * - 标题**恒定停在顶栏**、位置不随滚动移动（参考 App 标题恒在 y=181px，滚动前后不动）；
+ * - 未滚动时顶栏底色 = 页面底色（视觉上"没有栏"，与页面融为一体）；
+ * - 滚动后顶栏**微微加深约 6%**，把从下方穿过的内容压住
+ *   （参考 App 实测 249 → 237 ≈ −5%；这里取 6%，浅色下 242 → 约 229，同一档）。
+ *   刻意**不换整块色、不加分割线** —— 那会让顶栏看起来像一条悬浮的横条。
+ *
+ * ⚠️ 顶栏自己吃 [statusBarsPadding]，接进 `SesameScaffold(topBar = ...)` 后
+ * 不要再由外部补状态栏内边距（与 [SesameTopBar] 的做法一致）。
+ *
+ * @param scrolled 页面是否已滚动（由调用方订阅当前页 ScrollState 得出）。只影响顶栏底色深浅。
+ */
+@Composable
+fun SesamePageTitleBar(title: String, scrolled: Boolean = false) {
+    val container = sesameSurface()
+    // 「加深一档」用**向 onSurface 插值**表达：明暗两套主题都自动成立，也不依赖具体色槽
+    // （注意 sesameSurfaceContainer() 是**卡片色**、比页面底更亮，语义不对，不能拿来当"加深"）。
+    val deepened = lerp(container, sesameOnSurface(), 0.06f)
+    val deepen by animateFloatAsState(
+        targetValue = if (scrolled) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "pageTitleBarDeepen"
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 必须**不透明**：顶栏就是靠这块底色把从下方滚过的内容挡住
+            .background(lerp(container, deepened, deepen))
+            .statusBarsPadding()
+            // 不额外加竖向内边距：标题自己的上下留白由下面 SesamePageTitle 显式给，
+            // 一处控制、避免"栏留一点 + 标题再留一点"叠起来。
+            // 四次实测迭代（标题墨迹顶部距屏幕顶；K80 Pro 状态栏 inset = 50dp）：
+            //   改造前 36dp（太靠上）→ 加 16dp 后 82dp（太靠下）→ 66dp（仍偏下）→ 现在 56dp ✓
+            // 参考 App（SukiSU Ultra）实测 64dp；本方案比它略高，是老板逐轮看过后的选择。
+            .padding(horizontal = 16.dp)
+    ) {
+        // 复用一级页大标题的排版（32sp / headlineMedium），与改造前保持同一套字号体系。
+        // 上下留白显式传小值（不再用 SesamePageTitle 的 8/16dp 默认）：
+        //   上 6dp → 标题抬高；
+        //   下 4dp → 收紧「大标题 → 第一个小标题」的间距（原 12dp，实测该间距 59dp 偏大）。
+        SesamePageTitle(text = title, topPadding = 6.dp, bottomPadding = 4.dp)
     }
 }
 
@@ -655,6 +737,278 @@ fun SesameClickRow(
 }
 
 /**
+ * 下拉选择行：右侧显示**当前取值**，点击弹出浮层菜单选择候选项。
+ *
+ * 与 [SesameRadioRow] 的区别是「候选集是否常驻页面」：
+ * - [SesameRadioRow] 把候选项一条条铺在卡片里（选项少、且想让用户一眼看到全部时合适）；
+ * - 本组件把候选项收进菜单，行上只留当前值——**行数恒定**、页面更短，
+ *   与系统设置里「界面风格 / 主题样式」这类单值选项是对应的交互。
+ *
+ * [options] 与 [selectedIndex] 用**索引**对应，调用方传展示文案即可
+ * （界面风格的枚举 code 与展示名并不相同，不适合直接比较字符串）。
+ *
+ * Miuix 分支没有对等的「带取值 + 浮层菜单」组件，这里用手工行承载；
+ * 菜单本身仍用 material3 的浮层——浮层是瞬时出现的覆盖层，不参与卡片的静态观感，
+ * 因此不会破坏 HyperOS 风格的一致性。
+ */
+@Composable
+fun SesameSelectRow(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    summary: String? = null,
+    icon: ImageVector? = null,
+    /** 菜单宽度。默认值按「HyperOS 风格 / Material」这类短文案定；过长可覆写 */
+    menuWidth: Dp = 116.dp
+) {
+    var expanded by remember { mutableStateOf(false) }
+    // 记录最近一次点击在行内的局部像素坐标，作为浮层菜单的锚点（从点击处弹出，而非固定从行底）
+    var pressOffset by remember { mutableStateOf(Offset.Zero) }
+    val selectedLabel = options.getOrNull(selectedIndex).orEmpty()
+    val dismiss = { expanded = false }
+
+    when (LocalUiStyle.current) {
+        // pointerInput 必须挂在 Box（= Popup 的锚点容器）上：pressOffset 才与 Popup offset
+        // 同一坐标系。若挂在带 padding 的 Row 内层，坐标会差出一个 padding 量，
+        // 锚点整体偏离指尖（实测 M3 分支偏 16dp 横向 / 4dp 纵向）。
+        UiStyle.MIUIX -> Box(
+            modifier = Modifier.pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press) {
+                            pressOffset = event.changes.first().position
+                        }
+                    }
+                }
+            }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { expanded = true }
+                    .padding(vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    MiuixText(
+                        text = title,
+                        fontSize = 16.sp,
+                        color = MiuixTheme.colorScheme.onBackground
+                    )
+                    if (!summary.isNullOrBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        MiuixText(
+                            text = summary,
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                MiuixText(
+                    text = selectedLabel,
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.primary
+                )
+            }
+            // 浮层以点击点为锚：直接作为 Box 子项，由 Popup 的 TopStart 对齐 + offset 定位到点击处
+            SesameSelectMenu(
+                expanded = expanded,
+                options = options,
+                selectedIndex = selectedIndex,
+                width = menuWidth,
+                onDismiss = dismiss,
+                onSelect = onSelect,
+                anchorPx = pressOffset
+            )
+        }
+
+        UiStyle.MATERIAL3 -> M3RowCard(onClick = { expanded = true }) {
+            // 同 MIUIX 分支：pointerInput 挂在 Box（Popup 锚点）上，坐标与 Popup offset 同系
+            Box(
+                modifier = Modifier.pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.type == PointerEventType.Press) {
+                                pressOffset = event.changes.first().position
+                            }
+                        }
+                    }
+                }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = if (summary.isNullOrBlank()) M3RowMinHeight else M3TwoLineRowMinHeight)
+                        .padding(
+                            start = M3RowStartPadding,
+                            end = M3RowEndPadding,
+                            top = M3RowVerticalPadding,
+                            bottom = M3RowVerticalPadding
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    M3LeadingIcon(icon)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (!summary.isNullOrBlank()) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = summary,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    // 当前取值是这一行的「结论」：用主题强调色标出，与只读信息行的次要色区分开，
+                    // 一眼能看出「这一行是可以改的，现在选的是它」
+                    Text(
+                        text = selectedLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                // 浮层以点击点为锚：作为 Box 子项，由 Popup 的 TopStart 对齐 + offset 定位到点击处
+                SesameSelectMenu(
+                    expanded = expanded,
+                    options = options,
+                    selectedIndex = selectedIndex,
+                    width = menuWidth,
+                    onDismiss = dismiss,
+                    onSelect = onSelect,
+                    anchorPx = pressOffset
+                )
+            }
+        }
+    }
+}
+
+/**
+ * [SesameSelectRow] 的浮层菜单：选中项 = 圆角色块 + 对勾。
+ *
+ * 为什么自己用 Popup + Surface 搭，而不用 material3 的 DropdownMenu：
+ * 1. DropdownMenu 的容器 shape 是 MD3 规范的 extra-small（4dp），在手机上几乎看不出圆角，
+ *    且它的签名**不暴露 shape / containerColor**，改不了；
+ * 2. DropdownMenuItem 自带 112dp 最小宽和固定左右内边距，菜单会明显偏宽。
+ * 自己搭之后宽度、圆角、色块、对勾全部可控。
+ *
+ * 对勾：选中/未选中**都占位**（未选中时把 tint 设为透明），
+ * 否则未选中项会因为没有勾而整体左移，逐项文字不在一条竖线上。
+ *
+ * 宽度固定（不随最长文案伸缩）：候选文案长度不一（「跟随系统」vs「深色」），
+ * 自适应会让菜单在不同取值下来回变宽，观感不稳定。
+ */
+@Composable
+private fun SesameSelectMenu(
+    expanded: Boolean,
+    options: List<String>,
+    selectedIndex: Int,
+    width: Dp,
+    onDismiss: () -> Unit,
+    onSelect: (Int) -> Unit,
+    /** 点击点（Popup 锚点容器 Box 的局部像素坐标，与 [Popup] offset 同一坐标系）。菜单右缘与顶边对齐它，并从该处缩放淡入。 */
+    anchorPx: Offset
+) {
+    if (!expanded) return
+    val density = LocalDensity.current
+    // 进场动画：从 0.92 缩放到 1、透明度 0→1。先用 appear 标志在首帧后置 true，
+    // 保证从「起点状态」开始动，而不是合成即终态（那样看不到动画）。
+    var appear by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appear = true }
+    val progress by animateFloatAsState(
+        targetValue = if (appear) 1f else 0f,
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+        label = "selectMenuPop"
+    )
+    val s = 0.92f + 0.08f * progress
+    val menuWpx = with(density) { width.roundToPx() }
+    // 以点击点为锚：菜单右缘对齐点击 X（从手指处向左展开），并夹在行宽内不溢出左边
+    val x = (anchorPx.x - menuWpx).coerceAtLeast(0f)
+    val y = anchorPx.y
+    Popup(
+        // 锚点 = 行左上（Box 包裹 Row，TopStart 对齐到行左上），再用 offset 移到点击处
+        alignment = Alignment.TopStart,
+        offset = IntOffset(x.roundToInt(), y.roundToInt()),
+        // focusable 才能接收返回键；外部点击 / 返回键都会走 onDismissRequest
+        properties = PopupProperties(focusable = true),
+        onDismissRequest = onDismiss
+    ) {
+        Box(
+            modifier = Modifier.scale(s).alpha(progress)
+        ) {
+        Surface(
+            modifier = Modifier.width(width),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 2.dp,
+            shadowElevation = 8.dp
+        ) {
+            // 容器内边距与行内间距同步收紧：宽度变窄后若沿用原来的留白，
+            // 只会让文字两侧空得更多，看不出「变窄」的效果
+            Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
+                options.forEachIndexed { index, label ->
+                    val selected = index == selectedIndex
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // 顺序有讲究——padding 在最外层，背景作用于内缩后的区域，
+                            // 写反了色块就会顶满整行、贴住菜单边缘
+                            .padding(vertical = 2.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(
+                                if (selected) {
+                                    Modifier.background(MaterialTheme.colorScheme.primaryContainer)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onSelect(index) }
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                Color.Transparent
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        }
+    }
+}
+
+/**
  * 开关行。
  *
  * [onClick] 为空时整行点击即切换开关（Miuix 用原生 SwitchPreference 保持一致）；
@@ -836,58 +1190,29 @@ fun SesameSwitchRow(
     }
 }
 
-/**
- * 单选行：用于互斥选项（如界面风格）。
- *
- * M3 下选择控件放在**行尾**：左侧留给「图标 + 名称」，与开关行、跳转行保持同一套
- * 阅读轴线（左边永远是「这是什么」，右边永远是「能对它做什么」）。
- * 控件与信息混在左侧时，一屏里两种行的心智模型不一致，扫读会不断重新定位。
- */
-@Composable
-fun SesameRadioRow(title: String, selected: Boolean, icon: ImageVector? = null, onClick: () -> Unit) {
-    when (LocalUiStyle.current) {
-        UiStyle.MIUIX -> MiuixRadioButtonPreference(
-            title = title,
-            selected = selected,
-            onClick = onClick
-        )
-
-        UiStyle.MATERIAL3 -> M3RowCard(onClick = onClick) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = M3RowMinHeight)
-                    .padding(
-                        start = M3RowStartPadding,
-                        // 控件行的行尾内边距用控件行的对齐值，让圆钮的**视觉右缘**同样落在 16dp 网格上
-                        end = M3ControlRowStartPadding,
-                        top = M3RowVerticalPadding,
-                        bottom = M3RowVerticalPadding
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                M3LeadingIcon(icon)
-                Text(
-                    text = title,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.width(12.dp))
-                RadioButton(selected = selected, onClick = null)
-            }
-        }
-    }
-}
-
 /* ───────────────────────── 底部导航 ───────────────────────── */
 
 /** 底部导航项 */
 data class SesameNavItem(val icon: ImageVector, val label: String)
 
-/** 底部导航栏 */
+/**
+ * 底部导航栏。
+ *
+ * @param transparent 背景是否透明。开启「底栏液态玻璃」时传 true：
+ *   MD3 分支不再画 surfaceContainer 实色底，把外观交给外层的玻璃面（liquidGlass），
+ *   否则实色底会把玻璃层整个盖住，玻璃效果不可见（曾因此被误判为「功能没生效」）。
+ * @param compact 紧凑胶囊模式（液态玻璃 dock 用，参考 Legado 阅读底栏形态）：
+ *   宽度包住图标组而不是通栏铺满，item 不用 weight 均分而用固定左右内边距。
+ *   注意 wrap-content 容器里 weight 会把子项压成 0 宽，所以两种模式的 item 修饰符不同。
+ */
 @Composable
-fun SesameNavBar(items: List<SesameNavItem>, selected: Int, onSelect: (Int) -> Unit) {
+fun SesameNavBar(
+    items: List<SesameNavItem>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    transparent: Boolean = false,
+    compact: Boolean = false
+) {
     when (LocalUiStyle.current) {
         UiStyle.MIUIX -> MiuixNavigationBar {
             items.forEachIndexed { index, item ->
@@ -907,25 +1232,51 @@ fun SesameNavBar(items: List<SesameNavItem>, selected: Int, onSelect: (Int) -> U
             // 这里按 M3 规范手写，度量完全可控：
             //   容器高 80dp / 图标 24dp / 指示器 64×32 全圆角 / 图标-文字间距 4dp
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                color = if (transparent) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
                 tonalElevation = 0.dp
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .height(M3NavBarHeight),
+                    modifier = if (compact) {
+                        // 紧凑胶囊：宽度包住内容、行高压到 56dp（参考 Legado 底栏的矮胖比例）；
+                        // 不留系统导航栏内边距，间距交给外层玻璃 dock（drawBackdrop 那层）控制
+                        Modifier.height(56.dp)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .height(M3NavBarHeight)
+                    },
+                    // 紧凑模式：相邻 tab 之间只留 1 像素（改用 Arrangement.spacedBy，不再用 item
+                    // 左右内边距凑间距，否则两侧各一份、实际间距是内边距的两倍）。
+                    horizontalArrangement = if (compact) {
+                        Arrangement.spacedBy(with(LocalDensity.current) { 1.toDp() })
+                    } else {
+                        Arrangement.Start
+                    },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     items.forEachIndexed { index, item ->
                         val isSelected = selected == index
+                        // 选中=深色内容（参考 Legado：选中态只靠浅灰椭圆区分，不靠变色）
                         val contentColor = if (isSelected) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
+                            MaterialTheme.colorScheme.onSurface
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         }
-                        Column(
-                            modifier = Modifier
+                        val itemModifier = if (compact) {
+                            // clickable 放在最外层，触摸热区 = 整个胶囊；
+                            // ⚠️ 这里【不再】留左右内边距：相邻 tab 的间距改由 Row 的
+                            // Arrangement.spacedBy(1px) 统一提供，避免"两侧各算一份"把间距翻倍。
+                            Modifier
+                                .fillMaxHeight()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    role = Role.Tab,
+                                    onClick = { onSelect(index) }
+                                )
+                        } else {
+                            Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .clickable(
@@ -933,7 +1284,26 @@ fun SesameNavBar(items: List<SesameNavItem>, selected: Int, onSelect: (Int) -> U
                                     indication = null,
                                     role = Role.Tab,
                                     onClick = { onSelect(index) }
-                                ),
+                                )
+                        }
+                        Column(
+                            modifier = itemModifier.then(
+                                // 紧凑模式：选中高亮包住「图标+底部文字」整体（参考 bottom nav 选中态）。
+                                // ⚠️ 内边距必须【恒定】（未选中也留同样的 padding，只是底色透明），
+                                // 否则只有选中项变宽 → 整排 item 重新分配位置，切页时按钮会"挪一下"。
+                                if (compact) {
+                                    Modifier
+                                        .background(
+                                            // 浅灰中性椭圆（参考 Legado 选中态），不用 secondaryContainer（蓝）
+                                            if (isSelected) MaterialTheme.colorScheme.surfaceVariant
+                                            else Color.Transparent,
+                                            RoundedCornerShape(50)
+                                        )
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                } else {
+                                    Modifier
+                                }
+                            ),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
@@ -942,10 +1312,14 @@ fun SesameNavBar(items: List<SesameNavItem>, selected: Int, onSelect: (Int) -> U
                             // CircleShape 会强制正圆，把 64×32 撑成 64×64 的大圆。
                             Box(
                                 modifier = Modifier
-                                    .size(width = M3NavIndicatorWidth, height = M3NavIndicatorHeight)
+                                    // 紧凑模式指示器收窄为 48×32，让胶囊整体更贴近参考 dock 的紧凑比例
+                                    .size(
+                                        width = if (compact) 44.dp else M3NavIndicatorWidth,
+                                        height = M3NavIndicatorHeight
+                                    )
                                     .clip(RoundedCornerShape(M3NavIndicatorHeight / 2))
                                     .background(
-                                        if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                                        if (isSelected && !compact) MaterialTheme.colorScheme.secondaryContainer
                                         else Color.Transparent
                                     ),
                                 contentAlignment = Alignment.Center
@@ -1241,28 +1615,6 @@ fun SesameSearchField(
                 cursorColor = MaterialTheme.colorScheme.primary
             )
         )
-    }
-}
-
-/** 文字按钮：对话框与内联编辑区的动作入口 */
-@Composable
-fun SesameTextButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    emphasized: Boolean = true
-) {
-    when (LocalUiStyle.current) {
-        UiStyle.MIUIX -> MiuixTextButton(text = text, onClick = onClick, modifier = modifier)
-
-        UiStyle.MATERIAL3 -> TextButton(onClick = onClick, modifier = modifier) {
-            Text(
-                text = text,
-                color = if (emphasized) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = if (emphasized) FontWeight.Medium else FontWeight.Normal
-            )
-        }
     }
 }
 
