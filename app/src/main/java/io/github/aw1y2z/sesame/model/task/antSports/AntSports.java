@@ -203,8 +203,16 @@ public class AntSports extends ModelTask {
                                 Log.record("同步运动步数失败:" + step);
                             }
                         } catch (Throwable t) {
-                            // XHelpers 会把 NoSuchMethodException 包装进 RuntimeException，这里统一处理
-                            if (t.getCause() instanceof NoSuchMethodException) {
+                            // ⚠️ 不能只看 t.getCause()：XHelpers.findMethodBestMatch 找不到方法时抛的是
+                            // new RuntimeException("No method xxx matching args in …")，既不是
+                            // NoSuchMethodException、也没有 cause（见 util/XHelpers.java:276）。
+                            // 旧判定因此恒为 false，把「接口已被新版支付宝移除」这种【预期内】的情况
+                            // 误走进 else 分支，把整段堆栈印进 error 日志（每天 1 条噪音）。
+                            // 现在三种情况都算「接口已不可用」：本身是 NoSuchMethodException、
+                            // 由它包装而来、或 message 形如 "No method … matching args in …"。
+                            if (t instanceof NoSuchMethodException
+                                    || t.getCause() instanceof NoSuchMethodException
+                                    || String.valueOf(t.getMessage()).startsWith("No method")) {
                                 Log.record("同步步数主动推送⚠️接口已不可用（新版支付宝移除），已跳过；readDailyStep hook 不受影响");
                             } else {
                                 Log.record("同步步数主动推送⚠️异常，已跳过；readDailyStep hook 不受影响");
