@@ -218,23 +218,22 @@ class MiuixMainActivity : MiuixBaseActivity() {
         checkPermissionAndRefresh()
     }
 
-    /** 检查文件权限，若已授权则刷新统计；无权限时负责（仅一次）自动引导 */
+    /** 检查文件权限，已授权则刷新统计；无权限时负责（仅一次）自动引导 */
     private fun checkPermissionAndRefresh() {
         if (hasRequestedPermission) {
             hasRequestedPermission = false
-            if (PermissionUtil.checkFilePermissions(this)) {
-                hasPermission = true
-                refreshStatistics()
-            }
-            return
         }
-        if (!hasPermission && PermissionUtil.checkFilePermissions(this)) {
-            // 首次进入或权限刚被授予
-            hasPermission = true
+        // 每次 resume 都重取真实权限值并据此刷新。
+        // 旧逻辑只在「无权限 → 有权限」的转变瞬间才调 refreshStatistics()；而权限早已授予的设备上
+        // onCreate 就把 hasPermission 置 true，转变永远不会发生 → 正常启动路径加载不到 statistics.json，
+        // 首页统计恒为 0（盘里明明有数据，K80 Pro 实测：json 有 58690，界面全 0）。
+        val granted = PermissionUtil.checkFilePermissions(this)
+        hasPermission = granted
+        if (granted) {
             refreshStatistics()
-            return
+        } else {
+            autoPromptPermissionOnce()
         }
-        autoPromptPermissionOnce()
     }
 
     /**
