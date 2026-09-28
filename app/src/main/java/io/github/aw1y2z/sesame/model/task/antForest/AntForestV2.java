@@ -2541,7 +2541,12 @@ public class AntForestV2 extends ModelTask {
         }
     }
 
+    private static final String FLAG_ENERGY_RAIN_RISK_BLOCK = "forest::energyRainRiskBlock";
+
     private void startEnergyRain() {
+        if (Status.hasFlagToday(FLAG_ENERGY_RAIN_RISK_BLOCK)) {
+            return;
+        }
         try {
             JSONObject jo = new JSONObject(AntForestRpcCall.startEnergyRain());
             TimeUtil.sleep(500);
@@ -2559,6 +2564,11 @@ public class AntForestV2 extends ModelTask {
                 Status.flagToday("EnergyRain::PlayGame");
             }
             jo = new JSONObject(AntForestRpcCall.energyRainSettlement(sum, token));
+            if (MessageUtil.isRiskControl(jo)) {
+                Status.flagToday(FLAG_ENERGY_RAIN_RISK_BLOCK);
+                Log.record("风控🚫[森林能量雨]接口已被拦截，本日中止剩余任务");
+                return;
+            }
             if (MessageUtil.checkResultCode(TAG, jo)) {
                 Toast.show("获得了[" + sum + "g]能量[能量雨]");
                 Log.forest("收能量雨🌧️[" + sum + "g]");

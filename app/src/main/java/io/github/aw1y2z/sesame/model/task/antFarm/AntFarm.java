@@ -43,6 +43,8 @@ public class AntFarm extends ModelTask {
 
     /** 风控当日熔断标记：doFarmTask 接口命中风控挑战后置位，当日不再逐个试剩余饲料任务 */
     private static final String FLAG_DO_FARM_TASK_RISK_BLOCK = "farm::doFarmTaskRiskBlock";
+    /** 风控当日熔断标记：新村做饭(cook)接口命中风控后置位，当日不再重打被拦接口 */
+    private static final String FLAG_COOK_RISK_BLOCK = "farm::cookRiskBlock";
     /** 家庭分享：当日最多尝试几次，超过后当天不再重试（避免每轮任务都重发邀请请求） */
     private static final int MAX_FAMILY_SHARE_ATTEMPT = 3;
     /** 小鸡所在空间标识：家庭空间。睡觉/起床靠它区分走家庭接口还是个人小屋接口 */
@@ -1664,6 +1666,10 @@ public class AntFarm extends ModelTask {
     }
 
     private Boolean doFarmTask(JSONObject task) {
+        if (Status.hasFlagToday(FLAG_DO_FARM_TASK_RISK_BLOCK)) {
+            // 当日庄园饲料任务已命中风控，本日中止剩余任务，避免重复打被拦截的接口、加重风控
+            return false;
+        }
         boolean isDoTask = false;
         try {
             String title = task.getString("title");
@@ -2198,6 +2204,10 @@ public class AntFarm extends ModelTask {
     }
 
     private void cook(String userId) {
+        if (Status.hasFlagToday(FLAG_COOK_RISK_BLOCK)) {
+            // 当日新村做饭已命中风控，本日中止剩余任务，避免重复打被拦截的接口、加重风控
+            return;
+        }
         try {
             JSONObject jo = new JSONObject(AntFarmRpcCall.enterKitchen(userId));
             if (!MessageUtil.checkMemo(TAG, jo)) {
