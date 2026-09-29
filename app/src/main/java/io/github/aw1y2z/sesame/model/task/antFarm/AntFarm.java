@@ -2217,6 +2217,12 @@ public class AntFarm extends ModelTask {
             if (cookTimesAllowed > 0) {
                 for (int i = 0; i < cookTimesAllowed; i++) {
                     jo = new JSONObject(AntFarmRpcCall.cook(userId));
+                    if (MessageUtil.isRiskControl(jo)) {
+                        // 新村做饭接口被风控拦截，置当日标记，本日中止剩余做饭，避免重复打加重风控
+                        Status.flagToday(FLAG_COOK_RISK_BLOCK);
+                        Log.record("风控🚫[新村做饭]接口已被拦截，本日中止剩余任务");
+                        break;
+                    }
                     if (MessageUtil.checkMemo(TAG, jo)) {
                         JSONObject cuisineVO = jo.getJSONObject("cuisineVO");
                         Log.farm("小鸡厨房👨🏻‍🍳制作[" + cuisineVO.getString("name") + "]");
