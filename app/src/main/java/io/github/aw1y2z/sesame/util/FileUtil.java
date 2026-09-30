@@ -474,7 +474,11 @@ public class FileUtil {
     public static File getStatusFile(String userId) {
         return getFile(getUserDataDirectoryFile(userId), "status.json");
     }
-    
+
+    public static File getFriendEnergyStatsFile(String userId) {
+        return getFile(getUserDataDirectoryFile(userId), "friendEnergyStats.json");
+    }
+
     public static File getStatisticsFile() {
         File statisticsFile = getFile(MAIN_DIRECTORY_FILE, "statistics.json");
         if (statisticsFile.exists()) {

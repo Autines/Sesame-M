@@ -1041,6 +1041,7 @@ public class AntForestV2 extends ModelTask {
             boolean isSelf = Objects.equals(userId, selfId);
             String userName;
             boolean isCollectEnergy;
+            boolean hasCollectable = false;
             //默认收炸弹能量
             boolean isBombCollectenergy = true;
             if (getType.equals("PK")) {
@@ -1082,6 +1083,7 @@ public class AntForestV2 extends ModelTask {
                                                     break;
                                                 }
                                                 addChildTask(new BubbleTimerTask(userId, bubbleId, produceTime, userName));
+                                hasCollectable = true;
                                                 Log.record("[" + userName + "]能量保护罩时间[" + TimeUtil.getCommonDate(joProp.getLong("endTime")) + "]#未覆盖能量球成熟时间[" + TimeUtil.getCommonDate(produceTime) + "]");
                                                 Log.record("添加蹲点收取🪂[" + userName + "]在[" + TimeUtil.getCommonDate(produceTime) + "]执行");
                                             } else {
@@ -1132,10 +1134,13 @@ public class AntForestV2 extends ModelTask {
                             //用阈值判断单个能量球需收取情况
                             if (CollectSelfEnergyType.getValue() == CollectSelfType.ALL) {
                                 bubbleIdList.add(bubbleId);
+                                hasCollectable = true;
                             } else if ((CollectSelfEnergyType.getValue() == CollectSelfType.OVER_THRESHOLD) && (remainEnergy >= CollectSelfEnergyThreshold.getValue())) {
                                 bubbleIdList.add(bubbleId);
+                                hasCollectable = true;
                             } else if (((CollectSelfEnergyType.getValue() == CollectSelfType.BELOW_THRESHOLD) && (remainEnergy <= CollectSelfEnergyThreshold.getValue()))) {
                                 bubbleIdList.add(bubbleId);
+                                hasCollectable = true;
                             }
                             break;
                         case WAITING:
@@ -1146,12 +1151,15 @@ public class AntForestV2 extends ModelTask {
                                 }
                                 if (CollectSelfEnergyType.getValue() == CollectSelfType.ALL) {
                                     addChildTask(new BubbleTimerTask(userId, bubbleId, produceTime, userName));
+                                hasCollectable = true;
                                     Log.record("添加蹲点收取🪂[" + userName + "]在[" + TimeUtil.getCommonDate(produceTime) + "]执行");
                                 } else if ((CollectSelfEnergyType.getValue() == CollectSelfType.OVER_THRESHOLD) && (remainEnergy >= CollectSelfEnergyThreshold.getValue())) {
                                     addChildTask(new BubbleTimerTask(userId, bubbleId, produceTime, userName));
+                                hasCollectable = true;
                                     Log.record("添加蹲点收取🪂[" + userName + "]在[" + TimeUtil.getCommonDate(produceTime) + "]执行");
                                 } else if (((CollectSelfEnergyType.getValue() == CollectSelfType.BELOW_THRESHOLD) && (remainEnergy <= CollectSelfEnergyThreshold.getValue()))) {
                                     addChildTask(new BubbleTimerTask(userId, bubbleId, produceTime, userName));
+                                hasCollectable = true;
                                     Log.record("添加蹲点收取🪂[" + userName + "]在[" + TimeUtil.getCommonDate(produceTime) + "]执行");
                                 }
                             } else {
@@ -1190,6 +1198,9 @@ public class AntForestV2 extends ModelTask {
                 }
             }
 
+            if (!isSelf) {
+                FriendEnergyStats.recordAttempt(userId, hasCollectable);
+            }
             return userHomeObject;
         } catch (Throwable t) {
             Log.err(TAG, "collectUserEnergy err:", t);
@@ -1233,9 +1244,11 @@ public class AntForestV2 extends ModelTask {
                                 collectEnergy = false;
                             }
                         }
-                        if (collectEnergy) {
-                            userHomeObject = collectFriendEnergy(userId, getType);
-                        }
+                                if (collectEnergy && !FriendEnergyStats.shouldSkip(userId)) {
+                                    userHomeObject = collectFriendEnergy(userId, getType);
+                                } else if (collectEnergy) {
+                                    Log.record("[" + UserIdMap.getMaskName(userId) + "]长期无能量，本轮跳过");
+                                }
                     } else {
                         if (collectEnergy.getValue() && !dontCollectMap.contains(userId)) {
                             boolean collectEnergy = true;
@@ -1279,6 +1292,7 @@ public class AntForestV2 extends ModelTask {
                     Log.err(TAG, "collectFriendEnergy err:", t);
                 }
             }
+            FriendEnergyStats.save(selfId);
         } catch (Exception e) {
             Log.printStackTrace(e);
         }
