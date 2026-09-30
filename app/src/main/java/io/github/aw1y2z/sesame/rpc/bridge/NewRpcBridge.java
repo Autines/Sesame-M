@@ -7,7 +7,9 @@ import io.github.aw1y2z.sesame.model.normal.base.BaseModel;
 import io.github.aw1y2z.sesame.rpc.intervallimit.RpcIntervalLimit;
 import io.github.aw1y2z.sesame.util.ClassUtil;
 import io.github.aw1y2z.sesame.util.Log;
+import io.github.aw1y2z.sesame.util.MessageUtil;
 import io.github.aw1y2z.sesame.util.NotificationUtil;
+import io.github.aw1y2z.sesame.util.Status;
 import io.github.aw1y2z.sesame.util.RandomUtil;
 import io.github.aw1y2z.sesame.util.RunGeneration;
 import io.github.aw1y2z.sesame.util.TaskCancelledException;
@@ -168,9 +170,14 @@ public class NewRpcBridge implements RpcBridge {
                                     ApplicationHook.reLoginByBroadcast();
                                 }
                             }
-                            return null;
-                        }
-                        return rpcEntity;
+                        return null;
+                    }
+                    // P0 全局风控暂停：命中风控挑战即触发全局静默（自动过滑块不可用，重试只会加重风控）
+                    if (MessageUtil.isRiskControl(rpcEntity.getResponseString())) {
+                        Status.markGlobalRiskControl();
+                        Log.record("风控🚫[" + method + "]接口被拦截，已触发全局暂停");
+                    }
+                    return rpcEntity;
                     } catch (Exception e) {
                         Log.error("new rpc response | id: " + id + " | method: " + method + " get err:");
                         Log.printStackTrace(e);
@@ -193,6 +200,13 @@ public class NewRpcBridge implements RpcBridge {
                 } catch (Throwable t) {
                     Log.error("new rpc request | id: " + id + " | method: " + method + " err:");
                     Log.printStackTrace(t);
+                    // P0 智能重试：风控类响应不再重试（其他传输异常仍按原策略重试）
+                    if (rpcEntity.getHasError() && rpcEntity.getResponseString() != null
+                            && MessageUtil.isRiskControl(rpcEntity.getResponseString())) {
+                        Status.markGlobalRiskControl();
+                        Log.record("风控🚫[" + method + "]请求异常但响应为风控，已触发全局暂停，不再重试");
+                        break;
+                    }
                     if (retryInterval < 0) {
                         try {
                             Thread.sleep(600 + RandomUtil.delay());
@@ -284,9 +298,14 @@ public class NewRpcBridge implements RpcBridge {
                                     ApplicationHook.reLoginByBroadcast();
                                 }
                             }
-                            return null;
-                        }
-                        return rpcEntity;
+                        return null;
+                    }
+                    // P0 全局风控暂停：命中风控挑战即触发全局静默（自动过滑块不可用，重试只会加重风控）
+                    if (MessageUtil.isRiskControl(rpcEntity.getResponseString())) {
+                        Status.markGlobalRiskControl();
+                        Log.record("风控🚫[" + method + "]接口被拦截，已触发全局暂停");
+                    }
+                    return rpcEntity;
                     } catch (Exception e) {
                         Log.error("new rpc response | id: " + id + " | method: " + method + " get err:");
                         Log.printStackTrace(e);
@@ -309,6 +328,13 @@ public class NewRpcBridge implements RpcBridge {
                 } catch (Throwable t) {
                     Log.error("new rpc request | id: " + id + " | method: " + method + " err:");
                     Log.printStackTrace(t);
+                    // P0 智能重试：风控类响应不再重试（其他传输异常仍按原策略重试）
+                    if (rpcEntity.getHasError() && rpcEntity.getResponseString() != null
+                            && MessageUtil.isRiskControl(rpcEntity.getResponseString())) {
+                        Status.markGlobalRiskControl();
+                        Log.record("风控🚫[" + method + "]请求异常但响应为风控，已触发全局暂停，不再重试");
+                        break;
+                    }
                     if (retryInterval < 0) {
                         try {
                             Thread.sleep(600 + RandomUtil.delay());

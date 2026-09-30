@@ -22,6 +22,15 @@ public class Status {
     
     public static final Status INSTANCE = new Status();
 
+    /** P0 全局风控暂停：命中一次风控挑战后，所有任务统一暂停的时长（分钟） */
+    public static final int GLOBAL_RISK_PAUSE_MINUTES = 30;
+    /** P0 停滞护栏：同一任务连续异常轮次达到该值，当日暂停该任务 */
+    public static final int STALL_MAX_ERROR_ROUNDS = 3;
+    /** P0 停滞护栏：单轮执行软超时（毫秒），超过视为"卡顿" */
+    public static final long STALL_SOFT_TIMEOUT_MS = 10L * 60 * 1000;
+    /** P0 停滞护栏：连续软超时轮次达到该值，当日暂停该任务 */
+    public static final int STALL_MAX_SLOW_ROUNDS = 2;
+
     /** 帮喂好友/家庭成员：当日总次数已达上限（服务端返回 resultCode=391），全局标记 */
     public static final String FLAG_FEED_FRIEND_ANIMAL_LIMIT = "farm::feedFriendAnimalLimit";
     
@@ -56,6 +65,11 @@ public class Status {
     // other
     private final Set<String> flagLogList = new HashSet<>();
 
+    /** P0 停滞护栏：任务名 -> 连续异常轮次（进程内计数，跨天随 status 重置） */
+    private final Map<String, Integer> taskErrorStreak = new HashMap<>();
+    /** P0 停滞护栏：任务名 -> 连续软超时轮次 */
+    private final Map<String, Integer> taskSlowStreak = new HashMap<>();
+
     // 爱心鸡结号(S2)：上一个已捐蛋的轮次号；持久化以避免进程重启后同一轮重复捐
     private String competitionDonatedRound;
     
@@ -67,6 +81,9 @@ public class Status {
     
     // 保存时间
     private Long saveTime = 0L;
+
+    /** P0 全局风控暂停：所有任务统一的"安全验证截止时间"（毫秒时间戳），过期前整轮静默 */
+    private long globalRiskControlUntil = 0L;
     
     /**
      * 绿色经营，收取好友金币已完成用户
@@ -125,6 +142,97 @@ public class Status {
         if (INSTANCE.flagLogList.contains(tag)) {
             INSTANCE.flagLogList.remove(tag);
             save(); // 清除后需保存状态，避免下次加载时恢复
+        }
+    }
+
+    // ===================== P0 全局风控暂停 =====================
+    /**
+     * 命中风控挑战时调用：把所有任务的"安全验证截止时间"后推 {@link #GLOBAL_RISK_PAUSE_MINUTES} 分钟。
+     * <p>一旦置位，{@link #isGlobalRiskControlActive()} 为 true 期间，所有任务在 {@code ModelTask.startTask}
+     * / {@code startAllTask} 入口统一跳过，不再空转重打被拦接口、也不加重风控。
+     * <p>与现有 per-task 当日熔断标记互补：全局暂停是"短冷却、跨任务"，per-task 标记是"该接口当天不再试"。
+     */
+    public static synchronized void markGlobalRiskControl() {
+        long until = System.currentTimeMillis() + GLOBAL_RISK_PAUSE_MINUTES * 60_000L;
+        if (until > INSTANCE.globalRiskControlUntil) {
+            INSTANCE.globalRiskControlUntil = until;
+            try {
+                save();
+            } catch (Throwable t) {
+                Log.err(TAG, "markGlobalRiskControl save err:", t);
+            }
+            Log.system(TAG, "全局风控暂停⏸已激活，所有任务暂停约 " + GLOBAL_RISK_PAUSE_MINUTES + " 分钟");
+        }
+    }
+
+    /** 全局风控暂停是否仍在生效（过期前返回 true） */
+    public static synchronized boolean isGlobalRiskControlActive() {
+        return System.currentTimeMillis() < INSTANCE.globalRiskControlUntil;
+    }
+
+    /** 全局风控暂停剩余毫秒数（已过期返回 0） */
+    public static synchronized long getGlobalRiskControlRemainMs() {
+        return Math.max(0L, INSTANCE.globalRiskControlUntil - System.currentTimeMillis());
+    }
+
+    // ===================== P0 停滞/进度护栏 =====================
+    /**
+     * 任务本轮执行抛异常：累加连续异常轮次；达到 {@link #STALL_MAX_ERROR_ROUNDS} 则当日暂停该任务。
+     * <p>用于兜住"任务线程卡死/每轮重打崩溃"——连续异常不再每轮空耗资源，直到次日重置。
+     */
+    public static synchronized void noteTaskError(String taskName) {
+        if (StringUtil.isEmpty(taskName)) {
+            return;
+        }
+        int n = INSTANCE.taskErrorStreak.getOrDefault(taskName, 0) + 1;
+        INSTANCE.taskErrorStreak.put(taskName, n);
+        if (n >= STALL_MAX_ERROR_ROUNDS) {
+            String flag = "stall::" + taskName;
+            if (!hasFlagToday(flag)) {
+                try {
+                    flagToday(flag);
+                } catch (Throwable t) {
+                    Log.err(TAG, "noteTaskError flagToday err:", t);
+                }
+                Log.system(TAG, "停滞护栏⚠️[" + taskName + "]连续 " + n + " 轮异常，今日暂停该任务");
+            }
+        }
+    }
+
+    /** 任务本轮正常结束（无异常）：清零连续异常计数 */
+    public static synchronized void resetTaskError(String taskName) {
+        if (!StringUtil.isEmpty(taskName)) {
+            INSTANCE.taskErrorStreak.remove(taskName);
+        }
+    }
+
+    /**
+     * 任务本轮执行超时（卡顿）：累加连续超时轮次；达到 {@link #STALL_MAX_SLOW_ROUNDS} 则当日暂停该任务。
+     * <p>软超时 {@link #STALL_SOFT_TIMEOUT_MS} 较高（10 分钟），且需连续两次才暂停，避免正常长任务误伤。
+     */
+    public static synchronized void noteTaskSlow(String taskName) {
+        if (StringUtil.isEmpty(taskName)) {
+            return;
+        }
+        int n = INSTANCE.taskSlowStreak.getOrDefault(taskName, 0) + 1;
+        INSTANCE.taskSlowStreak.put(taskName, n);
+        if (n >= STALL_MAX_SLOW_ROUNDS) {
+            String flag = "stall::" + taskName;
+            if (!hasFlagToday(flag)) {
+                try {
+                    flagToday(flag);
+                } catch (Throwable t) {
+                    Log.err(TAG, "noteTaskSlow flagToday err:", t);
+                }
+                Log.system(TAG, "停滞护栏⏱️[" + taskName + "]连续 " + n + " 轮执行超时，今日暂停该任务");
+            }
+        }
+    }
+
+    /** 任务本轮未超时：清零连续超时计数 */
+    public static synchronized void resetTaskSlow(String taskName) {
+        if (!StringUtil.isEmpty(taskName)) {
+            INSTANCE.taskSlowStreak.remove(taskName);
         }
     }
     

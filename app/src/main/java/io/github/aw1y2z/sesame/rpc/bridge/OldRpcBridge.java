@@ -99,6 +99,12 @@ public class OldRpcBridge implements RpcBridge {
                     rpcEntity.setError();
                     Log.error("old rpc request | id: " + id + " | method: " + method + " err:");
                     Log.printStackTrace(t);
+                    // P0 智能重试：风控类响应不再重试（其他异常按原策略返回）
+                    if (rpcEntity.getResponseString() != null && MessageUtil.isRiskControl(rpcEntity.getResponseString())) {
+                        Status.markGlobalRiskControl();
+                        Log.record("风控🚫[" + method + "]请求异常但响应为风控，已触发全局暂停");
+                        return rpcEntity;
+                    }
                     if (t instanceof InvocationTargetException) {
                         Throwable cause = t.getCause();
                         if (cause != null) {
@@ -179,6 +185,11 @@ public class OldRpcBridge implements RpcBridge {
                             && !resultObject.optBoolean("isSuccess")) {
                         rpcEntity.setError();
                         Log.error("old rpc response | id: " + id + " | method: " + method + " args: " + args + " | data:" + rpcEntity.getResponseString());
+                        // P0 全局风控暂停：命中风控挑战即触发全局静默（自动过滑块不可用，重试只会加重风控）
+                        if (MessageUtil.isRiskControl(resultObject)) {
+                            Status.markGlobalRiskControl();
+                            Log.record("风控🚫[" + method + "]接口被拦截，已触发全局暂停");
+                        }
                     }
                     return rpcEntity;
                 } catch (Throwable t) {

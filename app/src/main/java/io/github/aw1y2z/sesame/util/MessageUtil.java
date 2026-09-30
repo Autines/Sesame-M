@@ -118,6 +118,32 @@ public class MessageUtil {
     }
 
     /**
+     * 风控挑战（重载：直接吃原始响应字符串，供 RPC 桥在错误路径统一判定）。
+     * <p>解析失败按「非风控」处理，避免把网络异常/畸形响应误判成风控。
+     */
+    public static boolean isRiskControl(String responseStr) {
+        if (StringUtil.isEmpty(responseStr)) {
+            return false;
+        }
+        try {
+            return isRiskControl(new JSONObject(responseStr));
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * 是否应该对本次失败做重试（SmartRetryStrategy 分流）：网络/临时类可重试，
+     * 风控(保护)类不可重试（自动过滑块不可用，重试只会加重风控）。
+     */
+    public static boolean shouldRetryAfter(JSONObject jo) {
+        if (jo == null) {
+            return false;
+        }
+        return isRetryable(jo) && !isRiskControl(jo);
+    }
+
+    /**
      * 风控错误是否还应该打印日志：同一 tag 前 {@link #RISK_CONTROL_LOG_LIMIT} 次打印，
      * 之后静默（最后一次打印时提示「已按接口熔断」，免得看日志的人以为风控消失了）。
      */

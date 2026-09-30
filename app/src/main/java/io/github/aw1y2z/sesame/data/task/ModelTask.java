@@ -56,6 +56,7 @@ public abstract class ModelTask extends Model {
         public void run() {
             // 执行槽已由 startTask 抢住；此处只取快照，stopTask 递增后本代作废
             long myGen = task.generation;
+            long startTime = System.currentTimeMillis();
             MAIN_TASK_MAP.put(task, Thread.currentThread());
             // 绑定本代令牌：本线程的 sleep / RPC 入口据此感知作废
             RunGeneration prevGen = RunGeneration.bind(myGen, () -> task.generation);
@@ -72,13 +73,28 @@ public abstract class ModelTask extends Model {
             // 标记本线程所属模块：Log 写入时会自动加 [模块名] 前缀。
             // 各模块跑在各自的线程池线程上，ThreadLocal 天然隔离，并发交错也不会串味。
             Log.setCurrentModule(task.getName());
+            boolean threw = false;
             try {
                 task.run();
             } catch (TaskCancelledException e) {
                 Log.record(task.getName() + "⏹代际已作废，本轮提前结束");
             } catch (Exception e) {
+                threw = true;
+                Status.noteTaskError(task.getName());
                 Log.printStackTrace(e);
             } finally {
+                // P0 停滞护栏：单轮执行过久记为"卡顿"，连续超时则当日暂停
+                long cost = System.currentTimeMillis() - startTime;
+                if (threw) {
+                    // 异常 streak 已在 catch 中累加
+                } else {
+                    Status.resetTaskError(task.getName());
+                }
+                if (cost > Status.STALL_SOFT_TIMEOUT_MS) {
+                    Status.noteTaskSlow(task.getName());
+                } else {
+                    Status.resetTaskSlow(task.getName());
+                }
                 // 作废期间被静音的错误日志条数一并报告，避免真故障无声丢失
                 int dropped = Log.takeDroppedStaleLogCount();
                 if (dropped > 0) {
@@ -193,6 +209,19 @@ public abstract class ModelTask extends Model {
             Log.record(getName() + "⏭本实例上一代未退出，本轮跳过");
             return false;
         }
+        // P0 全局风控暂停：命中一次风控后所有任务静默约 GLOBAL_RISK_PAUSE_MINUTES 分钟，避免空转重打被拦接口
+        if (Status.isGlobalRiskControlActive()) {
+            running.set(false);
+            long remainMin = Status.getGlobalRiskControlRemainMs() / 60_000L;
+            Log.record(getName() + "⏸全局风控暂停中（约剩 " + remainMin + " 分钟），本轮跳过");
+            return false;
+        }
+        // P0 停滞护栏：单任务连续异常/超时达阈值，当日不再启动，防止死循环卡住线程池
+        if (Status.hasFlagToday("stall::" + getName())) {
+            running.set(false);
+            Log.record(getName() + "⏭当日停滞护栏已触发，本轮跳过");
+            return false;
+        }
         try {
             if (isSync()) {
                 mainRunnable.run();
@@ -239,6 +268,12 @@ public abstract class ModelTask extends Model {
     }
 
     public static void startAllTask(Boolean force) {
+        // P0 全局风控暂停：整轮静默，不再逐个启动任何任务
+        if (Status.isGlobalRiskControlActive()) {
+            long remainMin = Status.getGlobalRiskControlRemainMs() / 60_000L;
+            Log.record("⏸全局风控暂停中（约剩 " + remainMin + " 分钟），本轮全部任务跳过");
+            return;
+        }
         //自动触发备份配置文件
         if (!Status.hasFlagToday("Config::backup")) {
             FileUtil.backupConfigV2WithRolling(UserIdMap.getCurrentUid());
