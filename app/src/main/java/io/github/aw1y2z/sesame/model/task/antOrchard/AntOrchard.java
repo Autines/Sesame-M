@@ -80,9 +80,8 @@ public class AntOrchard extends ModelTask {
     private BooleanModelField orchardListTask;
     private BooleanModelField AutoAntOrchardTaskList;
     private SelectModelField AntOrchardTaskList;
-    // 金豆夺宝专场（antorchard 抽奖活动）：独立开关 + 黑名单
+    // 金豆夺宝专场（antorchard 抽奖活动）：开关 + 黑名单
     private BooleanModelField orchardDrawTask;
-    private BooleanModelField orchardDrawLottery;
     private SelectModelField AntOrchardDrawTaskList;
     private BooleanModelField orchardSpreadManure;
     private BooleanModelField useBatchSpread;
@@ -125,8 +124,6 @@ public class AntOrchard extends ModelTask {
         LinkedHashSet<String> drawBlackDefault = new LinkedHashSet<>();
         drawBlackDefault.add("CHOUCHOULE_GAME_SC33T_ZH1");
         modelFields.addField(orchardDrawTask = new BooleanModelField("orchardDrawTask", "金豆夺宝专场 | 开启", false));
-        // 抽奖与做任务解耦：只做任务不抽、或只把已有机会抽掉，都允许
-        modelFields.addField(orchardDrawLottery = new BooleanModelField("orchardDrawLottery", "金豆夺宝专场 | 自动抽奖", true));
         modelFields.addField(AntOrchardDrawTaskList = new SelectModelField("AntOrchardDrawTaskList", "金豆夺宝专场 | 黑名单列表", drawBlackDefault, AlipayAntOrchardDrawTaskList::getList).setDependsOn("orchardDrawTask"));
         modelFields.addField(orchardSpreadManure = new BooleanModelField("orchardSpreadManure", "农场施肥 | 开启", false));
         modelFields.addField(useBatchSpread = new BooleanModelField("useBatchSpread", "一键施肥5次(边界突破)", false)
@@ -182,8 +179,8 @@ public class AntOrchard extends ModelTask {
                 orchardListTask();
             }
 
-            // 金豆夺宝专场（antorchard 抽奖活动）：做任务得机会 + 把机会抽掉，两个开关任一开启就进来
-            if (orchardDrawTask.getValue() || orchardDrawLottery.getValue()) {
+            // 金豆夺宝专场（antorchard 抽奖活动）：做任务得机会 + 把机会抽掉
+            if (orchardDrawTask.getValue()) {
                 orchardDrawTask();
             }
 
@@ -206,12 +203,8 @@ public class AntOrchard extends ModelTask {
     /**
      * 金豆夺宝专场（antorchard 抽奖活动）：做任务得抽奖机会 + 把机会抽掉。
      * <p>入口在芭芭农场内；任务走 {@code antieptask.*antorchard}，抽奖机走 {@code antiepdrawprod.*antorchard}。
-     * <p>两个开关互相独立、任意一个开着就走本方法，公用的「进入专场 + 同步次数」只做一次：
-     * <ul>
-     *   <li>{@code orchardDrawTask}（金豆夺宝专场 | 开启）＝做任务、领抽奖机会；</li>
-     *   <li>{@code orchardDrawLottery}（金豆夺宝专场 | 自动抽奖）＝消耗机会去抽奖
-     *       （参照 {@code ForestChouChouLe} 森林寻宝的实现）。</li>
-     * </ul>
+     * <p>由「金豆夺宝专场 | 开启」一个开关统一控制：先做任务领机会，再把所有机会抽掉
+     * （抽奖参照 {@code ForestChouChouLe} 森林寻宝的实现）。
      */
     private void orchardDrawTask() {
         try {
@@ -220,10 +213,10 @@ public class AntOrchard extends ModelTask {
             AntOrchardDrawTaskListMap.load();
             // 进入专场并同步抽奖次数（不消耗机会，仅刷新余额），下面两个子步骤共用
             String activityId = enterAndSyncOrchardDraw();
-            if (orchardDrawTask.getValue()) {
-                finishOrchardDrawTasks();
-            }
-            if (orchardDrawLottery.getValue() && !activityId.isEmpty()) {
+            // 做任务、领抽奖机会
+            finishOrchardDrawTasks();
+            // 把机会抽掉
+            if (!activityId.isEmpty()) {
                 drawOrchardLottery(activityId);
             }
         } catch (Throwable t) {
