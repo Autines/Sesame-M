@@ -36,6 +36,7 @@ import java.util.Set;
 
 import io.github.aw1y2z.sesame.util.*;
 import io.github.aw1y2z.sesame.util.idMap.AntFarmDoFarmTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntOrchardDrawTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntOrchardTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.MemberCreditSesameTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.PlantSceneIdMap;
@@ -81,6 +82,7 @@ public class AntOrchard extends ModelTask {
     private SelectModelField AntOrchardTaskList;
     // 金豆夺宝专场（antorchard 抽奖活动）：独立开关 + 黑名单
     private BooleanModelField orchardDrawTask;
+    private BooleanModelField orchardDrawLottery;
     private SelectModelField AntOrchardDrawTaskList;
     private BooleanModelField orchardSpreadManure;
     private BooleanModelField useBatchSpread;
@@ -123,6 +125,8 @@ public class AntOrchard extends ModelTask {
         LinkedHashSet<String> drawBlackDefault = new LinkedHashSet<>();
         drawBlackDefault.add("CHOUCHOULE_GAME_SC33T_ZH1");
         modelFields.addField(orchardDrawTask = new BooleanModelField("orchardDrawTask", "金豆夺宝专场 | 开启", false));
+        // 抽奖与做任务解耦：只做任务不抽、或只把已有机会抽掉，都允许
+        modelFields.addField(orchardDrawLottery = new BooleanModelField("orchardDrawLottery", "金豆夺宝专场 | 自动抽奖", true));
         modelFields.addField(AntOrchardDrawTaskList = new SelectModelField("AntOrchardDrawTaskList", "金豆夺宝专场 | 黑名单列表", drawBlackDefault, AlipayAntOrchardDrawTaskList::getList).setDependsOn("orchardDrawTask"));
         modelFields.addField(orchardSpreadManure = new BooleanModelField("orchardSpreadManure", "农场施肥 | 开启", false));
         modelFields.addField(useBatchSpread = new BooleanModelField("useBatchSpread", "一键施肥5次(边界突破)", false)
@@ -178,8 +182,8 @@ public class AntOrchard extends ModelTask {
                 orchardListTask();
             }
 
-            // 金豆夺宝专场（antorchard 抽奖活动）任务自动完成
-            if (orchardDrawTask.getValue()) {
+            // 金豆夺宝专场（antorchard 抽奖活动）：做任务得机会 + 把机会抽掉，两个开关任一开启就进来
+            if (orchardDrawTask.getValue() || orchardDrawLottery.getValue()) {
                 orchardDrawTask();
             }
 
@@ -200,18 +204,41 @@ public class AntOrchard extends ModelTask {
     }
 
     /**
-     * 金豆夺宝专场（antorchard 抽奖活动）任务自动完成。
-     * <p>入口在芭芭农场内；任务走 {@code antieptask.*antorchard}，抽奖机状态走 {@code antiepdrawprod.*antorchard}。
-     * <p>流程：进入抽奖活动并同步抽奖次数（不消耗机会）→ 拉任务列表 → 对每个任务按
-     * <b>RECEIVED/DONE → FINISHED(领奖) → 黑名单 → TODO(提交完成)</b> 的顺序判定；
-     * 即"能领的先领"，黑名单只拦"提交完成"，不会把已可领的奖励跳过。
-     * <p>游戏类任务（需前端行为配合）服务端拒收 RPC，交给自动拉黑机制兜底。
+     * 金豆夺宝专场（antorchard 抽奖活动）：做任务得抽奖机会 + 把机会抽掉。
+     * <p>入口在芭芭农场内；任务走 {@code antieptask.*antorchard}，抽奖机走 {@code antiepdrawprod.*antorchard}。
+     * <p>两个开关互相独立、任意一个开着就走本方法，公用的「进入专场 + 同步次数」只做一次：
+     * <ul>
+     *   <li>{@code orchardDrawTask}（金豆夺宝专场 | 开启）＝做任务、领抽奖机会；</li>
+     *   <li>{@code orchardDrawLottery}（金豆夺宝专场 | 自动抽奖）＝消耗机会去抽奖
+     *       （参照 {@code ForestChouChouLe} 森林寻宝的实现）。</li>
+     * </ul>
      */
     private void orchardDrawTask() {
         try {
-            // 进入抽奖活动并同步抽奖次数（不消耗抽奖机会，仅刷新状态）
-            String enterResp = AntOrchardRpcCall.enterDrawActivityantorchard();
-            JSONObject enterJo = new JSONObject(enterResp);
+            // 先载入展示映射（taskType→中文标题）。必须 load 再写：映射在宿主进程里默认是空的，
+            // 直接 add 后 save 会把上次学到的其它任务标题覆盖掉（同 initAntOrchardTaskListMap 的做法）。
+            AntOrchardDrawTaskListMap.load();
+            // 进入专场并同步抽奖次数（不消耗机会，仅刷新余额），下面两个子步骤共用
+            String activityId = enterAndSyncOrchardDraw();
+            if (orchardDrawTask.getValue()) {
+                finishOrchardDrawTasks();
+            }
+            if (orchardDrawLottery.getValue() && !activityId.isEmpty()) {
+                drawOrchardLottery(activityId);
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "orchardDrawTask err:", t);
+        }
+    }
+
+    /**
+     * 进入金豆夺宝专场并同步抽奖次数（**不消耗**机会，只刷新余额）。
+     *
+     * @return 专场 activityId；取不到时返回空串，调用方据此跳过依赖它的步骤
+     */
+    private String enterAndSyncOrchardDraw() {
+        try {
+            JSONObject enterJo = new JSONObject(AntOrchardRpcCall.enterDrawActivityantorchard());
             String activityId = "";
             if (MessageUtil.checkSuccess(TAG, enterJo)) {
                 JSONObject drawActivity = enterJo.optJSONObject("drawActivity");
@@ -229,7 +256,21 @@ public class AntOrchard extends ModelTask {
                     }
                 }
             }
+            return activityId;
+        } catch (Throwable t) {
+            Log.err(TAG, "enterAndSyncOrchardDraw err:", t);
+            return "";
+        }
+    }
 
+    /**
+     * 拉专场任务列表并逐个处理，判定顺序：
+     * <b>RECEIVED/DONE → FINISHED(领奖) → 黑名单 → TODO(提交完成)</b>。
+     * <p>即"能领的先领"，黑名单只拦"提交完成"，不会把已可领的奖励跳过。
+     * <p>游戏类任务（需前端行为配合）服务端拒收 RPC，交给自动拉黑机制兜底。
+     */
+    private void finishOrchardDrawTasks() {
+        try {
             // 拉任务列表
             JSONObject listJo = new JSONObject(AntOrchardRpcCall.listTaskantorchard());
             if (!MessageUtil.checkSuccess(TAG, listJo)) {
@@ -242,6 +283,7 @@ public class AntOrchard extends ModelTask {
             }
             int total = taskInfoList.length();
             int done = 0, received = 0, skipped = 0, todo = 0;
+            boolean titleMapChanged = false;
             for (int i = 0; i < taskInfoList.length(); i++) {
                 JSONObject task = taskInfoList.optJSONObject(i);
                 if (task == null) {
@@ -253,6 +295,19 @@ public class AntOrchard extends ModelTask {
                 String title = drawTaskTitle(task);
                 if (taskType.isEmpty()) {
                     continue;
+                }
+                // 把服务端返回的真实标题记进展示映射：黑名单列表与日志就能显示中文标题，
+                // 而黑名单的**存储值仍是不变的 taskType**（匹配靠它）。标题变了下次自动刷新。
+                if (!title.isEmpty()) {
+                    if (!title.equals(AntOrchardDrawTaskListMap.get(taskType))) {
+                        AntOrchardDrawTaskListMap.add(taskType, title);
+                        titleMapChanged = true;
+                    }
+                } else if (AntOrchardDrawTaskListMap.get(taskType) == null) {
+                    // 服务端这次没给标题：至少登记 taskType 兜底，
+                    // 保证该任务能在黑名单列表里被看到、被勾选（否则它会从选项里消失）
+                    AntOrchardDrawTaskListMap.add(taskType, taskType);
+                    titleMapChanged = true;
                 }
                 // 状态判定要排在黑名单之前：已可领奖(FINISHED)的任务即便在黑名单里也要领，
                 // 否则黑名单会把"本来能领的奖励"一起跳掉——黑名单的语义是"不再提交完成"，不是"不要领奖"。
@@ -305,10 +360,53 @@ public class AntOrchard extends ModelTask {
                 // 兜底：状态既不属可领/已领、也不属待做（字段缺失或服务端新增状态）→ 打出来便于排查
                 Log.farm("金豆夺宝专场❔未知状态[" + title + "]#status=" + taskStatus + "#taskType=" + taskType);
             }
+            if (titleMapChanged) {
+                AntOrchardDrawTaskListMap.save();
+            }
             Log.farm("金豆夺宝专场📊任务统计[共" + total + "个]#完成=" + done + "领奖=" + received
                     + "待做=" + todo + "跳过=" + skipped);
         } catch (Throwable t) {
-            Log.err(TAG, "orchardDrawTask err:", t);
+            Log.err(TAG, "finishOrchardDrawTasks err:", t);
+        }
+    }
+
+    /** 单轮最多抽几次：防"服务端一直返回成功但余额不降"导致的无上限连发（同森林寻宝的做法） */
+    private static final int MAX_DRAW_LOOP = 100;
+
+    /**
+     * 把已获得的抽奖机会抽完（每次消耗 1 次）。
+     * <p>参照 {@code ForestChouChouLe} 森林寻宝的抽奖段：每抽一次都从响应里读回
+     * {@code drawAsset.blance}（抽完后的剩余次数），归零即停；单次失败直接停止、不重试，
+     * 再用 {@link #MAX_DRAW_LOOP} 兜底防无上限连发。
+     * <p>奖品取自抓包确认的 {@code prizeVO.prizeName / prizeNum}（实测如「500肥料 ×1」）。
+     */
+    private void drawOrchardLottery(String activityId) {
+        int drawn = 0;
+        try {
+            for (int i = 0; i < MAX_DRAW_LOOP; i++) {
+                JSONObject jo = new JSONObject(AntOrchardRpcCall.drawantorchard(activityId));
+                if (!MessageUtil.checkSuccess(TAG, jo)) {
+                    Log.farm("金豆夺宝专场🎰抽奖停止[本次已抽" + drawn + "次]#原因="
+                            + jo.optString("desc", jo.optString("errorMsg", "")));
+                    return;
+                }
+                drawn++;
+                JSONObject prizeVO = jo.optJSONObject("prizeVO");
+                if (prizeVO != null) {
+                    Log.farm("金豆夺宝专场🎁抽中[" + prizeVO.optString("prizeName", "")
+                            + "×" + prizeVO.optInt("prizeNum", 0) + "]");
+                }
+                JSONObject drawAsset = jo.optJSONObject("drawAsset");
+                int blance = drawAsset == null ? 0 : drawAsset.optInt("blance", 0);
+                if (blance <= 0) {
+                    Log.farm("金豆夺宝专场🎰机会已抽完[共抽" + drawn + "次]");
+                    return;
+                }
+                TimeUtil.sleep(1000);
+            }
+            Log.farm("金豆夺宝专场🎰已达单轮上限[" + MAX_DRAW_LOOP + "次]，剩余机会下轮继续");
+        } catch (Throwable t) {
+            Log.err(TAG, "drawOrchardLottery err:", t);
         }
     }
 

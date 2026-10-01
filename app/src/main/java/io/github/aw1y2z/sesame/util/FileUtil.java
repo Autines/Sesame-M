@@ -567,6 +567,11 @@ public class FileUtil {
         return getFile(MAIN_DIRECTORY_FILE, "AntOrchardTask.json");
     }
 
+    /** 金豆夺宝专场任务的 taskType → 中文标题（仅供黑名单列表显示，存储值仍是 taskType） */
+    public static File getAntOrchardDrawTaskListMapFile() {
+        return getFile(MAIN_DIRECTORY_FILE, "AntOrchardDrawTask.json");
+    }
+
     public static File getGoldenBeansTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "GoldenBeansTask.json");
     }

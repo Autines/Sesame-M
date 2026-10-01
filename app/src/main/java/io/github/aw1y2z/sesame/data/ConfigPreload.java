@@ -11,6 +11,8 @@ import io.github.aw1y2z.sesame.util.idMap.AntForestVitalityTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntMemberTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntOceanAntiepTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntOceanFishBlackListMap;
+import io.github.aw1y2z.sesame.entity.AlipayAntOrchardDrawTaskList;
+import io.github.aw1y2z.sesame.util.idMap.AntOrchardDrawTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntOrchardTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntSportsTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntStallTaskListMap;
@@ -71,6 +73,11 @@ public final class ConfigPreload {
         AntOceanAntiepTaskListMap.load();
         AntOceanFishBlackListMap.load();
         AntOrchardTaskListMap.load();
+        AntOrchardDrawTaskListMap.load();
+        // 补上专场任务的内置显示名并落盘（必须在 load() 之后：否则会把已学到的真实标题覆盖掉）
+        if (AlipayAntOrchardDrawTaskList.seedDefaults()) {
+            AntOrchardDrawTaskListMap.save();
+        }
         AntStallTaskListMap.load();
         AntSportsTaskListMap.load();
         PathThemeMapListMap.load();

@@ -223,4 +223,19 @@ public class AntOrchardRpcCall {
         return ApplicationHook.requestString("com.alipay.antiepdrawprod.drawSyncantorchard", args);
     }
 
+    /**
+     * 执行一次金豆夺宝专场抽奖（{@code com.alipay.antiepdrawprod.drawantorchard}），**消耗 1 次机会**。
+     * <p>参数取自 2026-10-01 K40 真机抓包（老板手点一次抽奖）：
+     * <pre>[{"activityId":"20260916","requestType":"RPC","sceneCode":"ANTORCHARD_DRAW_TIMES",
+     *   "source":"antorchard","userId":"2088122949469851"}]</pre>
+     * <p>响应里 {@code drawAsset.blance} 是抽完后的剩余次数（抓包实测 7→6），
+     * {@code prizeVO.prizeName / prizeNum} 是本次奖品（实测「500肥料 ×1」）。
+     */
+    public static String drawantorchard(String activityId) {
+        String args = "[{\"activityId\":\"" + (activityId == null ? "" : activityId)
+                + "\",\"requestType\":\"RPC\",\"sceneCode\":\"ANTORCHARD_DRAW_TIMES\",\"source\":\"antorchard\",\"userId\":\""
+                + UserIdMap.getCurrentUid() + "\"}]";
+        return ApplicationHook.requestString("com.alipay.antiepdrawprod.drawantorchard", args);
+    }
+
 }
