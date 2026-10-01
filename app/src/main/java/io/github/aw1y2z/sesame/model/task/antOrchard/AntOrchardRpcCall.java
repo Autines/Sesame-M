@@ -179,4 +179,48 @@ public class AntOrchardRpcCall {
         return orchardSyncIndex();
     }
 
+    /* ===================== 金豆夺宝专场（antorchard 抽奖活动） ===================== */
+    // 入口在芭芭农场内；任务走 antieptask.*antorchard，抽奖机走 antiepdrawprod.*antorchard。
+    // 以下方法均来自 2026-10-01 真机抓包（logs/20261001-110335），请求参数与官方报文一致。
+
+    /**
+     * 拉金豆夺宝专场任务列表（{@code com.alipay.antieptask.listTaskantorchard}）。
+     * <p>响应 {@code taskInfoList[]}：每个任务含 {@code iepTaskTracer}（~ 分隔，含 taskType/taskStatus）、
+     * {@code taskBaseInfo.bizInfo.title}、{@code taskRights.awardCount/alreadyReceiveAwardCount}。
+     */
+    public static String listTaskantorchard() {
+        String args = "[{\"extend\":{\"appMode\":\"newarrival\"},\"requestType\":\"RPC\",\"sceneCode\":\"ANTORCHARD_DRAW_TIMES_TASK\",\"source\":\"antorchard\"}]";
+        return ApplicationHook.requestString("com.alipay.antieptask.listTaskantorchard", args);
+    }
+
+    /**
+     * 完成金豆夺宝专场任务（{@code com.alipay.antieptask.finishTaskantorchard}）。
+     * <p>只需 sceneCode + taskType，服务端按 taskType 判定该用户此轮任务；不需要 taskId。
+     * outBizNo 取 taskType + 时间戳 + 随机串，格式对齐官方报文。
+     */
+    public static String finishTaskantorchard(String taskType) {
+        String userId = UserIdMap.getCurrentUid();
+        String outBizNo = taskType + "_" + userId + "_" + System.currentTimeMillis() + "_" + RandomUtil.getRandom(6);
+        String args = "[{\"outBizNo\":\"" + outBizNo + "\",\"sceneCode\":\"ANTORCHARD_DRAW_TIMES_TASK\",\"source\":\"antorchard\",\"taskType\":\"" + taskType + "\"}]";
+        return ApplicationHook.requestString("com.alipay.antieptask.finishTaskantorchard", args);
+    }
+
+    /**
+     * 进入金豆夺宝专场抽奖活动（{@code com.alipay.antiepdrawprod.enterDrawActivityantorchard}）。
+     * <p>返回 {@code drawActivity.activityId}，供 {@link #drawSyncantorchard(String)} 同步抽奖次数。
+     */
+    public static String enterDrawActivityantorchard() {
+        String args = "[{\"activityId\":\"\",\"context\":{\"appMode\":\"newarrival\"},\"requestType\":\"RPC\",\"sceneCode\":\"ANTORCHARD_DRAW_TIMES\",\"source\":\"antorchard\"}]";
+        return ApplicationHook.requestString("com.alipay.antiepdrawprod.enterDrawActivityantorchard", args);
+    }
+
+    /**
+     * 同步金豆夺宝专场抽奖次数（{@code com.alipay.antiepdrawprod.drawSyncantorchard}）。
+     * <p>只刷新抽奖状态（drawAsset.blance），不消耗抽奖机会；activityId 来自 {@link #enterDrawActivityantorchard()}。
+     */
+    public static String drawSyncantorchard(String activityId) {
+        String args = "[{\"activityId\":\"" + (activityId == null ? "" : activityId) + "\",\"context\":{\"appMode\":\"newarrival\"},\"requestType\":\"RPC\",\"sceneCode\":\"ANTORCHARD_DRAW_TIMES\",\"source\":\"taskaward\"}]";
+        return ApplicationHook.requestString("com.alipay.antiepdrawprod.drawSyncantorchard", args);
+    }
+
 }

@@ -2,6 +2,7 @@ package io.github.aw1y2z.sesame.model.task.antOrchard;
 
 import io.github.aw1y2z.sesame.data.ConfigV2;
 import io.github.aw1y2z.sesame.entity.AlipayAntOrchardTaskList;
+import io.github.aw1y2z.sesame.entity.AlipayAntOrchardDrawTaskList;
 import io.github.aw1y2z.sesame.entity.AlipayMemberCreditSesameTaskList;
 import io.github.aw1y2z.sesame.entity.AlipayPlantScene;
 import io.github.aw1y2z.sesame.entity.AlipayUser;
@@ -78,6 +79,9 @@ public class AntOrchard extends ModelTask {
     private BooleanModelField orchardListTask;
     private BooleanModelField AutoAntOrchardTaskList;
     private SelectModelField AntOrchardTaskList;
+    // 金豆夺宝专场（antorchard 抽奖活动）：独立开关 + 黑名单
+    private BooleanModelField orchardDrawTask;
+    private SelectModelField AntOrchardDrawTaskList;
     private BooleanModelField orchardSpreadManure;
     private BooleanModelField useBatchSpread;
     private SelectModelField orchardSpreadManureSceneList;
@@ -115,6 +119,11 @@ public class AntOrchard extends ModelTask {
         modelFields.addField(orchardListTask = new BooleanModelField("orchardListTask", "农场任务", false));
         modelFields.addField(AutoAntOrchardTaskList = new BooleanModelField("AutoAntOrchardTaskList", "农场任务 | 自动黑名单", true).setDependsOn("orchardListTask"));
         modelFields.addField(AntOrchardTaskList = new SelectModelField("AntOrchardTaskList", "农场任务 | 黑名单列表", new LinkedHashSet<>(), AlipayAntOrchardTaskList::getList).setDependsOn("AutoAntOrchardTaskList"));
+        // 金豆夺宝专场：默认关闭；黑名单初始即含游戏类任务（生存33天电台招募，服务端拒收 RPC，做不了）
+        LinkedHashSet<String> drawBlackDefault = new LinkedHashSet<>();
+        drawBlackDefault.add("CHOUCHOULE_GAME_SC33T_ZH1");
+        modelFields.addField(orchardDrawTask = new BooleanModelField("orchardDrawTask", "金豆夺宝专场 | 开启", false));
+        modelFields.addField(AntOrchardDrawTaskList = new SelectModelField("AntOrchardDrawTaskList", "金豆夺宝专场 | 黑名单列表", drawBlackDefault, AlipayAntOrchardDrawTaskList::getList).setDependsOn("orchardDrawTask"));
         modelFields.addField(orchardSpreadManure = new BooleanModelField("orchardSpreadManure", "农场施肥 | 开启", false));
         modelFields.addField(useBatchSpread = new BooleanModelField("useBatchSpread", "一键施肥5次(边界突破)", false)
                 .setDependsOn("orchardSpreadManure")
@@ -169,6 +178,11 @@ public class AntOrchard extends ModelTask {
                 orchardListTask();
             }
 
+            // 金豆夺宝专场（antorchard 抽奖活动）任务自动完成
+            if (orchardDrawTask.getValue()) {
+                orchardDrawTask();
+            }
+
 
             // 执行施肥逻辑
             if (orchardSpreadManure.getValue()) {
@@ -183,6 +197,159 @@ public class AntOrchard extends ModelTask {
         } catch (Throwable t) {
             Log.err(TAG, "start.run err:", t);
         }
+    }
+
+    /**
+     * 金豆夺宝专场（antorchard 抽奖活动）任务自动完成。
+     * <p>入口在芭芭农场内；任务走 {@code antieptask.*antorchard}，抽奖机状态走 {@code antiepdrawprod.*antorchard}。
+     * <p>流程：进入抽奖活动并同步抽奖次数（不消耗机会）→ 拉任务列表 → 对每个任务按
+     * <b>RECEIVED/DONE → FINISHED(领奖) → 黑名单 → TODO(提交完成)</b> 的顺序判定；
+     * 即"能领的先领"，黑名单只拦"提交完成"，不会把已可领的奖励跳过。
+     * <p>游戏类任务（需前端行为配合）服务端拒收 RPC，交给自动拉黑机制兜底。
+     */
+    private void orchardDrawTask() {
+        try {
+            // 进入抽奖活动并同步抽奖次数（不消耗抽奖机会，仅刷新状态）
+            String enterResp = AntOrchardRpcCall.enterDrawActivityantorchard();
+            JSONObject enterJo = new JSONObject(enterResp);
+            String activityId = "";
+            if (MessageUtil.checkSuccess(TAG, enterJo)) {
+                JSONObject drawActivity = enterJo.optJSONObject("drawActivity");
+                if (drawActivity != null) {
+                    activityId = drawActivity.optString("activityId", "");
+                }
+            }
+            if (!activityId.isEmpty()) {
+                JSONObject syncJo = new JSONObject(AntOrchardRpcCall.drawSyncantorchard(activityId));
+                if (MessageUtil.checkSuccess(TAG, syncJo)) {
+                    // 抽奖次数余额（服务端字段名本就拼作 blance，照抄，别"顺手修正"）
+                    JSONObject drawAsset = syncJo.optJSONObject("drawAsset");
+                    if (drawAsset != null && drawAsset.has("blance")) {
+                        Log.farm("金豆夺宝专场🎰当前抽奖机会[" + drawAsset.optInt("blance", 0) + "]");
+                    }
+                }
+            }
+
+            // 拉任务列表
+            JSONObject listJo = new JSONObject(AntOrchardRpcCall.listTaskantorchard());
+            if (!MessageUtil.checkSuccess(TAG, listJo)) {
+                return;
+            }
+            JSONArray taskInfoList = listJo.optJSONArray("taskInfoList");
+            if (taskInfoList == null || taskInfoList.length() == 0) {
+                Log.farm("金豆夺宝专场📋无任务");
+                return;
+            }
+            int total = taskInfoList.length();
+            int done = 0, received = 0, skipped = 0, todo = 0;
+            for (int i = 0; i < taskInfoList.length(); i++) {
+                JSONObject task = taskInfoList.optJSONObject(i);
+                if (task == null) {
+                    continue;
+                }
+                String tracer = task.optString("iepTaskTracer", "");
+                String taskType = traceField(tracer, "taskType");
+                String taskStatus = traceField(tracer, "taskStatus");
+                String title = drawTaskTitle(task);
+                if (taskType.isEmpty()) {
+                    continue;
+                }
+                // 状态判定要排在黑名单之前：已可领奖(FINISHED)的任务即便在黑名单里也要领，
+                // 否则黑名单会把"本来能领的奖励"一起跳掉——黑名单的语义是"不再提交完成"，不是"不要领奖"。
+                // （攒豆类阶梯任务就属于这种：提交完成永远失败，但攒够豆后状态会自己变 FINISHED）
+                if ("RECEIVED".equals(taskStatus) || "DONE".equals(taskStatus)) {
+                    received++;
+                    Log.farm("金豆夺宝专场☑️已领[" + title + "]");
+                    continue;
+                }
+                if ("FINISHED".equals(taskStatus)) {
+                    JSONObject rights = task.optJSONObject("taskRights");
+                    int awardCount = rights == null ? 0 : rights.optInt("awardCount", 0);
+                    int already = rights == null ? 0 : rights.optInt("alreadyReceiveAwardCount", 0);
+                    int awardCountForReceive = awardCount - already;
+                    if (awardCountForReceive > 0) {
+                        JSONObject aw = new JSONObject(
+                                AntOrchardRpcCall.receiveTaskAwardantorchard(awardCountForReceive, "ANTORCHARD_DRAW_TIMES_TASK", taskType));
+                        if (MessageUtil.checkSuccess(TAG, aw)) {
+                            received++;
+                            Log.farm("金豆夺宝专场🎖️领取[" + title + "]奖励[" + awardCountForReceive + "]");
+                        } else {
+                            MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, aw);
+                        }
+                    } else {
+                        received++;
+                        Log.farm("金豆夺宝专场☑️已领[" + title + "]");
+                    }
+                    continue;
+                }
+                if ("TODO".equals(taskStatus)) {
+                    // 只有"待做"才看黑名单：黑名单里的任务不再提交完成，避免无效 RPC 触发风控
+                    if (AntOrchardDrawTaskList.getValue().contains(taskType)) {
+                        skipped++;
+                        Log.farm("金豆夺宝专场🏴跳过[" + title + "]#黑名单");
+                        continue;
+                    }
+                    todo++;
+                    JSONObject finishJo = new JSONObject(AntOrchardRpcCall.finishTaskantorchard(taskType));
+                    if (MessageUtil.checkSuccess(TAG, finishJo)) {
+                        done++;
+                        Log.farm("金豆夺宝专场🧾完成[" + title + "]#taskType=" + taskType);
+                    } else {
+                        // 游戏类/需前端行为配合的任务服务端拒收，交给自动拉黑机制兜底
+                        MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, finishJo);
+                        Log.farm("金豆夺宝专场⚠️未完成[" + title + "]#taskType=" + taskType);
+                    }
+                    TimeUtil.sleep(1000);
+                    continue;
+                }
+                // 兜底：状态既不属可领/已领、也不属待做（字段缺失或服务端新增状态）→ 打出来便于排查
+                Log.farm("金豆夺宝专场❔未知状态[" + title + "]#status=" + taskStatus + "#taskType=" + taskType);
+            }
+            Log.farm("金豆夺宝专场📊任务统计[共" + total + "个]#完成=" + done + "领奖=" + received
+                    + "待做=" + todo + "跳过=" + skipped);
+        } catch (Throwable t) {
+            Log.err(TAG, "orchardDrawTask err:", t);
+        }
+    }
+
+    /** 解析 iepTaskTracer（~ 分隔的 key:value）中的字段 */
+    private static String traceField(String tracer, String key) {
+        if (tracer == null || tracer.isEmpty()) {
+            return "";
+        }
+        for (String seg : tracer.split("~")) {
+            int idx = seg.indexOf(key + ":");
+            if (idx >= 0) {
+                return seg.substring(idx + key.length() + 1);
+            }
+        }
+        return "";
+    }
+
+    /** 任务展示名：taskBaseInfo.bizInfo(title)，bizInfo 可能是 JSONObject 或 JSON 字符串 */
+    private static String drawTaskTitle(JSONObject task) {
+        JSONObject tbi = task.optJSONObject("taskBaseInfo");
+        if (tbi == null) {
+            return "";
+        }
+        Object biz = tbi.opt("bizInfo");
+        JSONObject bizJo = null;
+        if (biz instanceof JSONObject) {
+            bizJo = (JSONObject) biz;
+        } else if (biz instanceof String) {
+            try {
+                bizJo = new JSONObject((String) biz);
+            } catch (Throwable ignore) {
+                // ignore
+            }
+        }
+        if (bizJo != null) {
+            String title = bizJo.optString("title", "").trim();
+            if (!title.isEmpty()) {
+                return title;
+            }
+        }
+        return "";
     }
 
     /**
