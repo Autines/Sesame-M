@@ -768,7 +768,7 @@ public class AntOcean extends ModelTask {
                 return;
             }
             if (cleanFriendOcean(userId)) {
-                TimeUtil.sleep(1000);
+                TimeUtil.sleep(gameDelayMs(1000));
             }
         } catch (Throwable t) {
             Log.err(TAG, "cleanFriendOcean err:", t);
@@ -897,7 +897,7 @@ public class AntOcean extends ModelTask {
                 if (TaskStatus.TODO.name().equals(taskStatus) && !finishOceanTask(jo)) {
                     continue;
                 }
-                TimeUtil.sleep(500);
+                TimeUtil.sleep(gameDelayMs(500));
 
                 receiveTaskAward(sceneCode, taskType, taskTitle);
             }
@@ -910,7 +910,7 @@ public class AntOcean extends ModelTask {
     private static void receiveTaskAward(String sceneCode, String taskType, String taskTitle) {
         try {
             JSONObject jo = new JSONObject(AntOceanRpcCall.receiveTaskAward(sceneCode, taskType));
-            TimeUtil.sleep(500);
+            TimeUtil.sleep(gameDelayMs(500));
             //检查并标记黑名单任务
             MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOceanAntiepTaskList", taskTitle, jo);
             if (MessageUtil.checkSuccess(TAG, jo)) {
@@ -1008,7 +1008,7 @@ public class AntOcean extends ModelTask {
             }
             // 与蚂蚁新村每日答题用的是同一个 dada 接口，这里同样交给 AI 作答
             String answer = AnswerAI.getAnswer(jo.optString("title"), JsonUtil.jsonArrayToList(options));
-            TimeUtil.sleep(500);
+            TimeUtil.sleep(gameDelayMs(500));
             jo = new JSONObject(AntOceanRpcCall.submitAnswer(answer, questionId));
             if (MessageUtil.checkResultCode(TAG, jo)) {
                 Log.record("海洋答题成功");
@@ -1019,6 +1019,21 @@ public class AntOcean extends ModelTask {
             Log.err(TAG, "answerQuestion err:", t);
         }
         return false;
+    }
+
+    /**
+     * 游戏/海洋动作间隔：基线 + 随机抖动（参考 Sen GameIntervalCalculator 思路的简化实现）。
+     * 让相邻动作间隔不完全规律（±40%），比固定 sleep 更自然，略降风控概率。
+     *
+     * @param baseMs 基线毫秒（原固定间隔）
+     * @return 实际等待毫秒（>=0）
+     */
+    private static int gameDelayMs(int baseMs) {
+        if (baseMs <= 0) {
+            return baseMs;
+        }
+        int jitter = (int) (baseMs * 0.4 * (Math.random() * 2 - 1));
+        return Math.max(0, baseMs + jitter);
     }
 
     // 制作万能拼图
@@ -1037,7 +1052,7 @@ public class AntOcean extends ModelTask {
                 if (!exchangeUniversalPiece(exchangeNum)) {
                     break;
                 }
-                TimeUtil.sleep(1000);
+                TimeUtil.sleep(gameDelayMs(1000));
                 duplicatePieceNum -= exchangeNum * 10;
             }
         } catch (Throwable t) {
@@ -1143,7 +1158,7 @@ public class AntOcean extends ModelTask {
                 }
             }
             if (useUniversalPiece(assetsDetails, name, holdsNum - assetsDetails.length())) {
-                TimeUtil.sleep(1000);
+                TimeUtil.sleep(gameDelayMs(1000));
                 return assetsDetails.length();
             }
         } catch (Throwable t) {

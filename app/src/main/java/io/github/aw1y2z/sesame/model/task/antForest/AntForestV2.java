@@ -4822,6 +4822,12 @@ public class AntForestV2 extends ModelTask {
         private final long bubbleId;
 
         /**
+         * 能量成熟后的有效采集宽限（ms）。超过此值仍未采，视为调度严重延迟 / 能量已被收走，
+         * 放弃本次采集（对应 Sen SmartRetryStrategy 的 timeToTarget 思路：明知来不及还重试是无谓的 RPC）。
+         */
+        private static final long COLLECT_GRACE_MS = 30_000L;
+
+        /**
          * The ProduceTime.
          */
         private final long produceTime;
@@ -4851,6 +4857,12 @@ public class AntForestV2 extends ModelTask {
                         Log.i("终止[" + userName + "]蹲点收取任务, 任务ID[" + getId() + "]");
                         return;
                     }
+                }
+                // ⑦ 窗口有效性：能量成熟已超过宽限仍未采，视为调度严重延迟/已被收走，放弃避免无效请求
+                long overdue = System.currentTimeMillis() - produceTime;
+                if (overdue > COLLECT_GRACE_MS) {
+                    Log.record("能量[" + userName + "]成熟已过[" + overdue + "ms]，超过有效窗口，跳过采集");
+                    return;
                 }
                 Log.record("执行蹲点收取[" + userName + "]" + "时差[" + averageInteger + "]ms" + "提前[" + advanceTimeInt + "]ms");
                 collectEnergy(new CollectEnergyEntity(userId, null, AntForestRpcCall.getCollectEnergyRpcEntity(null, userId, bubbleId)), userName);
