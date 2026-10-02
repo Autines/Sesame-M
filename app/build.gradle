@@ -28,9 +28,16 @@ android {
         // 36 = Android 16。升到这个目标版本后系统启用「预测式返回」，
         // 不再调用 Activity.onBackPressed()，各页面已统一改走 OnBackPressedDispatcher。
         targetSdk 36
-        // 构建号：跟随 git 提交数，改一次代码提交一次就自动 +1，不需要手改；
-        // 同时保证数值单调递增，能直接覆盖安装（也是和上游官方包区分的一处）
-        versionCode gitCommitCount
+        // 构建号 = git 提交数 + 偏移。
+        //
+        // 为什么不能只用提交数：**提交数会回落** —— 一旦重建 / 压缩 git 历史
+        // （比如把 5 个提交压成 1 个），`git rev-list --count HEAD` 立刻变小，
+        // 新包的 versionCode 就比手机上已装的还低 → 系统直接拒装
+        // （INSTALL_FAILED_VERSION_DOWNGRADE；而且 adb 的 -d 只对 debuggable 包生效，
+        //  对 release 包无效，只能 root 兜底）。
+        // 留一段偏移后，压缩历史不会再把构建号压到已装版本之下。
+        // ⚠️ 将来若某次压缩幅度超过该偏移量，把 1000 调大即可（只需大于历史最大值）。
+        versionCode gitCommitCount + 1000
         versionName version
 
         buildConfigField "String", "GIT_COMMIT_HASH", "\"${gitCommitHash}\""

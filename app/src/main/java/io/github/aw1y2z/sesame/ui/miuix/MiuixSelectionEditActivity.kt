@@ -216,9 +216,13 @@ fun SelectionEditContent(
         else options.filter { it.name.contains(searchQuery, ignoreCase = true) || it.id.contains(searchQuery) }
     }
 
-    // 选中项自动置顶
-    val sortedOptions = remember(filteredOptions, sel) {
-        filteredOptions.sortedByDescending { it.id in sel }
+    // 选中项置顶 —— 但排序基准**冻结在进入页面的那一刻**（用初始的已选集合），
+    // 而不是跟着 sel 实时变：否则每勾选/取消一次，刚点的那一行就会跳到顶部、其余行整片位移，
+    // 手指还停在原处就已经点到别的条目上了，看着就是"列表乱跳"。
+    // 退出重进时 selectedIds 重新取，列表才按最新的已选集合重排。
+    val sortBase = remember { selectedIds }
+    val sortedOptions = remember(filteredOptions, sortBase) {
+        filteredOptions.sortedByDescending { it.id in sortBase }
     }
 
     val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
