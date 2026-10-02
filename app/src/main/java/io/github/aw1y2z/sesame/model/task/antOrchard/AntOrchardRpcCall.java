@@ -238,4 +238,23 @@ public class AntOrchardRpcCall {
         return ApplicationHook.requestString("com.alipay.antiepdrawprod.drawantorchard", args);
     }
 
+    /**
+     * 批量抽奖（{@code com.alipay.antiepdrawprod.batchDrawantorchard}），**一次消耗 times 次机会**。
+     *
+     * <p>接口与参数取自同类实现的反编译结果（{@code AntOrchardRpcCall.batchDrawantorchard}）：
+     * <pre>[{"activityId":"20260916","requestType":"RPC","sceneCode":"ANTORCHARD_DRAW_TIMES",
+     *   "source":"antorchard","times":6,"userId":"2088122949469851"}]</pre>
+     *
+     * <p>同类实现里**只有批量接口、没有单抽方法**，说明批量才是官方主路径。
+     * 用它可把 N 次抽奖压成 1 个请求，避免循环里对同一接口反复打点（重复打点正是风控触发面）。
+     *
+     * @param times 本次要消耗的机会次数，调用方需自行保证不超过当前余额
+     */
+    public static String batchDrawantorchard(String activityId, int times) {
+        String args = "[{\"activityId\":\"" + (activityId == null ? "" : activityId)
+                + "\",\"requestType\":\"RPC\",\"sceneCode\":\"ANTORCHARD_DRAW_TIMES\",\"source\":\"antorchard\",\"times\":"
+                + times + ",\"userId\":\"" + UserIdMap.getCurrentUid() + "\"}]";
+        return ApplicationHook.requestString("com.alipay.antiepdrawprod.batchDrawantorchard", args);
+    }
+
 }

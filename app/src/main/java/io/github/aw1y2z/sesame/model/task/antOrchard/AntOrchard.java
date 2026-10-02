@@ -19,6 +19,9 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField;
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField;
 import io.github.aw1y2z.sesame.model.task.antFarm.AntFarmRpcCall;
 import io.github.aw1y2z.sesame.model.task.antGame.GameTask;
+import io.github.aw1y2z.sesame.model.task.antGame.GameTaskRegistry;
+import io.github.aw1y2z.sesame.model.task.antGame.IGameTask;
+import io.github.aw1y2z.sesame.model.task.antGame.MiniProgramGameTask;
 import io.github.aw1y2z.sesame.model.task.antMember.AntMemberRpcCall;
 import io.github.aw1y2z.sesame.util.Log;
 import io.github.aw1y2z.sesame.util.MessageUtil;
@@ -245,7 +248,8 @@ public class AntOrchard extends ModelTask {
                     // 抽奖次数余额（服务端字段名本就拼作 blance，照抄，别"顺手修正"）
                     JSONObject drawAsset = syncJo.optJSONObject("drawAsset");
                     if (drawAsset != null && drawAsset.has("blance")) {
-                        Log.farm("金豆夺宝专场🎰当前抽奖机会[" + drawAsset.optInt("blance", 0) + "]");
+                        orchardDrawBlance = drawAsset.optInt("blance", 0);
+                        Log.farm("金豆夺宝专场🎰当前抽奖机会[" + orchardDrawBlance + "]");
                     }
                 }
             }
@@ -258,9 +262,10 @@ public class AntOrchard extends ModelTask {
 
     /**
      * 拉专场任务列表并逐个处理，判定顺序：
-     * <b>RECEIVED/DONE → FINISHED(领奖) → 黑名单 → TODO(提交完成)</b>。
+     * <b>RECEIVED/DONE → FINISHED(领奖) → 游戏适配器 → 黑名单 → TODO(提交完成)</b>。
      * <p>即"能领的先领"，黑名单只拦"提交完成"，不会把已可领的奖励跳过。
-     * <p>游戏类任务（需前端行为配合）服务端拒收 RPC，交给自动拉黑机制兜底。
+     * <p>游戏类任务优先于黑名单（见 {@code TODO} 分支的注释）：一条游戏任务被写进黑名单，
+     * 恰恰是因为"以前做不了"；有了 {@link GameTaskRegistry} 之后应改由适配器尝试，每天一次。
      */
     private void finishOrchardDrawTasks() {
         try {
@@ -331,10 +336,40 @@ public class AntOrchard extends ModelTask {
                     continue;
                 }
                 if ("TODO".equals(taskStatus)) {
-                    // 只有"待做"才看黑名单：黑名单里的任务不再提交完成，避免无效 RPC 触发风控
+                    // 游戏类任务**优先于黑名单**：一条游戏任务被写进黑名单，恰恰是因为"以前做不了"。
+                    // 现在有了适配器就该试，否则这个框架会被那条历史记录永久挡住（默认预置里就有它）。
+                    // 想彻底不做，把「金豆夺宝专场 | 开启」关掉即可。
+                    IGameTask gameTask = GameTaskRegistry.match(task, taskType, title, drawTaskBizField(task, "desc"));
+                    if (gameTask != null) {
+                        // 标签里**显式带当天"天序号"**：项目既有的每日标记(`farm::sign` 等)都是不带日期的，
+                        // 依赖 Status 跨日重建时把 flagLogList 清空。这里不押那个前提——
+                        // 带上日期后，无论跨日有没有清空，都保证"每任务每天最多试一次"；
+                        // 万一日后清空逻辑失效，本功能也不会退化成"一辈子只试一次"。
+                        String gameFlag = "gameTask::" + taskType + "::" + MessageUtil.currentDayIndex();
+                        if (Boolean.TRUE.equals(Status.hasFlagToday(gameFlag))) {
+                            skipped++;
+                            Log.farm("金豆夺宝专场🎮跳过[" + title + "]#今日已尝试过");
+                            continue;
+                        }
+                        // 每个任务每天只试一次：这类上报接口重复调只会白白增加风控暴露面，
+                        // 而且任务是否完成由服务端判定，同一轮里反复打也没有意义
+                        Status.flagToday(gameFlag);
+                        todo++;
+                        boolean reported = gameTask.execute(task, taskType);
+                        Log.farm("金豆夺宝专场🎮游戏任务" + (reported ? "已尝试[" : "无法上报[")
+                                + title + "]#taskType=" + taskType + "#下轮看服务端判定");
+                        TimeUtil.sleep(1000);
+                        continue;
+                    }
+                    // 非游戏任务才看黑名单：黑名单里的任务不再提交完成，避免无效 RPC 触发风控
                     if (AntOrchardDrawTaskList.getValue().contains(taskType)) {
                         skipped++;
-                        Log.farm("金豆夺宝专场🏴跳过[" + title + "]#黑名单");
+                        // 若服务端明确标它是游戏任务、却没有适配器认领（例如缺 game_id），说明覆盖有缺口 ——
+                        // 打出来，避免适配器漏覆盖时静默退化成"永远跳过"。
+                        // 判据必须用 isGameTask（服务端分类字段）：只看"有没有小程序地址"会把攒豆、
+                        // 逛一逛这类同样带小程序地址的非游戏任务一起误报进来。
+                        String hint = MiniProgramGameTask.isGameTask(task) ? "#游戏任务未被适配器覆盖" : "";
+                        Log.farm("金豆夺宝专场🏴跳过[" + title + "]#黑名单" + hint);
                         continue;
                     }
                     todo++;
@@ -367,13 +402,121 @@ public class AntOrchard extends ModelTask {
     private static final int MAX_DRAW_LOOP = 100;
 
     /**
-     * 把已获得的抽奖机会抽完（每次消耗 1 次）。
+     * 最近一次同步到的抽奖次数余额（{@code drawAsset.blance}）；未知为 -1。
+     * <p>由 {@link #enterAndSyncOrchardDraw()} 写入；{@link #drawOrchardLottery(String)} 会在抽奖前
+     * **重新同步一次**（做任务领奖会增加次数，进入时的值已过时），仅在这个兜底值上使用它。
+     */
+    private int orchardDrawBlance = -1;
+
+    /**
+     * 把已获得的抽奖机会抽完。
+     *
+     * <p><b>优先走批量接口</b>：{@code batchDrawantorchard(activityId, times)} 一次把剩余次数全抽掉，
+     * N 次机会压成 1 个请求，避免在同一接口上循环打点（重复打点正是风控触发面）。
+     * 批量不被支持时（服务端拒收 / 余额未知）退回 {@link #drawOrchardLotteryOneByOne(String)} 单抽兜底，
+     * 保证换接口不会让功能失效。
+     *
+     * <p>抽了几次**用抽奖前后余额差**算出来，不依赖响应里的奖品字段（更客观）；
+     * 奖品明细能解析就打印，解析不出只记总次数，不臆造。
+     */
+    private void drawOrchardLottery(String activityId) {
+        try {
+            // 抽奖前重新同步余额：前面的「做任务 + 领奖」会增加抽奖次数，进入专场时那个值已过时，
+            // 直接拿它当批量次数会少抽。
+            int before = queryOrchardDrawBlance(activityId);
+            if (before < 0) {
+                before = orchardDrawBlance;
+            }
+            if (before == 0) {
+                Log.farm("金豆夺宝专场🎰抽奖停止[本次已抽0次]#原因=用户资产不足");
+                return;
+            }
+            if (before < 0) {
+                // 余额两次都读不到：交给单抽循环，它会逐次从响应里读回余额
+                drawOrchardLotteryOneByOne(activityId);
+                return;
+            }
+            int times = Math.min(before, MAX_DRAW_LOOP);
+            JSONObject batchJo = new JSONObject(AntOrchardRpcCall.batchDrawantorchard(activityId, times));
+            if (!MessageUtil.checkSuccess(TAG, batchJo)) {
+                Log.farm("金豆夺宝专场🎰批量抽奖未生效，改用单抽#原因="
+                        + batchJo.optString("desc", batchJo.optString("errorMsg", "")));
+                drawOrchardLotteryOneByOne(activityId);
+                return;
+            }
+            Log.farm("金豆夺宝专场🎰批量抽奖[申请" + times + "次]");
+            logDrawPrizes(batchJo);
+            int after = queryOrchardDrawBlance(activityId);
+            int drawn = after < 0 ? times : Math.max(0, before - after);
+            orchardDrawBlance = after;
+            if (after <= 0) {
+                Log.farm("金豆夺宝专场🎰机会已抽完[共抽" + drawn + "次]");
+            } else {
+                Log.farm("金豆夺宝专场🎰本次抽了" + drawn + "次，剩余机会[" + after + "]下轮继续");
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "drawOrchardLottery err:", t);
+        }
+    }
+
+    /**
+     * 读当前剩余抽奖次数（{@code drawSyncantorchard}，**不消耗**机会）；读不到返回 -1。
+     */
+    private int queryOrchardDrawBlance(String activityId) {
+        try {
+            JSONObject jo = new JSONObject(AntOrchardRpcCall.drawSyncantorchard(activityId));
+            if (!MessageUtil.checkSuccess(TAG, jo)) {
+                return -1;
+            }
+            JSONObject drawAsset = jo.optJSONObject("drawAsset");
+            return drawAsset == null ? -1 : drawAsset.optInt("blance", 0);
+        } catch (Throwable t) {
+            Log.err(TAG, "queryOrchardDrawBlance err:", t);
+            return -1;
+        }
+    }
+
+    /**
+     * 打印批量抽奖响应里的奖品明细。
+     *
+     * <p>批量响应的奖品字段名**没有抓包证据**（同类实现里调用处反编译失败），所以这里按几种
+     * 已知可能的结构逐个尝试：① 与单抽同构的单个 {@code prizeVO}；② 奖品数组
+     * {@code prizeVOList / prizeList / prizes / drawResultList}。都取不到就只记"未含明细"，
+     * 总次数由余额差保证正确。
+     */
+    private void logDrawPrizes(JSONObject jo) {
+        JSONObject single = jo.optJSONObject("prizeVO");
+        if (single != null) {
+            Log.farm("金豆夺宝专场🎁抽中[" + single.optString("prizeName", "")
+                    + "×" + single.optInt("prizeNum", 0) + "]");
+            return;
+        }
+        for (String key : new String[]{"prizeVOList", "prizeList", "prizes", "drawResultList"}) {
+            JSONArray arr = jo.optJSONArray(key);
+            if (arr == null || arr.length() == 0) {
+                continue;
+            }
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject p = arr.optJSONObject(i);
+                if (p == null) {
+                    continue;
+                }
+                Log.farm("金豆夺宝专场🎁抽中[" + p.optString("prizeName", "")
+                        + "×" + p.optInt("prizeNum", 0) + "]");
+            }
+            return;
+        }
+        Log.farm("金豆夺宝专场🎁批量抽奖完成#响应未含奖品明细");
+    }
+
+    /**
+     * 单抽兜底：一次消耗 1 次机会，循环抽到余额归零。
      * <p>参照 {@code ForestChouChouLe} 森林寻宝的抽奖段：每抽一次都从响应里读回
-     * {@code drawAsset.blance}（抽完后的剩余次数），归零即停；单次失败直接停止、不重试，
+     * {@code drawAsset.blance}，归零即停；单次失败直接停止、不重试，
      * 再用 {@link #MAX_DRAW_LOOP} 兜底防无上限连发。
      * <p>奖品取自抓包确认的 {@code prizeVO.prizeName / prizeNum}（实测如「500肥料 ×1」）。
      */
-    private void drawOrchardLottery(String activityId) {
+    private void drawOrchardLotteryOneByOne(String activityId) {
         int drawn = 0;
         try {
             for (int i = 0; i < MAX_DRAW_LOOP; i++) {
@@ -392,6 +535,7 @@ public class AntOrchard extends ModelTask {
                 JSONObject drawAsset = jo.optJSONObject("drawAsset");
                 int blance = drawAsset == null ? 0 : drawAsset.optInt("blance", 0);
                 if (blance <= 0) {
+                    orchardDrawBlance = 0;
                     Log.farm("金豆夺宝专场🎰机会已抽完[共抽" + drawn + "次]");
                     return;
                 }
@@ -399,7 +543,7 @@ public class AntOrchard extends ModelTask {
             }
             Log.farm("金豆夺宝专场🎰已达单轮上限[" + MAX_DRAW_LOOP + "次]，剩余机会下轮继续");
         } catch (Throwable t) {
-            Log.err(TAG, "drawOrchardLottery err:", t);
+            Log.err(TAG, "drawOrchardLotteryOneByOne err:", t);
         }
     }
 
@@ -419,6 +563,16 @@ public class AntOrchard extends ModelTask {
 
     /** 任务展示名：taskBaseInfo.bizInfo(title)，bizInfo 可能是 JSONObject 或 JSON 字符串 */
     private static String drawTaskTitle(JSONObject task) {
+        return drawTaskBizField(task, "title");
+    }
+
+    /**
+     * 读 {@code taskBaseInfo.bizInfo} 里的某个字段；取不到返回空串。
+     * <p>bizInfo 在报文里是**转义过的 JSON 字符串**，但也兼容直接给对象的情况。
+     * 游戏任务适配器要用 {@code targetUrl}（拿小程序 appId），日志要用 {@code desc}，
+     * 所以把解析收敛在这里，别再各写一遍。
+     */
+    private static String drawTaskBizField(JSONObject task, String key) {
         JSONObject tbi = task.optJSONObject("taskBaseInfo");
         if (tbi == null) {
             return "";
@@ -434,13 +588,7 @@ public class AntOrchard extends ModelTask {
                 // ignore
             }
         }
-        if (bizJo != null) {
-            String title = bizJo.optString("title", "").trim();
-            if (!title.isEmpty()) {
-                return title;
-            }
-        }
-        return "";
+        return bizJo == null ? "" : bizJo.optString(key, "").trim();
     }
 
     /**
