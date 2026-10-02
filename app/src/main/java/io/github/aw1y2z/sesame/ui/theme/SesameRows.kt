@@ -435,7 +435,11 @@ internal fun SesameSelectMenu(
         ) {
         Surface(
             modifier = Modifier.width(width),
-            shape = RoundedCornerShape(28.dp),
+            // ⚠️ 浮层菜单**不跟随 SesameM3.shapes 的 large 档**：它是个小面积的浮层，
+            // 用大圆角会显得"鼓"、且与旁边的卡片（28dp）撞脸，看起来不协调。
+            // 卡片是大容器、圆角大才对；浮层是"贴上来的小面板"，圆角应更克制。
+            // 12dp 与菜单里选项行的 10dp 成比例，观感上是一套的。
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 2.dp,
             shadowElevation = 8.dp
@@ -451,7 +455,7 @@ internal fun SesameSelectMenu(
                             // 顺序有讲究——padding 在最外层，背景作用于内缩后的区域，
                             // 写反了色块就会顶满整行、贴住菜单边缘
                             .padding(vertical = 2.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .then(
                                 if (selected) {
                                     Modifier.background(MaterialTheme.colorScheme.primaryContainer)
