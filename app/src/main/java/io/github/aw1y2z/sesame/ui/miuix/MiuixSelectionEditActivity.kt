@@ -151,7 +151,7 @@ fun SelectionEditContent(
     // 若每次重组都执行，还会让下游 filteredOptions 的 remember(options, ...) 缓存永久失效。
     val initialState = remember(modelCode, field.code) {
         @Suppress("UNCHECKED_CAST")
-        val options: List<IdAndName> = (smf?.expandValue ?: emptyList<Any>()) as List<IdAndName>
+        val candidates: List<IdAndName> = (smf?.expandValue ?: emptyList<Any>()) as List<IdAndName>
         val v = liveField.value
         val ids: Set<String> = when {
             liveField.type == "SELECT" -> (v as? Set<*>)?.mapNotNull { it?.toString() }?.toSet() ?: emptySet()
@@ -181,6 +181,17 @@ fun SelectionEditContent(
                 if (key != null && key.isNotEmpty()) mapOf(key to count) else emptyMap()
             }
             else -> emptyMap()
+        }
+        // 已选值里可能残留「候选项已经不再提供」的键：候选来自运行期学到的清单（任务列表、
+        // 好友列表…），而配置里的值是历史沉淀的。典型如「金豆夺宝｜黑名单列表」——任务在
+        // 服务端下线后，键仍留在配置里，候选却不会再包含它；若不补进来，界面上永远看不到
+        // 这一条，也就**永远取消不掉**（GOLDENBEAN_BATCH_DRAW_GAME_ZH_KXXXL 就是这么卡住的）。
+        val candidateIds = candidates.mapNotNull { it?.id }.toSet()
+        val orphans = ids.filter { it.isNotEmpty() && it !in candidateIds }
+        val options: List<IdAndName> = if (orphans.isEmpty()) {
+            candidates
+        } else {
+            candidates + orphans.map { OrphanOption(it) }
         }
         Triple(options, ids, initialCounts)
     }
@@ -386,5 +397,18 @@ fun SelectionEditContent(
                 }
             }
         }
+    }
+}
+
+/**
+ * 「已失效」选项：值还留在配置里，但候选列表已经不再提供它（任务下线、好友被删…）。
+ *
+ * 显示出来**只为让用户能把它取消掉** —— 名字沿用键本身并加标注（这类键通常没有中文名可查）。
+ * 因为是已选项，列表的「已选置顶」排序会把它顶到最上面，一眼可见。
+ */
+private class OrphanOption(key: String) : IdAndName() {
+    init {
+        id = key
+        name = "$key（已失效）"
     }
 }

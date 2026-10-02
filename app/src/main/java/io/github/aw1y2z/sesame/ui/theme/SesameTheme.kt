@@ -2,7 +2,9 @@ package io.github.aw1y2z.sesame.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -53,15 +55,22 @@ fun SesameTheme(
 
     CompositionLocalProvider(LocalUiStyle provides style) {
         MiuixTheme(controller) {
-            // ⚠️ 关于 Material 3 Expressive：当前依赖（material3 1.4.0）里的 Expressive API
-            // （`MaterialExpressiveTheme` / `MotionScheme`）**全部标为库 internal**，外部调不到
-            // （实测编译报 "Cannot access ... it is internal in file"），官方尚未对外开放。
-            // 因此 Expressive 观感在本项目里走**项目层手工实现**：
-            // 形状阶梯见 SesameM3.shapes、色板见 SesameColor.kt、弹性动效由组件的 spring 动画给。
-            MaterialTheme(
+            // ── Material 3 Expressive ───────────────────────────────────────────────
+            // 1.4.0 时 Expressive API（`MaterialExpressiveTheme` / `MotionScheme`）全部是库
+            // internal，外部调不到；升到 1.5.0-alpha22 后已对外开放，这里正式接入。
+            //
+            // 显式传入项目自己的色板 / 形状 / 字体，**保持现有观感不变**；真正切换的是
+            // **动效方案**：`MotionScheme.expressive()` 会把全部 M3 组件（开关、勾选、滑块、
+            // 对话框、Chip…）的默认动画换成 Expressive 的弹性曲线。
+            //
+            // ⚠️ 库层面只开放到这一步：1.5.0-alpha22 里 **没有** ExpressiveShapes /
+            // ExpressiveTypography（形状与字体阶梯仍是老的 4/8/12/16/28）。形状与色板的
+            // Expressive 观感需要在项目层自定义（见 SesameM3.shapes / SesameColor.kt）。
+            MaterialExpressiveTheme(
                 colorScheme = colorScheme,
-                typography = SesameM3.typography,
-                shapes = SesameM3.shapes
+                motionScheme = MotionScheme.expressive(),
+                shapes = SesameM3.shapes,
+                typography = SesameM3.typography
             ) {
                 content()
             }
