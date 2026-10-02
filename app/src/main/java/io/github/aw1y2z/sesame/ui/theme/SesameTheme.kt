@@ -53,6 +53,11 @@ fun SesameTheme(
 
     CompositionLocalProvider(LocalUiStyle provides style) {
         MiuixTheme(controller) {
+            // ⚠️ 关于 Material 3 Expressive：当前依赖（material3 1.4.0）里的 Expressive API
+            // （`MaterialExpressiveTheme` / `MotionScheme`）**全部标为库 internal**，外部调不到
+            // （实测编译报 "Cannot access ... it is internal in file"），官方尚未对外开放。
+            // 因此 Expressive 观感在本项目里走**项目层手工实现**：
+            // 形状阶梯见 SesameM3.shapes、色板见 SesameColor.kt、弹性动效由组件的 spring 动画给。
             MaterialTheme(
                 colorScheme = colorScheme,
                 typography = SesameM3.typography,

@@ -394,8 +394,10 @@ public final class GoldenBeansTasks {
                         goldenbeansRpcCall.VERSION, "金豆[" + entry.alias + "]任务", msg -> Log.goldenBeans(msg));
                 return false;
             }
-            // 其它错误码（支付/配置类）= 真做不了，仍计入自动拉黑
-            MessageUtil.checkResultCodeAndMarkTaskBlackList("GoldenBeansTaskList", taskId, jo);
+            // 其它错误码（支付/配置类）= 真做不了，仍计入自动拉黑。
+            // 第 3 个参数传 taskName（中文标题）作为展示名：黑名单里存的是英文 taskId，
+            // 不把标题一起记下来的话，黑名单页只能显示 GOLDENBEAN_xxx 这种稳定键。
+            MessageUtil.checkResultCodeAndMarkTaskBlackList("GoldenBeansTaskList", taskId, taskName, jo);
             Log.goldenBeans("金豆[" + entry.alias + "]任务⚠️[" + taskName + "]完成失败[" + failMessage + "]");
         } catch (Throwable th) {
             Log.i(GoldenBeansSupport.TAG, "finishTask err:");

@@ -134,7 +134,11 @@ dependencies {
     implementation "top.yukonga.miuix.kmp:miuix-preference:0.9.4"
     implementation "androidx.compose.material:material-icons-extended:1.7.6"
     // Material Design 3（界面风格可选：设置 → 界面风格 → Material Design 3）
-    implementation "androidx.compose.material3:material3:1.4.0"
+    // ⚠️ 走 1.5.0-alpha 通道的原因：1.4.0 里 Expressive 相关 API（MaterialExpressiveTheme /
+    // MotionScheme / ExperimentalMaterial3ExpressiveApi）**全部标为库 internal**、外部调不到
+    // （实测编译报 "Cannot access ...: it is internal in file"）；alpha 通道已对外开放。
+    // 代价是预发布版依赖，需要实机回归；若有问题，退回 1.4.0 即可（Expressive 自动失效）。
+    implementation "androidx.compose.material3:material3:1.5.0-alpha22"
     // Compose Foundation Pager（HorizontalPager，底部 Tab 滑动切换；与上面的 material-icons-extended 同属 Compose 1.7.6）
     implementation "androidx.compose.foundation:foundation:1.7.6"
 

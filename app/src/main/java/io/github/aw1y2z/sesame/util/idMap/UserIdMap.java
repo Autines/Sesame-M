@@ -10,6 +10,7 @@ import io.github.aw1y2z.sesame.util.FileUtil;
 import io.github.aw1y2z.sesame.util.JsonUtil;
 import io.github.aw1y2z.sesame.util.Log;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +24,52 @@ public class UserIdMap {
     @Getter
     private static String currentUid = null;
     
+    /**
+     * 解析「当前账号」；拿不到时回退到设备上配置目录里**唯一的/最近写过的**那个账号。
+     *
+     * <p>为什么必须有这层兜底：模块界面是独立进程，和宿主进程各持一份内存。
+     * 界面进程刚启动时 {@link #getCurrentUid()} 是 **null** —— 只有从设置页进来、
+     * 被 `ConfigPreload.prepare(userId)` 显式设置过才有值。
+     * 「任务黑名单」这类从一级页直接进的页面因此拿不到账号，一旦拿它去保存（{@code save("")}），
+     * 改动会写进**默认配置**而不是账号配置 —— 现象就是「解禁点了、设置里却还勾着」。
+     *
+     * @return 账号 id；确实一个都找不到时返回 {@code null}（调用方必须判空，不要传 null 去 load）
+     */
+    public static String resolveCurrentUid() {
+        String uid = currentUid;
+        if (uid != null && !uid.isEmpty()) {
+            return uid;
+        }
+        try {
+            File[] subs = FileUtil.CONFIG_DIRECTORY_FILE.listFiles();
+            if (subs == null) {
+                return null;
+            }
+            String best = null;
+            long bestTime = -1L;
+            for (File sub : subs) {
+                if (sub == null || !sub.isDirectory()) {
+                    continue;
+                }
+                File config = new File(sub, "config_v2.json");
+                if (!config.exists()) {
+                    continue;
+                }
+                // 取"最近写过"的那个当当前账号；时间相同（或有文件系统不更新 mtime 的情况）时
+                // 就是先遍历到的那个，设备上通常只有一个账号，够用
+                long time = config.lastModified();
+                if (time > bestTime) {
+                    bestTime = time;
+                    best = sub.getName();
+                }
+            }
+            return best;
+        } catch (Throwable t) {
+            Log.printStackTrace("UserIdMap", t);
+            return null;
+        }
+    }
+
     public static Map<String, UserEntity> getUserMap() {
         return readOnlyUserMap;
     }

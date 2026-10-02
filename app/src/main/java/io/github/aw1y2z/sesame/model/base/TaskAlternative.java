@@ -147,8 +147,11 @@ public final class TaskAlternative {
                 String title = item.getValue();
                 if (stillTodo.contains(key)) {
                     cfg.sink.log(cfg.logPrefix + "⚠️未完成[" + title + "]#doFarmTask 未生效，已交给自动拉黑机制");
+                    // 第 5 个参数是"展示名"：不管黑名单里存的是标题还是稳定键，
+                    // 都把中文标题一并记进拉黑记录，黑名单页才显示得出中文
+                    // （键是英文稳定键时尤其需要，否则界面上只有一串 GOLDENBEAN_xxx）
                     MessageUtil.MarkTaskBlackList(cfg.moduleName, cfg.taskListField, cfg.listDisplay,
-                            cfg.blacklistByTitle ? title : key);
+                            cfg.blacklistByTitle ? title : key, title);
                 } else {
                     cfg.sink.log(cfg.logPrefix + cfg.doneTag + "[" + title + "]#doFarmTask（已按任务列表核对）");
                     changed = true;

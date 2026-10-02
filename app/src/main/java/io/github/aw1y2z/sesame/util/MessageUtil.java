@@ -2,17 +2,42 @@ package io.github.aw1y2z.sesame.util;
 
 import org.json.JSONObject;
 
+import java.text.Collator;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import io.github.aw1y2z.sesame.data.ConfigV2;
 import io.github.aw1y2z.sesame.data.ModelFields;
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField;
+import io.github.aw1y2z.sesame.entity.AutoBlackTaskEntry;
+import io.github.aw1y2z.sesame.entity.IdAndName;
 import io.github.aw1y2z.sesame.model.task.antMember.AntMember;
+import io.github.aw1y2z.sesame.util.idMap.AntDodoTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntFarmDoFarmTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntFarmDrawMachineTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntForestHuntTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntForestVitalityTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntMemberTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntOceanAntiepTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntOceanFishBlackListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntOrchardDrawTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntOrchardTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntSportsTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntStallTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AutoBlackListMap;
+import io.github.aw1y2z.sesame.util.idMap.GoldenBeansTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.MemberCreditSesameTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.MonopolyTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap;
 
 public class MessageUtil {
@@ -407,6 +432,92 @@ public class MessageUtil {
         BLACKLIST_LIST_TARGETS.put("MemberCreditSesameTaskList", new String[]{"AntMember", "会员芝麻信用任务芝麻粒"});
     }
 
+    /**
+     * 黑名单界面的**一级分组**名（模块）：键是字段码。
+     * <p>层级照抄「扩展功能」页：一级 = 模块（蚂蚁森林 / 神奇海洋…），
+     * 它下面那张卡片里的**每一行 = 该模块下的一个黑名单列表**（活力值黑名单 / 抽抽乐黑名单…），
+     * 点进去才是那个列表里的具体任务。
+     */
+    private static final Map<String, String> BLACKLIST_GROUP_NAMES = new LinkedHashMap<>();
+
+    /** 一级分组下的**行标题**：该黑名单列表的显示名。模块名已在分组标题上，这里不再重复。 */
+    private static final Map<String, String> BLACKLIST_LIST_NAMES = new LinkedHashMap<>();
+
+    /**
+     * 一级分组的固定展示顺序（未列出的分组排在最后）。
+     * <p>不按名称排序：中文按码点排出来的顺序对用户没有意义。
+     */
+    private static final List<String> BLACKLIST_GROUP_ORDER = Arrays.asList(
+            "蚂蚁森林", "神奇海洋", "芭芭农场", "庄园", "金豆",
+            "神奇物种", "新村", "运动", "会员");
+
+    static {
+        // 蚂蚁森林（AntForestV2）：活力值 / 抽抽乐 / 保护地
+        BLACKLIST_GROUP_NAMES.put("AntForestVitalityTaskList", "蚂蚁森林");
+        BLACKLIST_LIST_NAMES.put("AntForestVitalityTaskList", "活力值黑名单");
+        BLACKLIST_GROUP_NAMES.put("AntForestHuntTaskList", "蚂蚁森林");
+        BLACKLIST_LIST_NAMES.put("AntForestHuntTaskList", "抽抽乐黑名单");
+        BLACKLIST_GROUP_NAMES.put("MonopolyTaskList", "蚂蚁森林");
+        BLACKLIST_LIST_NAMES.put("MonopolyTaskList", "新版保护地黑名单");
+        // 神奇海洋（AntOcean）
+        BLACKLIST_GROUP_NAMES.put("AntOceanAntiepTaskList", "神奇海洋");
+        BLACKLIST_LIST_NAMES.put("AntOceanAntiepTaskList", "普通任务黑名单");
+        BLACKLIST_GROUP_NAMES.put("AntOceanFishBlackList", "神奇海洋");
+        BLACKLIST_LIST_NAMES.put("AntOceanFishBlackList", "去摸鱼黑名单");
+        // 芭芭农场（AntOrchard）：肥料 + 金豆夺宝专场（专场入口在农场内，同属 AntOrchard）
+        BLACKLIST_GROUP_NAMES.put("AntOrchardTaskList", "芭芭农场");
+        BLACKLIST_LIST_NAMES.put("AntOrchardTaskList", "农场肥料黑名单");
+        BLACKLIST_GROUP_NAMES.put("AntOrchardDrawTaskList", "芭芭农场");
+        BLACKLIST_LIST_NAMES.put("AntOrchardDrawTaskList", "金豆夺宝专场黑名单");
+        // 庄园（AntFarm）
+        BLACKLIST_GROUP_NAMES.put("AntFarmDoFarmTaskList", "庄园");
+        BLACKLIST_LIST_NAMES.put("AntFarmDoFarmTaskList", "饲料黑名单");
+        BLACKLIST_GROUP_NAMES.put("AntFarmDrawMachineTaskList", "庄园");
+        BLACKLIST_LIST_NAMES.put("AntFarmDrawMachineTaskList", "装扮抽抽乐黑名单");
+        // 金豆（独立小程序 goldenbeans）
+        BLACKLIST_GROUP_NAMES.put("GoldenBeansTaskList", "金豆");
+        BLACKLIST_LIST_NAMES.put("GoldenBeansTaskList", "夺宝黑名单");
+        // 其余模块各自成一组（当前设备上暂无记录，先备好，免得将来退化成"字段码当标题"）
+        BLACKLIST_GROUP_NAMES.put("AntDodoTaskList", "神奇物种");
+        BLACKLIST_LIST_NAMES.put("AntDodoTaskList", "物种任务黑名单");
+        BLACKLIST_GROUP_NAMES.put("AntStallTaskList", "新村");
+        BLACKLIST_LIST_NAMES.put("AntStallTaskList", "新村任务黑名单");
+        BLACKLIST_GROUP_NAMES.put("AntSportsTaskList", "运动");
+        BLACKLIST_LIST_NAMES.put("AntSportsTaskList", "运动任务黑名单");
+        BLACKLIST_GROUP_NAMES.put("AntMemberTaskList", "会员");
+        BLACKLIST_LIST_NAMES.put("AntMemberTaskList", "会员任务黑名单");
+        BLACKLIST_GROUP_NAMES.put("MemberCreditSesameTaskList", "会员");
+        BLACKLIST_LIST_NAMES.put("MemberCreditSesameTaskList", "芝麻信用黑名单");
+    }
+
+    /**
+     * 字段码 → 该字段的「任务键 → 中文名」映射文件。
+     *
+     * <p>给 {@link #resolveTaskName} 当**兜底数据源**：正规路径是拿字段的候选项列表
+     * （{@code SelectModelField.getExpandValue()}），但那要求 {@code ConfigV2} 的字段表已经灌好 ——
+     * 而字段表要等 {@code ConfigPreload.prepare()}，黑名单页从主界面直接进来时可能是空的。
+     * 那种情况下，键本身就是英文稳定键的列表（金豆、金豆夺宝专场）会整片显示英文。
+     */
+    private static final Map<String, Supplier<Map<String, String>>> BLACKLIST_NAME_MAPS = new LinkedHashMap<>();
+
+    static {
+        BLACKLIST_NAME_MAPS.put("AntForestVitalityTaskList", AntForestVitalityTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntForestHuntTaskList", AntForestHuntTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("MonopolyTaskList", MonopolyTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntOceanAntiepTaskList", AntOceanAntiepTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntOceanFishBlackList", AntOceanFishBlackListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntOrchardTaskList", AntOrchardTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntOrchardDrawTaskList", AntOrchardDrawTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntFarmDoFarmTaskList", AntFarmDoFarmTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntFarmDrawMachineTaskList", AntFarmDrawMachineTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("GoldenBeansTaskList", GoldenBeansTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntDodoTaskList", AntDodoTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntStallTaskList", AntStallTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntSportsTaskList", AntSportsTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("AntMemberTaskList", AntMemberTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("MemberCreditSesameTaskList", MemberCreditSesameTaskListMap::getMap);
+    }
+
     /** 400000040「不支持rpc调用」；它不等于任务做不了，见另一种实现方案。 */
     public static final String CODE_UNSUPPORTED_RPC = "400000040";
 
@@ -420,6 +531,15 @@ public class MessageUtil {
     }
 
     public static void checkResultCodeAndMarkTaskBlackList(String listTitle, String taskTitle, JSONObject jo) {
+        checkResultCodeAndMarkTaskBlackList(listTitle, taskTitle, null, jo);
+    }
+
+    /**
+     * 同上，额外带一个**展示名**（该任务当时的中文标题），只影响界面显示 ——
+     * 语义见 {@link #MarkTaskBlackList} 的五参重载。
+     */
+    public static void checkResultCodeAndMarkTaskBlackList(String listTitle, String taskTitle,
+                                                          String displayName, JSONObject jo) {
         try {
             if (jo == null) {
                 Log.i(listTitle, "JSON对象为空");
@@ -523,9 +643,9 @@ public class MessageUtil {
             }
 
             if (canAddBlackList) {
-                MarkTaskBlackList(target[0], listTitle, target[1], taskTitle);
+                MarkTaskBlackList(target[0], listTitle, target[1], taskTitle, displayName);
             } else if (needConfirm) {
-                MarkTaskBlackListConfirm(target[0], listTitle, target[1], taskTitle);
+                MarkTaskBlackListConfirm(target[0], listTitle, target[1], taskTitle, displayName);
             }
         } catch (Throwable t) {
             Log.err(TAG, "checkSuccess err:", t);
@@ -533,6 +653,20 @@ public class MessageUtil {
     }
 
     public static void MarkTaskBlackList(String ModelFieldsType, String listTitle, String TaskListName, String taskTitle) {
+        MarkTaskBlackList(ModelFieldsType, listTitle, TaskListName, taskTitle, null);
+    }
+
+    /**
+     * 记一条自动拉黑（带展示名版本）。
+     *
+     * @param displayName 该任务**当时的中文标题**，只供界面显示：黑名单页会优先用它，
+     *                    免得再去查"任务键 → 中文名"的映射 —— 有些列表按稳定键拉黑，
+     *                    键本身就是英文（如 {@code GOLDENBEAN_BATCH_DRAW_GAME_ZH_KXXXL}），
+     *                    映射里又没有，界面上就只能显示英文键。
+     *                    传 {@code null} 时与旧版行为完全一致。
+     */
+    public static void MarkTaskBlackList(String ModelFieldsType, String listTitle, String TaskListName,
+                                         String taskTitle, String displayName) {
         ConfigV2 config = ConfigV2.INSTANCE;
         ModelFields TaskModelFields = config.getModelFieldsMap().get(ModelFieldsType);
         SelectModelField TaskSelectModelField = (SelectModelField) TaskModelFields.get(listTitle);
@@ -546,7 +680,7 @@ public class MessageUtil {
         if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
             Log.record("自动拉黑🏴在[" + TaskListName + "]中添加[" + taskTitle + "]黑名单:" + TaskSelectModelField.getValue());
             // 记录拉黑日期，供"超期自动解禁重试"使用（只记自动项，用户手动加的不会被解禁）
-            recordAutoBlack(ModelFieldsType, listTitle, taskTitle);
+            recordAutoBlack(ModelFieldsType, listTitle, taskTitle, displayName);
         } else {
             Log.record("添加" + TaskListName + "黑名单失败：" + taskTitle);
         }
@@ -558,6 +692,12 @@ public class MessageUtil {
      * 避免一次性的临时故障（活动当天未配置等）被永久跳过。
      */
     public static void MarkTaskBlackListConfirm(String ModelFieldsType, String listTitle, String TaskListName, String taskTitle) {
+        MarkTaskBlackListConfirm(ModelFieldsType, listTitle, TaskListName, taskTitle, null);
+    }
+
+    /** 需连续确认的自动拉黑（带展示名，语义同 {@link #MarkTaskBlackList} 的五参重载） */
+    public static void MarkTaskBlackListConfirm(String ModelFieldsType, String listTitle, String TaskListName,
+                                                String taskTitle, String displayName) {
         try {
             String key = autoBlackKey(ModelFieldsType, listTitle, taskTitle);
             // 必须先确保已从磁盘载入：AutoBlackListMap 是懒加载的，新进程里不调 ensureLoaded
@@ -567,6 +707,10 @@ public class MessageUtil {
             long today = todayIndex();
             if (record == null || today - record.lastDay > BLACKLIST_CONFIRM_WINDOW_DAYS) {
                 record = new AutoBlackRecord();
+            }
+            // 观察期就把展示名记下来：真拉黑时不必再依赖"任务键 → 中文名"的映射
+            if ((record.title == null || record.title.isEmpty()) && displayName != null && !displayName.isEmpty()) {
+                record.title = displayName;
             }
             if (record.hits + 1 < BLACKLIST_CONFIRM_HITS) {
                 record.hits = record.hits + 1;
@@ -578,7 +722,7 @@ public class MessageUtil {
                         + record.hits + "/" + BLACKLIST_CONFIRM_HITS + "次命中，暂不拉黑");
                 return;
             }
-            MarkTaskBlackList(ModelFieldsType, listTitle, TaskListName, taskTitle);
+            MarkTaskBlackList(ModelFieldsType, listTitle, TaskListName, taskTitle, displayName);
         } catch (Throwable t) {
             Log.err(TAG, "MarkTaskBlackListConfirm err:", t);
         }
@@ -787,7 +931,7 @@ public class MessageUtil {
         return System.currentTimeMillis() / 86400000L;
     }
 
-    private static void recordAutoBlack(String module, String listTitle, String taskTitle) {
+    private static void recordAutoBlack(String module, String listTitle, String taskTitle, String displayName) {
         try {
             String key = autoBlackKey(module, listTitle, taskTitle);
             // 同上：先确保载入，否则读不到旧的 retry，会把"解禁重试次数"反复重置为 0
@@ -797,6 +941,10 @@ public class MessageUtil {
             record.hits = 0;
             record.lastDay = todayIndex();
             record.retry = old == null ? 0 : old.retry;
+            // 展示名：本次没给就沿用记录里已有的（反复拉黑不该把已记下的中文名抹掉）
+            record.title = displayName != null && !displayName.isEmpty()
+                    ? displayName
+                    : (old == null ? null : old.title);
             if (record.retry >= BLACKLIST_MAX_RETRY) {
                 // 解禁重试满 BLACKLIST_MAX_RETRY 次仍失败：永久拉黑，不再自动解禁
                 record.blackDay = AutoBlackRecord.PERMANENT;
@@ -811,9 +959,342 @@ public class MessageUtil {
         }
     }
 
+    // ===================== 任务黑名单：界面展示 & 手动解禁 =====================
+    // 下面这些方法**只读既有数据、或做用户显式要求的手动清理**，不参与"是否拉黑"的判定链路，
+    // 因此改它们不会影响任务的实际行为（判定逻辑见 MarkTaskBlackList / MarkTaskBlackListConfirm）。
+
+    /** 自动拉黑满多少天自动解禁（界面显示用） */
+    public static int getBlacklistRetryDays() {
+        return BLACKLIST_RETRY_DAYS;
+    }
+
+    /** 模糊错误需要连续命中多少次才拉黑（界面显示用） */
+    public static int getBlacklistConfirmHits() {
+        return BLACKLIST_CONFIRM_HITS;
+    }
+
+    /** 解禁重试几次后永久拉黑（界面显示用） */
+    public static int getBlacklistMaxRetry() {
+        return BLACKLIST_MAX_RETRY;
+    }
+
+    /** 当前天序号；界面用它算"还剩几天解禁" */
+    public static long currentDayIndex() {
+        return todayIndex();
+    }
+
     /**
-     * 自动拉黑记录：命中次数 / 最后命中天 / 拉黑天 / 解禁重试次数。
+     * 天序号 → {@code yyyy-MM-dd}，供界面显示「已拉黑 2026-10-01」这类文案。
+     *
+     * <p>天序号的口径是 {@code System.currentTimeMillis() / 86400000}（UTC 取整），
+     * 东八区下它对应的本地时间是当天 08:00，所以按本地时区格式化**不会差一天**。
+     * {@code <= 0}（观察期/非法值）返回空串，调用方据此省略日期段。
+     */
+    public static String formatBlackDay(long dayIndex) {
+        if (dayIndex <= 0) {
+            return "";
+        }
+        try {
+            return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    .format(new Date(dayIndex * 86400000L));
+        } catch (Throwable t) {
+            Log.printStackTrace(TAG, t);
+            return "";
+        }
+    }
+
+    /**
+     * 列出模块自动拉黑的记录（含仍在"观察期"、尚未真正拉黑的条目），按来源 → 任务名排序。
+     *
+     * <p>数据源只有 {@link AutoBlackListMap}——**用户自己在设置页手动加进「黑名单列表」的项不在其中**，
+     * 所以本清单回答的是"模块自己把哪些任务停掉了"，与各模块的黑名单列表是互补关系。
+     *
+     * <p>任务中文名取自该字段自己的候选项（{@link SelectModelField#getExpandValue()}，与设置页同源），
+     * 服务端已不再下发、候选项里找不到的，回落显示稳定键本身，不臆造。
+     */
+    /**
+     * 载入「黑名单列表」相关的「任务键 → 中文名」映射。
+     *
+     * <p>这些映射由各模块跑任务时从服务端学到的标题写进来（模块主目录下的 {@code *Task.json}）。
+     * 黑名单页要靠它们把 {@code CHOUCHOULE_GAME_ZJD3000} 这类稳定键显示成中文，
+     * 而原本统一负责载入的 {@code ConfigPreload.prepare()} **只在设置页被调用** ——
+     * 从主界面直接进黑名单时映射是空的，任务名就会整片回落成英文键。
+     *
+     * <p>这里刻意只读映射文件、**不碰配置**：{@code prepare()} 会连带 {@code ConfigV2.load()}
+     * 把配置文件重灌一遍，万一用户刚在别的页面改过还没落盘就会被覆盖。
+     */
+    private static void loadBlacklistNameMaps() {
+        AntForestVitalityTaskListMap.load();
+        AntForestHuntTaskListMap.load();
+        MonopolyTaskListMap.load();
+        AntOceanAntiepTaskListMap.load();
+        AntOceanFishBlackListMap.load();
+        AntOrchardTaskListMap.load();
+        AntOrchardDrawTaskListMap.load();
+        AntFarmDoFarmTaskListMap.load();
+        AntFarmDrawMachineTaskListMap.load();
+        GoldenBeansTaskListMap.load();
+        AntDodoTaskListMap.load();
+        AntStallTaskListMap.load();
+        AntSportsTaskListMap.load();
+        AntMemberTaskListMap.load();
+        MemberCreditSesameTaskListMap.load();
+    }
+
+    /**
+     * 兜底：从字段自己的界面标题里取列表名。
+     *
+     * <p>各模块给黑名单字段起的标题都是「活力值 | 黑名单列表」「新村任务 | 黑名单列表」这种形式，
+     * 取竖线左边再补「黑名单」，正好就是界面要的行标题。
+     *
+     * <p>有它就不必指望 {@link #BLACKLIST_LIST_NAMES} 把每个列表都登记全 ——
+     * 上游将来新增一个黑名单列表时，界面也不会退化成只显示一个「黑名单」。
+     */
+    private static String resolveListNameFromField(SelectModelField field) {
+        if (field == null) {
+            return "";
+        }
+        String title = field.getName();
+        if (title == null || title.isEmpty()) {
+            return "";
+        }
+        int bar = title.indexOf('|');
+        String left = (bar >= 0 ? title.substring(0, bar) : title).trim();
+        if (left.isEmpty()) {
+            return "";
+        }
+        return left.endsWith("黑名单") ? left : left + "黑名单";
+    }
+
+    /** 黑名单列表在界面上的先后顺序 = 它在 {@link #BLACKLIST_LIST_TARGETS} 里的声明顺序 */
+    private static int blacklistListOrder(String fieldCode) {
+        int index = 0;
+        for (String code : BLACKLIST_LIST_TARGETS.keySet()) {
+            if (code.equals(fieldCode)) {
+                return index;
+            }
+            index++;
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    /** 一级分组的顺序 = {@link #BLACKLIST_GROUP_ORDER} 的登记顺序（中文按码点排没有意义） */
+    private static int blacklistGroupOrder(String groupName) {
+        int index = BLACKLIST_GROUP_ORDER.indexOf(groupName);
+        return index < 0 ? Integer.MAX_VALUE : index;
+    }
+
+    /**
+     * 状态档位：**已拉黑(0) → 观察中(1) → 已永久拉黑(2)**。
+     *
+     * <p>正在被拦的排最前（它有明确的解禁倒计时、最需要被看到）；观察期次之（还没真被拦，
+     * 但连续命中在累积，是"趋势预警"）；永久拉黑的已经不会自己恢复，放最后，不占视线。
+     */
+    private static int blacklistStateRank(AutoBlackTaskEntry entry) {
+        if (entry.isPermanent()) {
+            return 2;
+        }
+        return entry.isWatching() ? 1 : 0;
+    }
+
+    /**
+     * 同一档内的"紧急度"，**升序**排列 —— 越小越该先看。
+     *
+     * <ul>
+     *   <li>已拉黑：剩余解禁天数（快解禁的在前，因为它们最可能马上回到任务队列）；</li>
+     *   <li>观察中：命中次数的相反数（命中越多越接近被拉黑，排越前）。</li>
+     * </ul>
+     */
+    private static int blacklistUrgency(AutoBlackTaskEntry entry, long today) {
+        if (entry.isWatching()) {
+            return -entry.hits;
+        }
+        long remain = (long) BLACKLIST_RETRY_DAYS - (today - entry.blackDay);
+        // 永久拉黑（blackDay = -1）算出来是很大的负数，钳到 0 即可（它们同档、下面会按名称排）
+        return (int) Math.max(0L, Math.min(Integer.MAX_VALUE, remain));
+    }
+
+    public static List<AutoBlackTaskEntry> listAutoBlackEntries() {
+        List<AutoBlackTaskEntry> entries = new ArrayList<>();
+        try {
+            AutoBlackListMap.load();
+            loadBlacklistNameMaps();
+            for (String key : new ArrayList<>(AutoBlackListMap.keys())) {
+                AutoBlackRecord record = AutoBlackRecord.parse(AutoBlackListMap.get(key));
+                if (record == null) {
+                    continue;
+                }
+                String[] parts = key.split("\\|", 3);
+                String module = parts.length > 0 ? parts[0] : "";
+                String fieldCode = parts.length > 1 ? parts[1] : "";
+                String taskValue = parts.length > 2 ? parts[2] : "";
+                String[] target = BLACKLIST_LIST_TARGETS.get(fieldCode);
+                String sourceName = target == null || target.length < 2 ? fieldCode : target[1];
+                String groupName = BLACKLIST_GROUP_NAMES.getOrDefault(fieldCode, sourceName);
+                SelectModelField field = findTaskListField(module, fieldCode);
+                // 行标题（列表名）三级取值：登记表 → 字段自带标题 → 来源名。
+                // 中间那层是兜底，保证"没登记过的新列表"也不会显示成光秃秃的「黑名单」。
+                String listName = BLACKLIST_LIST_NAMES.get(fieldCode);
+                if (listName == null || listName.isEmpty()) {
+                    listName = resolveListNameFromField(field);
+                }
+                if (listName.isEmpty()) {
+                    listName = sourceName;
+                }
+                // ⚠️ 拿不到字段表时是"未知"（null），**不能当成"不在列表里"** ——
+                // 否则界面会给一条刚拉黑的任务标上「已不在黑名单列表」，看起来像已经放出来了。
+                Boolean inList = field == null ? null : Boolean.TRUE.equals(field.contains(taskValue));
+                // 名字优先级：记录里存的「拉黑当时的中文标题」 > 字段候选/名字映射 > 稳定键本身。
+                // 第一优先是为了**不依赖名字映射** —— 有些列表是按英文稳定键拉黑的，
+                // 那个键在映射里可能永远学不到，界面就只能显示英文。
+                String taskName = record.title != null && !record.title.isEmpty()
+                        ? record.title
+                        : resolveTaskName(field, fieldCode, taskValue);
+                entries.add(new AutoBlackTaskEntry(key, module, fieldCode, taskValue, sourceName,
+                        groupName, listName, taskName, record.hits, record.blackDay,
+                        record.retry, inList));
+            }
+            // 排序（界面直接照这个顺序渲染）：
+            //   ① 一级分组：固定表（蚂蚁森林 → 神奇海洋 → 芭芭农场 → 庄园 → 金豆 → …）
+            //   ② 同组内：按黑名单列表的**声明顺序**（与设置页里的先后一致，位置稳定）
+            //   ③ 同列表内：**已拉黑 → 观察中 → 永久拉黑**，每档内"最紧急的在前"
+            //      （已拉黑按剩余解禁天数升序、观察中按命中次数降序）
+            //   ④ 同级再按任务名**拼音**（中文按码点排出来的顺序对用户毫无意义）
+            long today = todayIndex();
+            Collator pinyin = Collator.getInstance(Locale.CHINA);
+            entries.sort(Comparator
+                    .comparingInt((AutoBlackTaskEntry e) -> blacklistGroupOrder(e.groupName))
+                    .thenComparing((AutoBlackTaskEntry e) -> e.groupName)
+                    .thenComparingInt((AutoBlackTaskEntry e) -> blacklistListOrder(e.fieldCode))
+                    .thenComparingInt(MessageUtil::blacklistStateRank)
+                    .thenComparingInt((AutoBlackTaskEntry e) -> blacklistUrgency(e, today))
+                    .thenComparing((AutoBlackTaskEntry e) -> e.taskName, pinyin));
+        } catch (Throwable t) {
+            Log.err(TAG, "listAutoBlackEntries err:", t);
+        }
+        return entries;
+    }
+
+    /**
+     * 手动解禁一条：把它从对应模块的黑名单列表里移除，并清掉自动拉黑记录。
+     *
+     * <p>与"自动解禁"的区别：立刻执行，且**不累加解禁重试次数**——用户主动干预不该被记成一次失败重试，
+     * 否则多按几次就把任务"刷"成永久拉黑。
+     *
+     * <p>注意：解禁只代表"允许再试"，不保证下次能成功；服务端已下线的任务会再次失败并被重新拉黑。
+     */
+    public static boolean releaseAutoBlack(String key) {
+        try {
+            String[] parts = key.split("\\|", 3);
+            if (parts.length < 3) {
+                return false;
+            }
+            String taskValue = parts[2];
+
+            // ⚠️ 账号必须用 resolveCurrentUid()：界面进程刚启动时 currentUid 是空的，
+            //   直接拿它去 save 会把改动写进「默认配置」而不是账号配置 ——
+            //   现象就是「解禁点了、设置里还勾着、任务照样被跳过」。
+            String userId = UserIdMap.resolveCurrentUid();
+            if (userId == null || userId.isEmpty()) {
+                Log.record("手动解禁⚠️[" + taskValue + "]拿不到当前账号，未改动配置");
+                return false;
+            }
+
+            SelectModelField field = findTaskListField(parts[0], parts[1]);
+            if (field == null) {
+                // 字段表没进内存时**绝不能**当作解禁成功：那样只会删掉自动拉黑记录，
+                // 黑名单里的键还留着，任务依旧被跳过 —— 用户会以为已经放开了。
+                Log.record("手动解禁⚠️[" + taskValue + "]找不到黑名单字段(" + parts[0] + "|" + parts[1]
+                        + ")，未改动配置");
+                return false;
+            }
+            field.remove(taskValue);
+            if (Boolean.TRUE.equals(field.contains(taskValue))) {
+                // 键本来就不在这个字段里（或 remove 没生效）：也要如实报失败，别报"已移出"
+                Log.record("手动解禁⚠️[" + taskValue + "]不在[" + parts[1] + "]里，未能移除");
+                return false;
+            }
+
+            AutoBlackListMap.load();
+            AutoBlackListMap.remove(key);
+            AutoBlackListMap.save();
+            if (!ConfigV2.save(userId, false)) {
+                Log.record("手动解禁⚠️[" + taskValue + "]配置保存失败");
+                return false;
+            }
+            Log.record("手动解禁🕊️[" + taskValue + "]已移出黑名单");
+            return true;
+        } catch (Throwable t) {
+            Log.err(TAG, "releaseAutoBlack err:", t);
+            return false;
+        }
+    }
+
+    /** 手动解禁全部自动拉黑项，返回处理条数 */
+    public static int releaseAllAutoBlack() {
+        int count = 0;
+        for (AutoBlackTaskEntry entry : listAutoBlackEntries()) {
+            if (releaseAutoBlack(entry.key)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 任务稳定键 → 中文展示名；取不到就回落成键本身。
+     * <p>依次走两条路，任一命中即可：
+     * <ol>
+     *   <li>字段自带的候选项列表（{@code getExpandValue()}）—— 与设置页「黑名单列表」里显示的名字同源，
+     *       还包含各实体类内置的兜底名；</li>
+     *   <li>该字段对应的 {@code *Task.json} 映射（见 {@link #BLACKLIST_NAME_MAPS}）——
+     *       **字段表还没灌进内存时兜底**：黑名单页从主界面直接进来时 {@code ConfigV2} 的字段表是空的，
+     *       只靠第 1 条会让"按英文稳定键拉黑"的列表（金豆、金豆夺宝专场）整片显示英文键。</li>
+     * </ol>
+     */
+    private static String resolveTaskName(SelectModelField field, String fieldCode, String taskValue) {
+        if (taskValue.isEmpty()) {
+            return taskValue;
+        }
+        // 1) 字段自带的候选项：与设置页「黑名单列表」显示的名字同源，还含各实体类内置的兜底名
+        if (field != null) {
+            try {
+                List<? extends IdAndName> options = field.getExpandValue();
+                if (options != null) {
+                    for (IdAndName option : options) {
+                        if (option != null && taskValue.equals(option.id) && option.name != null
+                                && !option.name.isEmpty()) {
+                            return option.name;
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                Log.printStackTrace(TAG, t);
+            }
+        }
+        // 2) 兜底：直接查该字段的映射文件 —— 字段表没灌进内存时（从主界面直接进黑名单页）也能出中文
+        Supplier<Map<String, String>> supplier = BLACKLIST_NAME_MAPS.get(fieldCode);
+        if (supplier != null) {
+            try {
+                Map<String, String> map = supplier.get();
+                if (map != null) {
+                    String name = map.get(taskValue);
+                    if (name != null && !name.isEmpty()) {
+                        return name;
+                    }
+                }
+            } catch (Throwable t) {
+                Log.printStackTrace(TAG, t);
+            }
+        }
+        return taskValue;
+    }
+
+    /**
+     * 自动拉黑记录：命中次数 / 最后命中天 / 拉黑天 / 解禁重试次数 / 展示名（可选）。
      * <p>{@code blackDay}：{@code >0} 已拉黑；{@code 0} 未拉黑（观察中或已解禁待重试）；{@link #PERMANENT} 永久拉黑。
+     * <p>{@code title} 是**拉黑当时的中文标题**，只服务界面显示（黑名单页优先用它）。
+     * 追加在末尾且**可缺省**：老记录（4 段）照旧可解析，新记录是 5 段。
      */
     private static final class AutoBlackRecord {
         private static final long PERMANENT = -1L;
@@ -821,12 +1302,14 @@ public class MessageUtil {
         private long lastDay;
         private long blackDay;
         private int retry;
+        private String title;
 
         private static AutoBlackRecord parse(String str) {
             if (str == null || str.isEmpty()) {
                 return null;
             }
-            String[] parts = str.split(";");
+            // 最多切 5 段：第 5 段收"剩余全部"，标题里万一带了分号也不会被切碎
+            String[] parts = str.split(";", 5);
             if (parts.length < 3) {
                 return null;
             }
@@ -836,6 +1319,7 @@ public class MessageUtil {
                 record.lastDay = Long.parseLong(parts[1].trim());
                 record.blackDay = Long.parseLong(parts[2].trim());
                 record.retry = parts.length > 3 ? Integer.parseInt(parts[3].trim()) : 0;
+                record.title = parts.length > 4 ? parts[4].trim() : null;
                 return record;
             } catch (NumberFormatException e) {
                 return null;
@@ -843,7 +1327,9 @@ public class MessageUtil {
         }
 
         private String format() {
-            return hits + ";" + lastDay + ";" + blackDay + ";" + retry;
+            String base = hits + ";" + lastDay + ";" + blackDay + ";" + retry;
+            // 没有标题时仍写 4 段，与旧版格式完全一致（旧版本读回来也不会出错）
+            return title == null || title.isEmpty() ? base : base + ";" + title;
         }
     }
 

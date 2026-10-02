@@ -1,18 +1,29 @@
 package io.github.aw1y2z.sesame.ui.theme
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.animation.core.animateFloatAsState
@@ -22,6 +33,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.SmallTitle as MiuixSmallTitle
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -312,20 +324,96 @@ fun SesamePageTitleBar(title: String, scrolled: Boolean = false) {
 @Composable
 fun SesameSectionTitle(text: String) {
     when (LocalUiStyle.current) {
+        // MIUIX 沿用库组件：它的留白与字号就是这一风格下"分组标题"的定义，不要自己重画
         UiStyle.MIUIX -> MiuixSmallTitle(text = text)
 
-        UiStyle.MATERIAL3 -> Text(
-            text = text,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            // 与卡片左边缘对齐（MD3 分组标题的常规做法）。
-            // MD3 里分组标题是**弱化**的标签而非彩色强调，故用 onSurfaceVariant；
-            // 上 24 / 下 8 的留白把「标题贴着自己的卡片、与上一组拉开」的关系表达出来。
-            modifier = Modifier.padding(
+        UiStyle.MATERIAL3 -> Box(
+            Modifier.padding(
                 start = 0.dp,
                 top = M3SectionTitleTopPadding,
                 bottom = M3SectionTitleBottomPadding
             )
+        ) {
+            SesameSectionTitleLabel(text)
+        }
+    }
+}
+
+/**
+ * 分组标题的**文字本体**（不含上下留白）。
+ * <p>留给需要自己控制行内排版的场景复用，例如可折叠标题 —— 那里要让文字与箭头在同一行里
+ * 垂直居中，不能吃标题自带的不对称留白（MD3 是上 24 / 下 8，会让文字整体偏下）。
+ */
+@Composable
+private fun SesameSectionTitleLabel(text: String) {
+    when (LocalUiStyle.current) {
+        UiStyle.MIUIX -> MiuixText(
+            text = text,
+            fontSize = MiuixTheme.textStyles.body2.fontSize,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+        )
+
+        UiStyle.MATERIAL3 -> Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
+
+/**
+ * 可展开 / 收起的分组标题。
+ *
+ * 与 [SesameSectionTitle] 只差两点：**整行可点**、右侧多一个随状态旋转的箭头。
+ * 用于条目很多的分组列表 —— 先让用户看到有哪些分组，按需展开，不必一路滑到底。
+ *
+ * 展开状态由调用方持有（组件本身不存状态）；标题文字里建议带上条目数（如「农场肥料任务（18）」），
+ * 这样收起时也能一眼看到组里有多少条。
+ */
+@Composable
+fun SesameExpandableSectionTitle(text: String, expanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 先裁形状、再挂点击：按压高亮跟着变成圆角块。
+            // 不裁的话，Material 默认的 indication 是**通栏直角**灰底，在 Miuix 风格下很突兀。
+            .clip(SectionTitleRowShape)
+            .clickable(onClick = onToggle)
+            // 行内只留**对称**的上下留白，文字与箭头才能真正处在同一水平线上；
+            // 分组之间的呼吸感由这个值给，而不是标题自带的不对称留白。
+            .padding(vertical = SectionTitleRowPaddingV),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.weight(1f)) {
+            SesameSectionTitleLabel(text)
+        }
+        val tint = sesameOnSurfaceVariant()
+        val arrow = Modifier
+            .rotate(if (expanded) 180f else 0f)
+            .size(M3TrailingIconSize)
+        val desc = if (expanded) "收起" else "展开"
+        when (LocalUiStyle.current) {
+            // 与 SesameRows 的惯例一致：MIUIX 走库图标、M3 走 material3 图标，
+            // 避免在 Miuix 主题下依赖 MaterialTheme 是否可用
+            UiStyle.MIUIX -> MiuixIcon(
+                imageVector = Icons.Outlined.ExpandMore,
+                contentDescription = desc,
+                tint = tint,
+                modifier = arrow
+            )
+
+            UiStyle.MATERIAL3 -> Icon(
+                imageVector = Icons.Outlined.ExpandMore,
+                contentDescription = desc,
+                tint = tint,
+                modifier = arrow
+            )
+        }
+    }
+}
+
+/** 可折叠分组标题：行内对称的上下留白（文字与箭头都以这一行居中） */
+private val SectionTitleRowPaddingV = 12.dp
+
+/** 可折叠分组标题：按压高亮的圆角（配合 clip，避免通栏直角灰块） */
+private val SectionTitleRowShape = RoundedCornerShape(10.dp)

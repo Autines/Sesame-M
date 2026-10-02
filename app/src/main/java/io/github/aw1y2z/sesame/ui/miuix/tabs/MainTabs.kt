@@ -75,6 +75,7 @@ import io.github.aw1y2z.sesame.util.idMap.UserIdMap
 import kotlinx.coroutines.delay
 import io.github.aw1y2z.sesame.ui.miuix.LogType
 import io.github.aw1y2z.sesame.ui.miuix.MiuixAboutActivity
+import io.github.aw1y2z.sesame.ui.miuix.MiuixBlacklistActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixExtensionsActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixFriendStatsActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixLogViewerActivity
@@ -595,6 +596,12 @@ fun SettingsTab(activity: MiuixMainActivity) {
             title = "扩展功能",
             icon = Icons.Outlined.Extension,
             onClick = { context.startActivity(Intent(context, MiuixExtensionsActivity::class.java)) }
+        )
+        // 任务黑名单：把"模块自己拉黑了哪些任务"摊开给用户看（原先只在日志里，界面完全不可见）
+        SesameClickRow(
+            title = "任务黑名单",
+            icon = Icons.Outlined.Block,
+            onClick = { context.startActivity(Intent(context, MiuixBlacklistActivity::class.java)) }
         )
     }
 

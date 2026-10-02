@@ -378,8 +378,9 @@ public class AntOrchard extends ModelTask {
                         done++;
                         Log.farm("金豆夺宝专场🧾完成[" + title + "]#taskType=" + taskType);
                     } else {
-                        // 游戏类/需前端行为配合的任务服务端拒收，交给自动拉黑机制兜底
-                        MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, finishJo);
+                        // 游戏类/需前端行为配合的任务服务端拒收，交给自动拉黑机制兜底；
+                        // 把 title 作为展示名传下去，界面上才显示中文而不是 taskType
+                        MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, title, finishJo);
                         Log.farm("金豆夺宝专场⚠️未完成[" + title + "]#taskType=" + taskType);
                     }
                     TimeUtil.sleep(1000);

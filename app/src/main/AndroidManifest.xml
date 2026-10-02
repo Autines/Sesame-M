@@ -68,6 +68,16 @@
             android:resizeableActivity="true" />
 
         <activity
+            android:name=".ui.miuix.MiuixBlacklistActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+
+        <activity
+            android:name=".ui.miuix.MiuixBlacklistListActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+
+        <activity
             android:name=".ui.miuix.MiuixAboutActivity"
             android:exported="false"
             android:resizeableActivity="true" />
