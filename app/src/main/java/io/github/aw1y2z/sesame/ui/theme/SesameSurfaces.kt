@@ -155,7 +155,7 @@ fun SesameCardGroup(
         UiStyle.MIUIX -> Column(
             modifier = modifier
                 .fillMaxWidth()
-                .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+                .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(28.dp))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             content = content
         )
@@ -220,7 +220,7 @@ fun SesameLogCard(tag: String, time: String, body: String) {
         UiStyle.MIUIX -> Column(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .background(MiuixTheme.colorScheme.surfaceContainer)
                 .padding(12.dp)
         ) {
@@ -345,7 +345,7 @@ fun SesameStatusCard(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFE8F5E9), RoundedCornerShape(16.dp))
+                    .background(Color(0xFFE8F5E9), RoundedCornerShape(28.dp))
                     .padding(16.dp)
             ) {
                 Row(
@@ -403,7 +403,7 @@ fun SesameStatusCard(
                     Box(
                         Modifier
                             .size(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(accent)
                     )
                     Spacer(Modifier.width(12.dp))

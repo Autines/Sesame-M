@@ -436,7 +436,7 @@ fun SesameFilterChip(label: String, count: Int, selected: Boolean, onClick: () -
     Row(
         Modifier
             .height(32.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(bg)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -533,7 +533,7 @@ fun SesameConfirmDialog(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(MiuixTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                    .background(MiuixTheme.colorScheme.surface, RoundedCornerShape(28.dp))
                     .padding(16.dp)
             ) {
                 Column {
@@ -612,7 +612,7 @@ fun SesameInputDialog(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(MiuixTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                    .background(MiuixTheme.colorScheme.surface, RoundedCornerShape(28.dp))
                     .padding(16.dp)
             ) {
                 Column {

@@ -416,4 +416,4 @@ fun SesameExpandableSectionTitle(text: String, expanded: Boolean, onToggle: () -
 private val SectionTitleRowPaddingV = 12.dp
 
 /** 可折叠分组标题：按压高亮的圆角（配合 clip，避免通栏直角灰块） */
-private val SectionTitleRowShape = RoundedCornerShape(10.dp)
+private val SectionTitleRowShape = RoundedCornerShape(14.dp)

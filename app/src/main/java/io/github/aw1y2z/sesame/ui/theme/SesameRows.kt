@@ -435,7 +435,7 @@ internal fun SesameSelectMenu(
         ) {
         Surface(
             modifier = Modifier.width(width),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 2.dp,
             shadowElevation = 8.dp
@@ -451,7 +451,7 @@ internal fun SesameSelectMenu(
                             // 顺序有讲究——padding 在最外层，背景作用于内缩后的区域，
                             // 写反了色块就会顶满整行、贴住菜单边缘
                             .padding(vertical = 2.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .then(
                                 if (selected) {
                                     Modifier.background(MaterialTheme.colorScheme.primaryContainer)

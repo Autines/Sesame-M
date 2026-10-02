@@ -103,10 +103,11 @@ fun sesameSurface(): Color = when (LocalUiStyle.current) {
     UiStyle.MATERIAL3 -> if (sesameIsDark()) {
         MaterialTheme.colorScheme.surfaceContainerLow
     } else {
-        // 浅色模式页面底色：原用 surfaceContainer(#EEEEEE) 偏灰，整屏（尤其首页大片空白）
-        // 看起来像脏灰。实测参考 app 同类页面底色为 #F4F6FB（近白），
-        // 这里改到 surfaceContainerLow(#F3F3F3)，与参考同档，同时仍比卡片(#FFFFFF)深一档，
-        // 保持「浅底白卡」的浮起关系不被推翻。
+        // 浅色页面底：Expressive 化后取 surfaceContainerLow。
+        // 为什么不是更高的档：卡片已取 surfaceContainerHigh（#E6E8F1，彩度 28.2%），
+        // 若底也用 container/High 两者会太接近 —— 实测两色亮度差只有 5.3，
+        // 卡片"浮起"的立体感几乎没了。改回 Low(#F0F1F8) 后亮度差回到 11 左右，
+        // 兼顾"有色调"与"看得出层次"。这是本轮实测调出来的唯一平衡点。
         MaterialTheme.colorScheme.surfaceContainerLow
     }
 }
@@ -117,19 +118,23 @@ fun sesameSurface(): Color = when (LocalUiStyle.current) {
  * 与 [sesameSurface] 成对使用，两者必须来自**不同的等级档**，
  * 否则卡片和页面底同色，卡片就消失了。同样按明暗挑角色。
  *
- * 选档的理由：两档之间只差一档时，明度差约 9～10（实测浅色下
- * `surfaceContainer` → `surfaceContainerLowest` 为 #F3EDF7 → #FFFFFF）。
- * 这个差值刚好让卡片「浮起来但不刺眼」；直接跨两档会让对比翻倍，
- * 卡片虽然更白，整屏却会显得割裂。
+ * 选档的理由（2026-10-02 实机重新量过）：
+ * 改前浅色下卡片取 `surfaceContainerLowest`，实测纯白 `#FFFFFF`、**彩度 0%**，
+ * 而它占了整屏 **65.1%** —— 三分之二画面是一块死白，这就是"看着寡淡"的量化原因。
+ * Expressive 化后取 **`surfaceContainerHigh`**：实测 #ECEDF6 彩度 **35.7%**（淡蓝紫），
+ * 与页面底 #F3F3FA 形成"浅而有色 / 深而近白"的层次，卡片既浮起又带颜色。
+ *
+ * 为什么不用 `surface`（更白、彩度更低）：那正是改前的问题本身，等于没改。
+ * 为什么不再往上跨到 Highest：实测会让卡片与页面底的明度差过大、整屏发"花"。
+ *
+ * 深色分支保持原样：深色下 surface 阶梯本身已带蓝紫调，再动会显脏。
  */
 @Composable
 fun sesameSurfaceContainer(): Color = when (LocalUiStyle.current) {
     UiStyle.MIUIX -> MiuixTheme.colorScheme.surfaceContainer
-    UiStyle.MATERIAL3 -> if (sesameIsDark()) {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLowest
-    }
+    // 明暗同档：这一组里 High 是唯一"带明确色调"的一档，深色下它本就是
+    // 「比 surface 亮一级」的正确语义，浅色下则是实测彩度 35.7% 的淡蓝紫。
+    UiStyle.MATERIAL3 -> MaterialTheme.colorScheme.surfaceContainerHigh
 }
 
 /**

@@ -318,8 +318,8 @@ fun SelectionEditContent(
                     // 先裁到圆角再画底；并且**不在这里加左右内边距**：
                     // 行的文字缩进由行自身的 insideMargin 提供，行顶满卡片宽度后
                     // 条目的按压效果才是通栏色带，否则会露出方框
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(28.dp))
             ) {
                 LazyColumn(
                     state = lazyListState,

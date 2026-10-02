@@ -33,13 +33,26 @@ object SesameM3 {
     /** 品牌种子色：现有主色，用于低版本静态色板 */
     const val SEED = 0xFF216EEE
 
-    /** M3 默认形状阶梯（4 / 8 / 12 / 16 / 28） */
+    /**
+     * 形状阶梯 —— 走 M3 **Expressive** 的「更圆润」一档。
+     *
+     * 官方 Expressive 没有独立的 `ExpressiveShapes`，只有 4/8/12/16/28
+     * （material3 1.5.0-alpha22 实测确认，且 `Hct` 仍是库 internal、外部调不到），
+     * 所以「更圆润」只能在项目层做。
+     *
+     * 每档都往上抬，且**抬升幅度随档位递减**（4→8、8→14、12→20、16→28、28→36）：
+     * 若做成全等差，extraLarge 会变成 44dp 的"药丸"，卡片与底栏就看不出是卡片了；
+     * 现在 36dp 已经足够柔和，又仍能一眼辨出"容器"的形状。
+     *
+     * ⚠️ 别只改这里：`ui/` 下的组件大量**硬编码**圆角（改前统计 16dp×8、10dp×2、12/4dp 各 1），
+     * 那些才是实际观感的来源，必须同步改，否则只有少数组件变圆、观感割裂。
+     */
     val shapes: Shapes = Shapes(
-        extraSmall = RoundedCornerShape(4.dp),
-        small = RoundedCornerShape(8.dp),
-        medium = RoundedCornerShape(12.dp),
-        large = RoundedCornerShape(16.dp),
-        extraLarge = RoundedCornerShape(28.dp)
+        extraSmall = RoundedCornerShape(8.dp),
+        small = RoundedCornerShape(14.dp),
+        medium = RoundedCornerShape(20.dp),
+        large = RoundedCornerShape(28.dp),
+        extraLarge = RoundedCornerShape(36.dp)
     )
 
     /**
@@ -131,6 +144,21 @@ object SesameM3 {
     /**
      * 取得当前应使用的 M3 色板：API 31+ 动态取色，否则静态兜底。
      * 明暗由模块自身设置（跟随系统 / 强制深色）决定，与系统深色开关解耦。
+     *
+     * ⚠️ **色板数值本身不做任何"提饱和"处理**，这是试过之后的结论：
+     * K40 实测改前整屏只有两种颜色 —— 卡片 `RGB(255,255,255)` 占 **65.1% 且彩度 0%**、
+     * 页面底 `RGB(243,243,250)` 占 31.5%。Material You 从浅色壁纸派生时，高亮度区的
+     * 彩度会被压到接近 0，于是三分之二画面是一块死白 —— 这才是"寡淡"的真正来源。
+     *
+     * 试过在 HSL 空间把彩度 ×1.75，**失败**：极浅色上 HSL 彩度不具感知意义，
+     * 提高后仍被 sRGB 可表示范围挤回（实测彩度 41.2% → 17.6%，反而**降**了）；
+     * 而且 HSL 换算让**色相从 240° 漂到 20°**（蓝紫变橙红），色板基调整个跑掉。
+     * 根因是 material3 的 `Hct`（CAM16）位于 `material3.internal` 包、外部调不到
+     * （1.5.0-alpha22 实测），拿不到感知正确的色彩空间。
+     *
+     * → 所以"更饱和"落在**角色选择**上：让带彩的容器色真正上屏，
+     * 见 `SesameTheme.kt` 的 [sesameSurface] / [sesameSurfaceContainer]。
+     * 这里保持色板原样，只做兜底与文档。
      */
     fun colorScheme(context: Context, dark: Boolean): ColorScheme {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
