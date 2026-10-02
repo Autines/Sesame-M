@@ -20,6 +20,7 @@ import io.github.aw1y2z.sesame.data.ModelFields;
 import io.github.aw1y2z.sesame.data.ModelGroup;
 import io.github.aw1y2z.sesame.data.TokenConfig;
 import io.github.aw1y2z.sesame.data.modelFieldExt.*;
+import io.github.aw1y2z.sesame.data.task.ChildTaskRegistry;
 import io.github.aw1y2z.sesame.data.task.ModelTask;
 import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField;
 import io.github.aw1y2z.sesame.entity.AlipayUser;
@@ -207,6 +208,32 @@ public class AntFarm extends ModelTask {
     public void boot(ClassLoader classLoader) {
         super.boot(classLoader);
         RpcIntervalLimit.addIntervalLimit("com.alipay.antfarm.enterFarm", 2000);
+        registerRestorableTasks();
+    }
+
+    /**
+     * 登记「可以从磁盘存档还原」的子任务分组。
+     * <p>
+     * 每登记一个 group，就必须在这里给出从子任务 id 切回执行体的办法 ——
+     * 因为执行体是 Lambda，不能存盘，只能靠这个对照表重建。
+     * <p>
+     * <b>只登记「重启后重新拉一次接口拿到最新状态也照样成立」的动作</b>：
+     * 蹲点投喂（FA）要重新算食槽、睡觉/起床（AS/AW）要重查小鸡状态，
+     * 恢复出来的时刻是存档里那个未来时刻，不依赖任何易失的内存状态。
+     * <p>
+     * 刻意<b>不</b>登记 UPDATE / HIRE / COMPETITION_STEAL：
+     * 这几个的 id 里带的是「分钟数」而非庄园内实体，重复还原会和本轮 run 新排的撞车；
+     * 它们本来就在每轮 run 里重排，收益小、风险大。
+     */
+    private void registerRestorableTasks() {
+        ChildTaskRegistry.get()
+                // 蹲点投喂：id 形如 "FA|<farmId>"，还原时把 farmId 切出来复用同一个方法
+                .register("FA", (id, execTime) -> {
+                    String farmId = id.contains("|") ? id.substring(id.indexOf('|') + 1) : ownerFarmId;
+                    return () -> feedAnimal(StringUtil.isEmpty(farmId) ? ownerFarmId : farmId);
+                })
+                .register("AS", (id, execTime) -> this::animalSleepNow)
+                .register("AW", (id, execTime) -> this::animalWakeUpNow);
     }
 
     @Override
@@ -225,6 +252,11 @@ public class AntFarm extends ModelTask {
             if (enterFarm() == null) {
                 return;
             }
+
+            // 恢复上一轮没跑完的「到点再做」排程（庄园被系统回收 / 支付宝进后台被杀后重进）。
+            // 必须放在 enterFarm() 之后：还原 FA 组要用 ownerFarmId，且还原出的子任务
+            // 立刻会进线程池跑，那里会用到本轮刚同步到的庄园状态。
+            restoreArchivedChildTasks();
 
             //初始任务列表
             if (!Status.hasFlagToday("BlackList::initAntFarm")) {
