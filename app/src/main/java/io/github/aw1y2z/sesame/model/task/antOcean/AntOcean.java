@@ -9,6 +9,7 @@ import io.github.aw1y2z.sesame.data.ModelGroup;
 import io.github.aw1y2z.sesame.data.modelFieldExt.BooleanModelField;
 import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField;
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField;
+import io.github.aw1y2z.sesame.data.task.ChildTaskRegistry;
 import io.github.aw1y2z.sesame.data.task.ModelTask;
 import io.github.aw1y2z.sesame.entity.AlipayAntOceanAntiepTaskList;
 import io.github.aw1y2z.sesame.entity.AlipayAntOceanFishBlackList;
@@ -104,11 +105,43 @@ public class AntOcean extends ModelTask {
     }
 
     @Override
+    public void boot(ClassLoader classLoader) {
+        super.boot(classLoader);
+        registerRestorableTasks();
+    }
+
+    /**
+     * 登记可以从磁盘存档还原的子任务分组。
+     * <p>
+     * 只登记 {@code Ocean}：那就是「蹲点清理自己海洋」，id 为 {@code "Ocean|<uid>"}
+     * （<b>不含时刻</b>，所以天然稳定，不会像庄园的 {@code "AS|<时刻>"} 那样每天堆新条目）。
+     * <p>
+     * <b>为什么这个值得做</b>：{@code canCleanLaterTime} 是服务端给的「最早可清理时刻」，
+     * 一天只有一次机会。支付宝被风控卡住或进程被回收而错过这一轮时，垃圾就会一直堆到
+     * 第二天 —— 而恢复出来的排程正好能兜住这个窗口。
+     * <p>
+     * <b>为什么森林不登记</b>（免得以后再问一遍）：森林的蹲点收取每轮都要遍历全部好友的
+     * {@code getBubbleList} 才能建出来 —— 那个全量扫描本身就是排程的前提，恢复排程省不掉它，
+     * 收益几乎为零；而且 {@code BubbleTimerTask} 是继承 {@code ChildModelTask} 的自定义子类，
+     * 接进档案要额外支持子类型，为零收益付这个复杂度不值。
+     */
+    private void registerRestorableTasks() {
+        ChildTaskRegistry.get()
+                .register("Ocean", (id, execTime) -> this::queryHomePage);
+    }
+
+    @Override
     public void run() {
         try {
             if (!queryOceanStatus()) {
                 return;
             }
+
+            // 恢复上一轮没跑完的「蹲点清理海洋」排程。放在 queryOceanStatus() 之后：
+            // 先确认海洋状态可用，再把之前排好的清理排程挂回内存时间线。
+            // 注意本轮稍后的 autocleanOcean() 也会重排一次（同 id 会覆盖），
+            // 所以恢复的实际价值在于「本轮因风控/进程被杀没走到那里时，由上一轮存档兜底」。
+            restoreArchivedChildTasks();
 
             //初始任务列表
             if (!Status.hasFlagToday("BlackList::initAntOceanAntiep")) {
