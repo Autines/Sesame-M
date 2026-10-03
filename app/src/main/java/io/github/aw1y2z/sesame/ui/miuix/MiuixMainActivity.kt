@@ -51,6 +51,7 @@ import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.RunType
 import io.github.aw1y2z.sesame.data.ViewAppInfo
+import io.github.aw1y2z.sesame.ui.theme.M3NavBarHeight
 import io.github.aw1y2z.sesame.ui.theme.SesameNavBar
 import io.github.aw1y2z.sesame.ui.theme.SesameNavItem
 import io.github.aw1y2z.sesame.ui.theme.SesamePageTitleBar
@@ -566,8 +567,17 @@ fun MainScreen(activity: MiuixMainActivity) {
                 .then(
                     // 玻璃效果开启时，内容层铺满全屏并录制成「折射源」（layerBackdrop），
                     // 让悬浮底栏采样到身后的页面内容。
+                    //
+                    // ⚠️ 非玻璃分支**只取 top**（bottom 显式归零）：Scaffold 的 padding 里已经
+                    // 含底栏高度（+ 系统导航栏 inset），若这里连 bottom 一起吃，滚动区会被抬高，
+                    // 而下面 Column 里又再加一次底栏高度 —— 同一份高度被加了两遍，
+                    // 实测底部空隙达 **216dp**（80dp 底栏 × 2 + 导航栏 inset），
+                    // 表现就是「最后一行离底部太靠上、怎么滚都压不下去」（首页/日志/配置/设置四个 Tab 全中）。
                     if (glassEnabled) Modifier.layerBackdrop(dockBackdrop)
-                    else Modifier.padding(padding)
+                    else Modifier.padding(
+                        top = padding.calculateTopPadding(),
+                        bottom = 0.dp
+                    )
                 )
         ) { page ->
             val scroll = scrollOf(page)
@@ -580,16 +590,19 @@ fun MainScreen(activity: MiuixMainActivity) {
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 12.dp)
                     .then(
-                        // 玻璃开启时：悬浮 dock 占据底部 84dp（行高 56 + 内边距 4×2 + 距屏底 20），
-                        // 底部留白必须 > 84dp 才能让最后一项（设置页「关于」）完整露出、滑得到，
-                        // 否则会被 dock 盖住。滚动过程中卡片仍会从 dock 下方经过 → 玻璃才有东西可折射。
+                        // 底部留白只在这里加一次（上一段已把 Scaffold 的 bottom 归零）：
+                        // 玻璃开启时悬浮 dock 占底部 84dp（行高 56 + 内边距 4×2 + 距屏底 20），
+                        // 留白必须 > 84dp，最后一项（设置页「关于」）才能完整露出、滑得到，
+                        // 同时滚动过程中卡片仍会从 dock 下方经过 → 玻璃才有东西可折射。
+                        // 非玻璃时用底栏实测高度（M3NavBarHeight=80dp），不额外加导航栏 inset ——
+                        // 系统手势区本来就在底栏之下，再加就又变成"多留一截"。
                         if (glassEnabled) Modifier.padding(bottom = 100.dp)
-                        else Modifier.padding(bottom = padding.calculateBottomPadding())
+                        else Modifier.padding(bottom = M3NavBarHeight)
                     )
                     .then(
                         // 玻璃开启时内容层是「全屏铺满」的（要当折射源），所以拿不到 Scaffold 给的
                         // topBar 内边距 —— 必须自己补顶栏高度，否则内容会滑到常驻标题栏底下被压住。
-                        // 非玻璃模式由上面那条 Modifier.padding(padding) 统一处理，这里不重复加。
+                        // 非玻璃模式由上面那条 padding(top=...) 统一处理，这里不重复加。
                         if (glassEnabled) Modifier.padding(top = padding.calculateTopPadding())
                         else Modifier
                     )
