@@ -7,7 +7,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
@@ -18,11 +21,69 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 
-/** 当前是否深色：先看是否跟随系统，再回落到模块的强制深色开关 */
+/**
+ * 主题模式的**可观察快照**：「跟随系统」与「固定浅/深」合成**一个** state。
+ *
+ * 为什么必须合成为一个 state（而不是分成两个独立的值）：
+ * `sesameIsDark()` 里一旦写成 `if (followSystem) return ...` 这种**提前返回**，
+ * 「跟随系统」这条分支就**不会读到**另一个 state → Compose 不会把该作用域注册为它的观察者
+ * → 用户从「跟随系统」切到「固定深色」时**不触发重组 → 设置完全无效**。
+ * （2026-10-03 实测踩到：玻璃开关修好了，主题样式却"设置后无效"，就是这个原因。）
+ *
+ * 合成一个 state 后，读取方**无条件读它**即可，永远有观察者。
+ *
+ * ⚠️ 另外：「跟随系统」时**不能**把深色值固化下来 —— 必须实时读 [isSystemInDarkTheme]，
+ * 否则用户切了系统深色，App 会停在切换前的值上不再跟随。
+ */
+private data class SesameThemeMode(val followSystem: Boolean, val darkMode: Boolean)
+
+private var SesameThemeModeState by mutableStateOf(
+    SesameThemeMode(
+        followSystem = AppConfig.INSTANCE.followSystem != false,
+        darkMode = AppConfig.INSTANCE.darkMode == true
+    )
+)
+
+/**
+ * 设置页切明暗时调用：落盘 AppConfig + 更新可观察快照（不再需要 recreate）
+ */
+fun sesameApplyTheme(followSystem: Boolean, darkMode: Boolean) {
+    AppConfig.INSTANCE.followSystem = followSystem
+    AppConfig.INSTANCE.darkMode = darkMode
+    SesameThemeModeState = SesameThemeMode(followSystem, darkMode)
+}
+
+/**
+ * 从 AppConfig **重新同步**主题快照。
+ *
+ * 用于「配置被外部整体替换」的场景 —— 典型是**恢复完整备份**：
+ * `performRestore` 里调 `AppConfig.load()` 把配置整份换掉，此时主题快照还是旧值，
+ * 必须重新同步，否则界面主题与配置不符（快照是进程级 state，不会自己重读）。
+ *
+ * 放在 [io.github.aw1y2z.sesame.ui.miuix.MiuixBaseActivity.onCreate] 里调用：
+ * 任何 Activity 重建（含恢复备份后的 recreate）都会经过那里，覆盖最全。
+ * 值相同时 `mutableStateOf` 不会触发重组，重复调用无副作用。
+ */
+fun sesameSyncThemeFromConfig() {
+    SesameThemeModeState = SesameThemeMode(
+        followSystem = AppConfig.INSTANCE.followSystem != false,
+        darkMode = AppConfig.INSTANCE.darkMode == true
+    )
+}
+
+/**
+ * 当前是否深色。
+ *
+ * - 跟随系统 → **实时**读 [isSystemInDarkTheme]（系统切深色 App 立刻跟随）；
+ * - 固定浅/深 → 用快照里的值，切换时重组生效、不重建 Activity。
+ *
+ * ⚠️ 必须**先无条件读出快照**再分支，别写成 `if (followSystem) return ...` 提前返回 ——
+ * 那样"跟随系统"时不会读到 state，之后切到固定模式就不触发重组（设置无效）。
+ */
 @Composable
 fun sesameIsDark(): Boolean {
-    val followSystem = AppConfig.INSTANCE.followSystem != false
-    return if (followSystem) isSystemInDarkTheme() else AppConfig.INSTANCE.darkMode == true
+    val mode = SesameThemeModeState
+    return if (mode.followSystem) isSystemInDarkTheme() else mode.darkMode
 }
 
 /**
@@ -40,10 +101,16 @@ fun SesameTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val dark = sesameIsDark()
-    val followSystem = AppConfig.INSTANCE.followSystem != false
+    // 一次读出主题模式快照，dark 与 followSystem 都从它派生 ——
+    // 保证两者**同源**，不会出现"dark 已变、followSystem 还是旧值"的中间态。
+    val themeMode = SesameThemeModeState
+    val followSystem = themeMode.followSystem
+    val dark = if (followSystem) isSystemInDarkTheme() else themeMode.darkMode
 
-    val controller = remember(dark) {
+    // ⚠️ key 必须同时含 followSystem：否则「固定深色(dark=true)」切到「跟随系统且系统也是深色
+    // (dark 仍为 true)」时，dark 没变 → controller 不重建 → colorSchemeMode 停在 Dark，
+    // 用户以为切了"跟随系统"却还是被钉在深色。
+    val controller = remember(dark, followSystem) {
         ThemeController(
             colorSchemeMode = when {
                 !followSystem -> if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light

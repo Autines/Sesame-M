@@ -469,10 +469,31 @@ fun MainScreen(activity: MiuixMainActivity) {
 
     // 底栏液态玻璃悬浮效果：玻璃面（navBar 外层 Box）采样「内容层」（HorizontalPager）做折射。
     // 开关存于 AppConfig.liquidGlassNavBar；关闭时回落为普通底栏，保持历史观感不变。
-    val glassEnabled = AppConfig.INSTANCE.liquidGlassNavBar != false
+    //
+    // ⚠️ 这里用 **可观察 state**（rememberSaveable），而不是每帧去读 AppConfig 的普通 Java 字段：
+    // 玻璃开关原本在设置页里用 `activity.recreate()` 让新值生效 —— 那会**销毁并重建整个
+    // Activity**，视觉上就是"界面闪一下"，是这个开关独有的问题（别的开关改的是数值，
+    // 重建不可见）。改成 state 后，设置页改开关 → 这里自动重组 → **不闪**。
+    // 初始值仍从 AppConfig 取；rememberSaveable 让 recreate（如切界面风格）后能恢复。
+    // ⚠️ 用 remember（不是 rememberSaveable）：它是**配置的镜像**，recreate 后必须
+    // 重新从 AppConfig 读最新值。若用 rememberSaveable，会把重建前的旧值恢复回来 ——
+    // 例如「恢复完整备份」改了配置再 recreate，界面却仍按旧值渲染（配置与实际不符）。
+    // （对比：selectedTab 用 rememberSaveable 是对的，页签选择不属于配置。）
+    var glassEnabled by remember { mutableStateOf(AppConfig.INSTANCE.liquidGlassNavBar != false) }
+    // 供设置页回写：切换开关时同时更新 AppConfig（落盘）与这里的 state（立即生效）
+    val onGlassEnabledChange: (Boolean) -> Unit = { newValue ->
+        AppConfig.INSTANCE.liquidGlassNavBar = newValue
+        AppConfig.save()
+        glassEnabled = newValue
+    }
     // Kyant0 Backdrop 的「折射源」句柄。内容层挂 Modifier.layerBackdrop(dockBackdrop) 把页面
     // 录进它的 GraphicsLayer，底栏再用 drawBackdrop(dockBackdrop) 采样这一层。
     val dockBackdrop = rememberLayerBackdrop()
+    // ⚠️ 切玻璃开关时要把**内容层与玻璃面**一起换掉：Modifier 链是构造时定下的，
+    // 而 layerBackdrop/drawBackdrop 共享同一个句柄才能采样到彼此。
+    // 这里给内容层的 Modifier 按 glassEnabled 取值即可（不重建句柄）：
+    // 关闭时内容层不挂 layerBackdrop，玻璃面也不挂 drawBackdrop，两边自然脱钩。
+
 
     // 底栏随滚动显隐（参考 iOS/Chrome 的「上滑收起、下滑唤出」）：
     //   手指上滑 = 内容继续往下走 = 当前页 ScrollState.value 增大 → 收起；
@@ -614,7 +635,11 @@ fun MainScreen(activity: MiuixMainActivity) {
                     0 -> HomeTab(activity)
                     1 -> LogsTab(activity)
                     2 -> ConfigTab(activity)
-                    3 -> SettingsTab(activity)
+                    3 -> SettingsTab(
+                        activity = activity,
+                        glassEnabled = glassEnabled,
+                        onGlassEnabledChange = onGlassEnabledChange
+                    )
                 }
             }
         }

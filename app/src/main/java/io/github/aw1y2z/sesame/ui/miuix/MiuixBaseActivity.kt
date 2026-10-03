@@ -7,10 +7,13 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.core.view.WindowCompat
 import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.ViewAppInfo
 import io.github.aw1y2z.sesame.ui.theme.SesameTheme
+import io.github.aw1y2z.sesame.ui.theme.sesameIsDark
+import io.github.aw1y2z.sesame.ui.theme.sesameSyncThemeFromConfig
 import io.github.aw1y2z.sesame.util.LanguageUtil
 
 open class MiuixBaseActivity : AppCompatActivity() {
@@ -31,6 +34,10 @@ open class MiuixBaseActivity : AppCompatActivity() {
         // 注册表、自己不做加载」的页面会拿到全默认值，保存后把用户配置覆盖掉。
         // 需要注册表的只读页面请改用 Model.initAllModelIfNeeded()（非破坏性）。
         setupSystemBars()
+        // 从配置重新同步主题快照：主题快照是**进程级** state，不会随 Activity 重建自动重读。
+        // 「恢复完整备份」会在 `AppConfig.load()` 后 recreate，若不同步，界面主题会与
+        // 刚恢复的配置不符。放这里可以覆盖任何 Activity 重建路径，且值相同时不触发重组。
+        sesameSyncThemeFromConfig()
     }
 
     /**
@@ -41,6 +48,14 @@ open class MiuixBaseActivity : AppCompatActivity() {
     protected fun setAppContent(content: @Composable () -> Unit) {
         setContent {
             SesameTheme {
+                // ⚠️ 系统栏图标的明暗必须在这里**跟着主题走**。
+                // 原先切主题靠 `activity.recreate()` 重建 Activity，重建时会重跑 onCreate 里的
+                // [setupSystemBars] → 系统栏图标随之刷新。现在改成"重组生效、不重建"，
+                // 那一步就**不会再发生**了 —— 结果是浅色模式下状态栏仍是深色模式留下的
+                // **白色图标**，在浅底上看不清（2026-10-03 实测踩到）。
+                // 用 SideEffect 在每次成功重组后同步一次；该赋值幂等、开销极小。
+                val dark = sesameIsDark()
+                SideEffect { applySystemBarAppearance(dark) }
                 content()
             }
         }
@@ -50,11 +65,24 @@ open class MiuixBaseActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
-        val isDark = if (AppConfig.INSTANCE.followSystem != false) {
-            (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        } else {
-            AppConfig.INSTANCE.darkMode == true
-        }
+        // Compose 还没起来，先按配置算一次（与 sesameIsDark 的口径一致）
+        applySystemBarAppearance(
+            if (AppConfig.INSTANCE.followSystem != false) {
+                (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                    Configuration.UI_MODE_NIGHT_YES
+            } else {
+                AppConfig.INSTANCE.darkMode == true
+            }
+        )
+    }
+
+    /**
+     * 按给定明暗刷新系统栏（状态栏/导航栏）**图标**明暗。
+     *
+     * 浅色底 → 图标要用深色（`isAppearanceLightStatusBars = true`），反之亦然。
+     * 幂等，可反复调用。
+     */
+    private fun applySystemBarAppearance(isDark: Boolean) {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             isAppearanceLightStatusBars = !isDark
             isAppearanceLightNavigationBars = !isDark

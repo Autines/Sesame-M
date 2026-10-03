@@ -80,6 +80,7 @@ import io.github.aw1y2z.sesame.ui.miuix.MiuixExtensionsActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixFriendStatsActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixLogViewerActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixSettingsActivity
+import io.github.aw1y2z.sesame.ui.theme.sesameApplyTheme
 import io.github.aw1y2z.sesame.ui.theme.SesameTheme
 import io.github.aw1y2z.sesame.ui.miuix.groupIconOf
 
@@ -514,8 +515,20 @@ private fun themeModeFlags(index: Int, currentDarkMode: Boolean): Pair<Boolean, 
     else -> false to false
 }
 
+/**
+ * 「设置」Tab。
+ *
+ * @param glassEnabled 底栏液态玻璃当前状态（**由 MainScreen 持有** —— 它是 Compose state，
+ *   所以切换时底栏能就地重组生效，不必像以前那样 `activity.recreate()`，
+ *   那会把整个界面销毁重建、视觉上"闪一下"）。
+ * @param onGlassEnabledChange 切换回调，由 MainScreen 提供（同时负责写回 AppConfig 落盘）。
+ */
 @Composable
-fun SettingsTab(activity: MiuixMainActivity) {
+fun SettingsTab(
+    activity: MiuixMainActivity,
+    glassEnabled: Boolean = AppConfig.INSTANCE.liquidGlassNavBar != false,
+    onGlassEnabledChange: ((Boolean) -> Unit)? = null
+) {
     val context = LocalContext.current
 
     // ── 主题：界面风格（设计语言）+ 主题样式（明暗）──
@@ -558,27 +571,35 @@ fun SettingsTab(activity: MiuixMainActivity) {
                 if (followSystem != nextFollow || darkMode != nextDark) {
                     followSystem = nextFollow
                     darkMode = nextDark
-                    AppConfig.INSTANCE.followSystem = nextFollow
-                    AppConfig.INSTANCE.darkMode = nextDark
+                    // ⚠️ 不再 activity.recreate()：明暗已改成可观察 state（见 SesameTheme.DarkOverride），
+                    // 写进去即整页重组换配色。原先靠重建 Activity 才生效 → 视觉上"界面闪一下"。
+                    sesameApplyTheme(nextFollow, nextDark)
                     AppConfig.save()
-                    activity.recreate()
                 }
             }
         )
         // 底栏液态玻璃：外观类开关，与「界面风格 / 主题样式」同属主题分组。
         // 原先放在「系统设置」里 —— 但它改的是**外观**（底栏材质），不是系统行为，故挪到主题。
-        var liquidGlassNavBar by remember { mutableStateOf(AppConfig.INSTANCE.liquidGlassNavBar != false) }
+        //
+        // ⚠️ 这里**不再**调 activity.recreate()：玻璃状态已由 MainScreen 以 Compose state 持有，
+        // 切换后底栏就地重组生效。原先靠 recreate 让新值生效，会销毁重建整个 Activity →
+        // 界面"闪一下"（这个开关独有的问题：它改的是整套渲染路径，不是某个数值）。
+        // onGlassEnabledChange 为空（例如被别处单独调用）时才退回 recreate 兜底。
         SesameSwitchRow(
             title = "底栏液态玻璃",
             icon = Icons.Outlined.AutoAwesome,
-            summary = "iOS 26 风折射悬浮底栏（实验）",
-            checked = liquidGlassNavBar,
-            onCheckedChange = {
-                AppConfig.INSTANCE.liquidGlassNavBar = it
-                AppConfig.save()
-                liquidGlassNavBar = it
-                // 该配置项不可观察（普通 Java 字段，非 Compose state），重建 Activity 让新值生效
-                activity.recreate()
+            // 不带副标题：原先写「iOS 26 风折射悬浮底栏（实验）」，
+            // 既是实现细节（折射怎么做的）、又带"实验"字样容易让人不敢开，
+            // 对用户没有决策价值 —— 开关叫什么、开了什么效果，看开关本身即可。
+            checked = glassEnabled,
+            onCheckedChange = { checked ->
+                if (onGlassEnabledChange != null) {
+                    onGlassEnabledChange(checked)
+                } else {
+                    AppConfig.INSTANCE.liquidGlassNavBar = checked
+                    AppConfig.save()
+                    activity.recreate()
+                }
             }
         )
     }
