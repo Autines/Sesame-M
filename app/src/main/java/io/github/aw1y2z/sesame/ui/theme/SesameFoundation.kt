@@ -178,6 +178,24 @@ internal val M3NavBarIconSize = 24.dp
 /** MD3 底部导航容器高度（规范值 80dp） */
 internal val M3NavBarHeight = 80.dp
 
+/**
+ * 本项目实际使用的底栏高度：**60dp**（规范 80dp 收窄 20dp）。
+ *
+ * 为什么偏离 M3 规范：
+ * 规范 80dp 配「指示器 32dp + 文字」这套排布后，上下各剩一段空槽（实测 80dp 里
+ * 有 12dp 纯属空白），视觉上表现为「内容被底栏压住、底部空一截」，
+ * 页面因此显得被压矮。
+ *
+ * 内部排布已同步压紧（指示器与文字零间距、文字行高等于字号），
+ * 内容实际只占约 46dp；留 60dp 是给上下各留约 7dp 呼吸位。
+ * 再压就会开始显得局促（图标/文字贴边），失去"这是一条底栏"的观感。
+ *
+ * ⚠️ 留白必须与本值**同步**：MiuixMainActivity 的
+ * `padding(bottom = SesameNavBarHeight)` 引用它。底栏矮了而留白不变，
+ * 内容反而会被盖住。
+ */
+internal val SesameNavBarHeight = 60.dp
+
 /** MD3 选中指示器（规范值 64×32，全圆角） */
 internal val M3NavIndicatorWidth = 64.dp
 internal val M3NavIndicatorHeight = 32.dp

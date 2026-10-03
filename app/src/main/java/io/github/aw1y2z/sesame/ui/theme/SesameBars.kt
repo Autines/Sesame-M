@@ -126,7 +126,9 @@ fun SesameNavBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .height(M3NavBarHeight),
+                        // 用项目实际高度 68dp（非规范 80dp）：80dp 里有 12dp 是纯空槽，
+                        // 会让内容显得被底栏压住。理由见 [SesameNavBarHeight]。
+                        .height(SesameNavBarHeight),
                     horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -172,12 +174,20 @@ fun SesameNavBar(
                                     modifier = Modifier.size(M3NavBarIconSize)
                                 )
                             }
-                            Spacer(Modifier.height(M3NavIconLabelGap))
+                            // 图标与文字贴紧：间距 0 + 文字行高压到等于字号。
+                            // ⚠️ 这两样必须**一起**做 ——
+                            // 只把间距设 0 还不够，`labelMedium` 的行高比字号大，
+                            // 文字上方仍留排版自带的空白；而那点空白正是「底栏上下空槽」的来源
+                            // （实测 80dp 时上下各空一段，让内容显得被底栏压住）。
+                            // 做法与 CompactNavBar 一致（那边已验证过）。
+                            Spacer(Modifier.height(CompactNavIconLabelGap))
                             Text(
                                 text = item.label,
-                                style = MaterialTheme.typography.labelMedium,
                                 color = contentColor,
-                                maxLines = 1
+                                maxLines = 1,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    lineHeight = MaterialTheme.typography.labelMedium.fontSize
+                                )
                             )
                         }
                     }

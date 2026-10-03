@@ -51,7 +51,7 @@ import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.RunType
 import io.github.aw1y2z.sesame.data.ViewAppInfo
-import io.github.aw1y2z.sesame.ui.theme.M3NavBarHeight
+import io.github.aw1y2z.sesame.ui.theme.SesameNavBarHeight
 import io.github.aw1y2z.sesame.ui.theme.SesameNavBar
 import io.github.aw1y2z.sesame.ui.theme.SesameNavItem
 import io.github.aw1y2z.sesame.ui.theme.SesamePageTitleBar
@@ -591,13 +591,11 @@ fun MainScreen(activity: MiuixMainActivity) {
                     .padding(bottom = 12.dp)
                     .then(
                         // 底部留白只在这里加一次（上一段已把 Scaffold 的 bottom 归零）：
-                        // 玻璃开启时悬浮 dock 占底部 84dp（行高 56 + 内边距 4×2 + 距屏底 20），
-                        // 留白必须 > 84dp，最后一项（设置页「关于」）才能完整露出、滑得到，
-                        // 同时滚动过程中卡片仍会从 dock 下方经过 → 玻璃才有东西可折射。
-                        // 非玻璃时用底栏实测高度（M3NavBarHeight=80dp），不额外加导航栏 inset ——
-                        // 系统手势区本来就在底栏之下，再加就又变成"多留一截"。
+                        // 必须与底栏实际高度 [SesameNavBarHeight] 同步 —— 底栏收窄多少，
+                        // 留白就跟着减多少，否则底栏变矮而留白不变，内容反而被盖住。
+                        // 玻璃开启时另走 100.dp（悬浮 dock 要留 > 84dp 让卡片从下方经过好折射）。
                         if (glassEnabled) Modifier.padding(bottom = 100.dp)
-                        else Modifier.padding(bottom = M3NavBarHeight)
+                        else Modifier.padding(bottom = SesameNavBarHeight)
                     )
                     .then(
                         // 玻璃开启时内容层是「全屏铺满」的（要当折射源），所以拿不到 Scaffold 给的
