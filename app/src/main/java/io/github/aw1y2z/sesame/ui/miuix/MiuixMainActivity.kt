@@ -579,8 +579,15 @@ fun MainScreen(activity: MiuixMainActivity) {
                         bottom = 0.dp
                     )
                 )
-        ) { page ->
+                    ) { page ->
             val scroll = scrollOf(page)
+            // 底部留白必须**等于底栏的总高**，而不是只有 Row 的高度。
+            // ⚠️ 实测教训：底栏 = `navigationBarsPadding()`（系统手势区，本次实测 34dp）
+            // + Row(SesameNavBarHeight=60dp) = **94dp**。我先前只按 60dp 留白，
+            // 差的 34dp 正好把卡片下沿的 28dp 圆角塞到底栏底下 → 「最后一行被底栏切掉一截」。
+            // 变量取不到 inset 高度（Compose MP 分支无 WindowInsets 查询 API 变通），
+            // 故显式写成实测值；换机型/换导航模式时**按真机重新量这一行**。
+            val bottomInsetDp = 34
             Column(
                 Modifier
                     .fillMaxSize()
@@ -590,12 +597,10 @@ fun MainScreen(activity: MiuixMainActivity) {
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 12.dp)
                     .then(
-                        // 底部留白只在这里加一次（上一段已把 Scaffold 的 bottom 归零）：
-                        // 必须与底栏实际高度 [SesameNavBarHeight] 同步 —— 底栏收窄多少，
-                        // 留白就跟着减多少，否则底栏变矮而留白不变，内容反而被盖住。
-                        // 玻璃开启时另走 100.dp（悬浮 dock 要留 > 84dp 让卡片从下方经过好折射）。
+                        // 玻璃开启时另走 100.dp：悬浮 dock 要留 > 84dp，
+                        // 让卡片能从 dock 下方经过 —— 玻璃才有东西可折射。
                         if (glassEnabled) Modifier.padding(bottom = 100.dp)
-                        else Modifier.padding(bottom = SesameNavBarHeight)
+                        else Modifier.padding(bottom = SesameNavBarHeight + bottomInsetDp.dp)
                     )
                     .then(
                         // 玻璃开启时内容层是「全屏铺满」的（要当折射源），所以拿不到 Scaffold 给的
