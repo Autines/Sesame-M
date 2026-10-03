@@ -576,7 +576,6 @@ public class FileUtil {
     public static File getOrchardChouChouLeTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "OrchardChouChouLeTask.json");
     }
-    }
 
     public static File getGoldenBeansTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "GoldenBeansTask.json");

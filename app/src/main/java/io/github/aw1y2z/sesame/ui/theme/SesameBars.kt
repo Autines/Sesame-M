@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.semantics.Role
@@ -373,7 +374,9 @@ fun SesameTopBar(
     onExport: (() -> Unit)? = null,
     onClear: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
-    onExecute: (() -> Unit)? = null
+    onExecute: (() -> Unit)? = null,
+    /** 自定义操作区（插在标题之后、内置图标之前），用于「全选 / 反选 / 取消」这类页面专属动作。 */
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     when (LocalUiStyle.current) {
         UiStyle.MIUIX -> Column(
@@ -406,6 +409,7 @@ fun SesameTopBar(
                     color = sesameOnSurface(),
                     maxLines = 1
                 )
+                actions()
                 if (onImport != null) {
                     MiuixIconButton(onClick = onImport) {
                         MiuixIcon(
@@ -486,6 +490,7 @@ fun SesameTopBar(
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1
                     )
+                    actions()
                     if (onImport != null) {
                         IconButton(onClick = onImport) {
                             Icon(
