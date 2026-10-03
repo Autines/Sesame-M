@@ -250,7 +250,14 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(padding)
+                // ⚠️ bottom 不在这里吃，改由内容末尾的 Spacer 承担。
+                // 若这里连 bottom 一起 padding(padding)，可滚动内容会被整体抬高，
+                // 滚到底时最后一行下面空出「底栏高度 + 一段空白」——也就是老板说的
+                // 「最后一行离底部太靠上」，滚到底也压不下去。
+                .padding(
+                    top = padding.calculateTopPadding(),
+                    bottom = 0.dp
+                )
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             // ============ 配置分组目录 ============
@@ -305,7 +312,10 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                     }
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            // 末尾留白：把底栏（bottomBar）的高度补上，让最后一行能贴到屏幕底。
+            // 之所以在这里补、而不在外层 padding 掉，是因为外层 padding 会把整个可滚动
+            // 区域整体抬高 —— 那样内容永远到不了底，只表现为「最后一行离底部太靠上」。
+            Spacer(Modifier.height(padding.calculateBottomPadding() + 16.dp))
 
             // 恢复确认：把包里有什么、要发生什么一次讲清楚，别让用户凭图标猜
             val info = pendingInfo.value

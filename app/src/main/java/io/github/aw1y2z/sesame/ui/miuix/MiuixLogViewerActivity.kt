@@ -395,7 +395,17 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
         },
         containerColor = sesameSurface()
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        // ⚠️ bottom 不在 Column 这里吃：连 bottom 一起 padding(padding) 会把滚动区整体抬高，
+        // 列表滚到底时最后一条下面会空出「底栏高度 + 一段空白」——
+        // 视觉上就是老板说的「最后一行离底部太靠上」，且怎么滚都压不下去。
+        // 所以这里先整体 padding，再把 bottom **显式归零**，让底栏那块高度
+        // 改由 LazyColumn 的 contentPadding 承担（内容因此能滚进空白区）。
+        Column(
+            Modifier.fillMaxSize().padding(
+                top = padding.calculateTopPadding(),
+                bottom = 0.dp
+            )
+        ) {
             // ── 搜索框 ──────────────────────────────────────────────────
             Row(
                 Modifier
@@ -477,7 +487,15 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                     reverseLayout = true,
                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                    // ⚠️ reverseLayout = true 时，contentPadding 的 top/bottom 会**互换**：
+                    // Compose 把 start 当作列表的"起始边"，而反转布局的起始边是**底部**。
+                    // 所以想让「列表底部（视觉上的最后一条那侧）」贴到屏幕底，
+                    // 得把底栏高度填进 **top** 这一档。
+                    // （不清这个的话，改了 padding 反而会在错误的一侧留白。）
+                    contentPadding = PaddingValues(
+                        top = padding.calculateBottomPadding() + 8.dp,
+                        bottom = 8.dp
+                    )
                 ) {
                     itemsIndexed(
                         filteredEntries.asReversed(),

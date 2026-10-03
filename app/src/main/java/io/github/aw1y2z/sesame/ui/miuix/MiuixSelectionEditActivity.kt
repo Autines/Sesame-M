@@ -283,7 +283,12 @@ fun SelectionEditContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                // ⚠️ 同设置页：bottom 交给末尾 Spacer，否则整个可滚动区被抬高，
+                // 最后一行永远离底部太远（滚到底也压不下去）。
+                .padding(
+                    top = padding.calculateTopPadding(),
+                    bottom = 0.dp
+                )
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             if (!single) {
@@ -400,6 +405,8 @@ fun SelectionEditContent(
                     }
                 }
             }
+            // 末尾留白：补上底栏高度，让最后一行能贴到屏幕底（同设置页的理由）
+            Spacer(Modifier.height(padding.calculateBottomPadding()))
         }
     }
 }
