@@ -1294,10 +1294,25 @@ public class ApplicationHook extends XposedModule {
     /**
      * 调用原方法取真实返回值。
      *
+     * ⚠️ 为什么不能直接用 {@code param.callOriginal()}：
+     * 它会把 **hook 时收到的实参原样回传**（见 `XHelpers.hookMember` 里的
+     * {@code chain.proceed(param.args)}）。而 {@code isInBackground} 存在
+     * **带一个 {@code boolean} 参数**的重载，那个 hook 收到的实参是包装类
+     * {@code java.lang.Boolean}，原方法要的却是**原始类型 {@code boolean}** ——
+     * 反射层于是抛
+     * {@code IllegalArgumentException: argument 1 has type boolean, got java.lang.Boolean}，
+     * 取不到真值，只能落回"谎报"分支（K80 Pro 2026-10-03 实测，全天才出现 1 次）。
+     *
+     * 改法：按**参数的真实类型**重新装箱后再回传 ——
+     * 原始类型 {@code boolean}/{@code int} 等用 {@code XHelpers} 的
+     * {@code toPrimitiveArgs} 归一化，保证反射层类型检查通过。
+     * 无参方法（另一种重载）不受影响，原样回传即可。
+     *
      * @return 真值；取不到（异常 / 非布尔）时返回 null，调用方按原行为谎报
      */
     private static Boolean originalBoolean(XC_MethodHook.MethodHookParam param, String what) {
         try {
+            param.args = toPrimitiveArgs(param.args);
             Object result = param.callOriginal();
             return result instanceof Boolean ? (Boolean) result : null;
         } catch (Throwable t) {
@@ -1307,6 +1322,44 @@ public class ApplicationHook extends XposedModule {
             }
             return null;
         }
+    }
+
+    /**
+     * 把实参里的包装类替换为其对应的**原始类型**实例。
+     *
+     * 反射调用 {@code Method.invoke} 时对每个参数做严格类型检查：声明为
+     * {@code boolean} 的形参收到 {@code Boolean} 就会抛
+     * {@code IllegalArgumentException: argument N has type boolean, got java.lang.Boolean}。
+     * Xposed 传入的实参常常是包装类（宿主那边被混淆/装箱过），这里做一次归一化。
+     *
+     * 只处理有对应原始类型的那几个（boolean/byte/char/short/int/long/float/double），
+     * 其余类型（对象、数组等）原样返回，不做任何转换。
+     */
+    private static Object[] toPrimitiveArgs(Object[] args) {
+        if (args == null) {
+            return null;
+        }
+        for (int i = 0; i < args.length; i++) {
+            Object a = args[i];
+            if (a instanceof Boolean) {
+                args[i] = ((Boolean) a).booleanValue();
+            } else if (a instanceof Byte) {
+                args[i] = ((Byte) a).byteValue();
+            } else if (a instanceof Character) {
+                args[i] = ((Character) a).charValue();
+            } else if (a instanceof Short) {
+                args[i] = ((Short) a).shortValue();
+            } else if (a instanceof Integer) {
+                args[i] = ((Integer) a).intValue();
+            } else if (a instanceof Long) {
+                args[i] = ((Long) a).longValue();
+            } else if (a instanceof Float) {
+                args[i] = ((Float) a).floatValue();
+            } else if (a instanceof Double) {
+                args[i] = ((Double) a).doubleValue();
+            }
+        }
+        return args;
     }
 
     /**
