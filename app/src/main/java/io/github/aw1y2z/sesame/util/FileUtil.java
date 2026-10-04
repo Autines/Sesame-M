@@ -530,6 +530,10 @@ public class FileUtil {
     public static File getMemberCreditSesameTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "MemberCreditSesameTask.json");
     }
+
+    public static File getSesameAlchemyTaskListMapFile() {
+        return getFile(MAIN_DIRECTORY_FILE, "SesameAlchemyTask.json");
+    }
     
     public static File getAntForestVitalityTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "AntForestVitalityTask.json");

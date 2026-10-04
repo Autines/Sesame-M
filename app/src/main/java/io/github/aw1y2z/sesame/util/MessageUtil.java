@@ -39,6 +39,7 @@ import io.github.aw1y2z.sesame.util.idMap.AntStallTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AutoBlackListMap;
 import io.github.aw1y2z.sesame.util.idMap.GoldenBeansTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.MemberCreditSesameTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.SesameAlchemyTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.MonopolyTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap;
 
@@ -433,6 +434,7 @@ public class MessageUtil {
         BLACKLIST_LIST_TARGETS.put("AntSportsTaskList", new String[]{"AntSports", "运动任务"});
         BLACKLIST_LIST_TARGETS.put("AntMemberTaskList", new String[]{"AntMember", "会员任务"});
         BLACKLIST_LIST_TARGETS.put("MemberCreditSesameTaskList", new String[]{"AntMember", "会员芝麻信用任务芝麻粒"});
+        BLACKLIST_LIST_TARGETS.put("SesameAlchemyTaskList", new String[]{"AntMember", "芝麻炼金任务"});
     }
 
     /**
@@ -491,6 +493,8 @@ public class MessageUtil {
         BLACKLIST_LIST_NAMES.put("AntMemberTaskList", "会员任务黑名单");
         BLACKLIST_GROUP_NAMES.put("MemberCreditSesameTaskList", "会员");
         BLACKLIST_LIST_NAMES.put("MemberCreditSesameTaskList", "芝麻信用黑名单");
+        BLACKLIST_GROUP_NAMES.put("SesameAlchemyTaskList", "会员");
+        BLACKLIST_LIST_NAMES.put("SesameAlchemyTaskList", "芝麻炼金黑名单");
     }
 
     /**
@@ -519,6 +523,7 @@ public class MessageUtil {
         BLACKLIST_NAME_MAPS.put("AntSportsTaskList", AntSportsTaskListMap::getMap);
         BLACKLIST_NAME_MAPS.put("AntMemberTaskList", AntMemberTaskListMap::getMap);
         BLACKLIST_NAME_MAPS.put("MemberCreditSesameTaskList", MemberCreditSesameTaskListMap::getMap);
+        BLACKLIST_NAME_MAPS.put("SesameAlchemyTaskList", SesameAlchemyTaskListMap::getMap);
     }
 
     /**
@@ -616,6 +621,15 @@ public class MessageUtil {
                             || anyFieldContains(jo, "不是有效的入参")
                             || anyFieldContains(jo, "存在进行中的生活记录")
                             || anyFieldContains(jo, "生活记录模板不存在");
+                    break;
+
+                // 芝麻炼金任务：「参数[promiseActivityExtCheck]不是有效的入参」是服务端对
+                // 「需真实行为校验」类任务（zm_* / 玩XX游戏）的固定拒绝 → 走连续确认。
+                // 连续 N 次都没做成，才认为该任务确实做不了（避免偶发一次就永久停掉）。
+                case "SesameAlchemyTaskList":
+                    needConfirm = weakHit
+                            || anyFieldContains(jo, "不是有效的入参")
+                            || anyFieldContains(jo, "promiseActivityExtCheck");
                     break;
 
                 // 金豆夺宝任务：错误码/文案（code 或 resultCode 或 errorCode + desc/resultDesc/memo）

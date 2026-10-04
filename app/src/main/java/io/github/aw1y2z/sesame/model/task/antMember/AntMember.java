@@ -13,6 +13,7 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField;
 import io.github.aw1y2z.sesame.data.task.ModelTask;
 import io.github.aw1y2z.sesame.entity.AlipayAntMemberTaskList;
 import io.github.aw1y2z.sesame.entity.AlipayMemberCreditSesameTaskList;
+import io.github.aw1y2z.sesame.entity.AlipaySesameAlchemyTaskList;
 import io.github.aw1y2z.sesame.entity.MemberBenefit;
 import io.github.aw1y2z.sesame.hook.ApplicationHook;
 import io.github.aw1y2z.sesame.model.base.TaskCommon;
@@ -25,6 +26,7 @@ import io.github.aw1y2z.sesame.util.idMap.AntFarmDoFarmTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntMemberTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.MemberBenefitIdMap;
 import io.github.aw1y2z.sesame.util.idMap.MemberCreditSesameTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.SesameAlchemyTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.PromiseSimpleTemplateIdMap;
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap;
 
@@ -69,6 +71,10 @@ public class AntMember extends ModelTask {
     private BooleanModelField collectSesame;
     private BooleanModelField AutoMemberCreditSesameTaskList;
     private SelectModelField MemberCreditSesameTaskList;
+    private BooleanModelField sesameAlchemy;
+    private BooleanModelField AutoSesameAlchemyTaskList;
+    private SelectModelField SesameAlchemyTaskList;
+    private BooleanModelField enableZhimaTree;
     private BooleanModelField SesameGrowthBehavior;
     private BooleanModelField promise;
     private SelectModelField promiseList;
@@ -88,6 +94,15 @@ public class AntMember extends ModelTask {
         modelFields.addField(collectSesame = new BooleanModelField("collectSesame", "芝麻粒 | 领取", false));
         modelFields.addField(AutoMemberCreditSesameTaskList = new BooleanModelField("AutoMemberCreditSesameTaskList", "芝麻粒任务 | 自动黑名单", true).setDependsOn("collectSesame"));
         modelFields.addField(MemberCreditSesameTaskList = new SelectModelField("MemberCreditSesameTaskList", "芝麻粒任务 | 黑名单列表", new LinkedHashSet<>(), AlipayMemberCreditSesameTaskList::getList).setDependsOn("AutoMemberCreditSesameTaskList"));
+        // 芝麻炼金：与「芝麻粒 | 领取」同属芝麻会员体系，但任务形态不同（广告任务/炼金消耗），故独立开关。
+        // 默认关闭 —— 新接口未经真机验证前不改变既有行为。
+        modelFields.addField(sesameAlchemy = new BooleanModelField("sesameAlchemy", "芝麻炼金", false));
+        // 炼金任务黑名单：与芝麻粒黑名单分列（任务名不重叠，混在一起用户分不清）。
+        // 自动黑名单默认开 —— 只为收集"服务端明确拒绝"的任务，避免每天重复空试。
+        modelFields.addField(AutoSesameAlchemyTaskList = new BooleanModelField("AutoSesameAlchemyTaskList", "芝麻炼金 | 自动黑名单", true).setDependsOn("sesameAlchemy"));
+        modelFields.addField(SesameAlchemyTaskList = new SelectModelField("SesameAlchemyTaskList", "芝麻炼金 | 黑名单列表", new LinkedHashSet<>(), AlipaySesameAlchemyTaskList::getList).setDependsOn("AutoSesameAlchemyTaskList"));
+        // 芝麻树：独立玩法（净化 + 浏览任务），走 alipay.promoprod.play.trigger。
+        modelFields.addField(enableZhimaTree = new BooleanModelField("enableZhimaTree", "芝麻树", false));
         modelFields.addField(SesameGrowthBehavior = new BooleanModelField("SesameGrowthBehavior", "攒芝麻分进度", false));
         modelFields.addField(enableGameCenter = new BooleanModelField("enableGameCenter", "游戏中心 | 得乐园豆", false));
         //modelFields.addField(promise = new BooleanModelField("promise", "生活记录 | 坚持做", false));
@@ -129,6 +144,16 @@ public class AntMember extends ModelTask {
             if (collectSesame.getValue()) {
                 CheckInTaskRpcManager();
                 collectSesame();
+            }
+            
+            // 芝麻炼金（独立开关）：炼金任务列表 → 时段奖励 → 炼金循环 → 收取
+            if (sesameAlchemy.getValue()) {
+                doSesameAlchemy();
+            }
+            
+            // 芝麻树（独立开关）：主页任务 → 任务列表 → 净化
+            if (enableZhimaTree.getValue()) {
+                doZhimaTree();
             }
             
             //芝麻积攒进度
@@ -252,6 +277,8 @@ public class AntMember extends ModelTask {
             }
             //初始化MemberCreditSesameTaskListMap
             MemberCreditSesameTaskListMap.load();
+            //初始化SesameAlchemyTaskListMap（炼金任务黑名单，独立于芝麻粒）
+            SesameAlchemyTaskListMap.load();
             blackList = new HashSet<>();
             // 实测（2026-09-22 抓包 logs/chk_sesame3）：芝麻粒任务走 taskFeedback 后服务端**不校验是否真的参与过**，
             // 未报名的「去玩xx」一次即 success ⇒ 游戏/浏览/签到/组件/施肥类不再预置拉黑，全部交给任务循环自动完成。
@@ -1369,8 +1396,13 @@ public class AntMember extends ModelTask {
     
     private void collectSesame() {
         try {
+            // ⚠️ 下面每个 return 都必须留痕：原先有 6 处静默返回，
+            //    导致「芝麻粒任务没生效」时模块日志里一片空白 —— 无法区分
+            //    「接口挂了 / 未开通 / 无待完成任务」。用户看到的"什么日志都没有"
+            //    恰恰是这个静默设计的产物，而不是任务未执行的证据。
             JSONObject jo = new JSONObject(AntMemberRpcCall.queryHome());
             if (!MessageUtil.checkResultCode(TAG, jo)) {
+                Log.other("芝麻粒🥇跳过：查询芝麻信用主页失败（queryHome 非成功应答，详情见运行日志）");
                 return;
             }
             JSONObject entrance = jo.getJSONObject("entrance");
@@ -1382,13 +1414,16 @@ public class AntMember extends ModelTask {
             jo = new JSONObject(AntMemberRpcCall.CreditAccumulateStrategyRpcManager());
             TimeUtil.sleep(300);
             if (!MessageUtil.checkResultCode(TAG, jo)) {
+                Log.other("芝麻粒🥇跳过：查询攒粒任务失败（CreditAccumulateStrategyRpcManager 非成功应答，详情见运行日志）");
                 return;
             }
             if (!jo.has("data")) {
+                Log.other("芝麻粒🥇跳过：攒粒任务应答无 data 字段");
                 return;
             }
             JSONObject data = jo.getJSONObject("data");
             if (!data.has("toCompleteVOS")) {
+                Log.other("芝麻粒🥇跳过：应答无 toCompleteVOS（当前无待完成任务，或字段已改名）");
                 return;
             }
             JSONArray toCompleteVOS = data.getJSONArray("toCompleteVOS");
@@ -1534,6 +1569,653 @@ public class AntMember extends ModelTask {
         }
         catch (Throwable t) {
             Log.printStackTrace(TAG + ".doSesameZmlCheckIn", t);
+        }
+    }
+    
+    // ==================== 芝麻炼金（独立开关 sesameAlchemy） ====================
+    // 实现来源：同类模块「森」(byseven.forest.sen) 的 doSesameAlchemy/processAlchemyTasks 反编译还原。
+    // 与本模块原有 collectSesame() 的区别：collectSesame 走「攒粒任务列表 + taskFeedback」；
+    // 炼金走「AlchemyRpcManager」独立体系 —— 主页/签到(alchemy场景)/时段奖励/任务列表/炼金消耗芝麻粒换金。
+    
+    /**
+     * 芝麻炼金主流程。每一步都留日志，避免出现「静默返回 → 日志一片空白」的诊断陷阱。
+     * <p>顺序严格照抄参考实现：主页 → 签到 → 时段奖励 → 任务列表 → 炼金循环 → 收取芝麻粒。
+     */
+    private void doSesameAlchemy() {
+        try {
+            Log.other("芝麻炼金⚗️开始执行 [build20261004d: cleanupDiag]");
+            
+            // ① 炼金主页：拿当前芝麻粒余额、单次消耗、可否继续炼金
+            int zmlBalance = 0;
+            int alchemyCost = 5;
+            int currentLevel = 0;
+            boolean capReached = false;
+            JSONObject homeJo = new JSONObject(AntMemberRpcCall.alchemyQueryHome());
+            if (MessageUtil.checkResultCode(TAG, homeJo)) {
+                JSONObject data = homeJo.optJSONObject("data");
+                if (data != null) {
+                    zmlBalance = data.optInt("zmlBalance", 0);
+                    alchemyCost = data.optInt("alchemyCostZml", 5);
+                    currentLevel = data.optInt("currentLevel", 0);
+                    capReached = data.optBoolean("capReached", false);
+                    Log.other("芝麻炼金⚗️主页读取成功#余额" + zmlBalance + "粒 单次消耗" + alchemyCost + "粒 等级Lv." + currentLevel);
+                }
+            }
+            else {
+                Log.other("芝麻炼金⚗️主页查询失败#本轮仅尝试任务与收取");
+            }
+            TimeUtil.sleep(300);
+            
+            // ② alchemy 场景签到（与芝麻粒 zml 签到是两套 sceneCode）
+            alchemyCheckIn("alchemy");
+            
+            // ③ 时段奖励（早/中/晚饭）
+            handleAlchemyTimeLimitedTask();
+            
+            // ④ 任务列表（toCompleteVOS + 日常任务的待参与/待完成）
+            handleAlchemyTaskList();
+            
+            // ⑤ 炼金循环：每消耗 alchemyCost 粒换金，直到粒不够或达到盖帽值
+            if (capReached) {
+                Log.other("芝麻炼金⚗️已达盖帽值，跳过炼金");
+            }
+            else if (zmlBalance < alchemyCost) {
+                Log.other("芝麻炼金⚗️余额不足（" + zmlBalance + "/" + alchemyCost + "），跳过炼金");
+            }
+            else {
+                int loops = Math.min((zmlBalance / Math.max(alchemyCost, 1)), 30); // 上限防意外死循环
+                for (int i = 0; i < loops; i++) {
+                    JSONObject execJo = new JSONObject(AntMemberRpcCall.doAlchemy());
+                    if (isAlchemyCapReached(execJo)) {
+                        Log.other("芝麻炼金⚗️达到盖帽值，停止炼金");
+                        break;
+                    }
+                    if (!MessageUtil.checkResultCode(TAG, execJo)) {
+                        Log.error("芝麻炼金⚗️炼金失败#" + execJo.optString("resultView", execJo.toString()));
+                        break;
+                    }
+                    JSONObject data = execJo.optJSONObject("data");
+                    if (data != null) {
+                        boolean levelUp = data.optBoolean("levelUp", false);
+                        boolean levelFull = data.optBoolean("levelFull", false);
+                        int goldNum = data.optInt("goldNum", 0);
+                        if (levelUp) {
+                            currentLevel++;
+                        }
+                        if (levelFull) {
+                            capReached = true;
+                        }
+                        Log.other("芝麻炼金⚗️[炼金成功]#消耗" + alchemyCost + "粒 | 获得" + goldNum + "金 | 当前等级Lv."
+                                + currentLevel + (levelUp ? "（升级🎉）" : "") + (levelFull ? "（满级🏆）" : ""));
+                    }
+                    TimeUtil.sleep(1500);
+                    if (capReached) {
+                        Log.other("芝麻炼金⚗️达到盖帽值，停止炼金");
+                        break;
+                    }
+                }
+            }
+            
+            // ⑥ 收取芝麻粒：先查有无待收取，再一键收
+            collectAlchemyCredit();
+
+            // ⑦ 保存炼金任务列表（供黑名单界面展示；自动拉黑的条目也在这里落盘）
+            SesameAlchemyTaskListMap.save();
+
+            Log.other("芝麻炼金⚗️执行结束");
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".doSesameAlchemy", t);
+        }
+    }
+    
+    /**
+     * 炼金签到。sceneCode="alchemy" 对应炼金签到，"zml" 对应芝麻粒签到（见 CheckInTaskRpcManager）。
+     * @param sceneCode 场景码
+     */
+    private void alchemyCheckIn(String sceneCode) {
+        try {
+            JSONObject jo = new JSONObject(AntMemberRpcCall.alchemyQueryCheckIn(sceneCode));
+            if (!MessageUtil.checkResultCode(TAG, jo)) {
+                return;
+            }
+            JSONObject data = jo.optJSONObject("data");
+            JSONObject currentDay = data != null ? data.optJSONObject("currentDateCheckInTaskVO") : null;
+            if (currentDay == null) {
+                return;
+            }
+            String status = currentDay.optString("status");
+            String checkInDate = currentDay.optString("checkInDate");
+            if (!"CAN_COMPLETE".equals(status) || checkInDate.isEmpty()) {
+                return;
+            }
+            JSONObject completeJo = new JSONObject(AntMemberRpcCall.zmCheckInCompleteTask(checkInDate, sceneCode));
+            if (MessageUtil.checkResultCode(TAG, completeJo)) {
+                JSONObject prizeData = completeJo.optJSONObject("data");
+                int num = 0;
+                if (prizeData != null) {
+                    JSONObject prize = prizeData.optJSONObject("prize");
+                    num = prizeData.optInt("zmlNum", prize != null ? prize.optInt("num", 0) : 0);
+                }
+                Log.other("芝麻炼金⚗️[每日签到成功]#获得" + num + "粒");
+            }
+            else {
+                Log.error("芝麻炼金⚗️炼金签到失败:" + completeJo.toString());
+            }
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".alchemyCheckIn", t);
+        }
+    }
+    
+    /**
+     * 处理炼金时段奖励（早/中/晚饭）。{@code state==1} 且非「明天」才领。
+     */
+    private void handleAlchemyTimeLimitedTask() {
+        try {
+            JSONObject jo = new JSONObject(AntMemberRpcCall.alchemyQueryTimeLimitedTask());
+            if (!MessageUtil.checkResultCode(TAG, jo)) {
+                Log.error("芝麻炼金⚗️[检查时段奖励错误] " + jo);
+                return;
+            }
+            JSONObject data = jo.optJSONObject("data");
+            JSONObject taskVO = data != null ? data.optJSONObject("timeLimitedTaskVO") : null;
+            if (taskVO == null) {
+                Log.other("芝麻炼金⚗️[当前没有时段奖励任务]");
+                return;
+            }
+            String longTitle = taskVO.optString("longTitle", "未知任务");
+            String templateId = taskVO.optString("templateId");
+            if (templateId.isEmpty()) {
+                Log.other("芝麻炼金⚗️[任务跳过] templateId 为空");
+                return;
+            }
+            int state = taskVO.optInt("state", 0);
+            boolean tomorrow = taskVO.optBoolean("tomorrow", false);
+            int rewardAmount = taskVO.optInt("rewardAmount", 0);
+            Log.other("芝麻炼金⚗️[任务检查] 任务=" + longTitle + " 状态=" + state + " 奖励=" + rewardAmount + " 明天=" + tomorrow);
+            if (tomorrow) {
+                Log.other("芝麻炼金⚗️[任务跳过] " + longTitle + " 是明天的奖励");
+                return;
+            }
+            if (state != 1) {
+                Log.other("芝麻炼金⚗️[当前不可领取] 任务=" + longTitle);
+                return;
+            }
+            JSONObject completeJo = new JSONObject(AntMemberRpcCall.alchemyCompleteTimeLimitedTask(templateId));
+            JSONObject resultData = completeJo.optJSONObject("data");
+            if (MessageUtil.checkResultCode(TAG, completeJo) && resultData != null) {
+                Log.other("芝麻炼金⚗️[领取成功] 获得芝麻粒=" + resultData.optInt("zmlNum", 0)
+                        + " 提示=" + resultData.optString("toast", ""));
+            }
+            else {
+                Log.error("芝麻炼金⚗️领取时段奖励失败 raw=" + completeJo);
+            }
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".handleAlchemyTimeLimitedTask", t);
+        }
+    }
+    
+    /**
+     * 处理炼金任务列表。三个来源合并处理：{@code data.toCompleteVOS} +
+     * {@code data.dailyTaskListVO.waitJoinTaskVOS} + {@code waitCompleteTaskVOS}。
+     */
+    private void handleAlchemyTaskList() {
+        try {
+            JSONObject jo = new JSONObject(AntMemberRpcCall.alchemyQueryTasks());
+            if (!MessageUtil.checkResultCode(TAG, jo)) {
+                Log.other("芝麻炼金⚗️[任务列表查询失败]");
+                return;
+            }
+            JSONObject data = jo.optJSONObject("data");
+            if (data == null) {
+                Log.other("芝麻炼金⚗️[任务列表无 data]");
+                return;
+            }
+            // 已处理过的黑名单任务标题，避免同一标题反复打日志
+            Set<String> processedBlacklistTasks = new LinkedHashSet<>();
+            JSONArray toCompleteVOS = data.optJSONArray("toCompleteVOS");
+            if (toCompleteVOS != null) {
+                processAlchemyTasks(toCompleteVOS, processedBlacklistTasks);
+            }
+            JSONObject dailyTaskListVO = data.optJSONObject("dailyTaskListVO");
+            if (dailyTaskListVO != null) {
+                JSONArray waitJoin = dailyTaskListVO.optJSONArray("waitJoinTaskVOS");
+                if (waitJoin != null) {
+                    processAlchemyTasks(waitJoin, processedBlacklistTasks);
+                }
+                JSONArray waitComplete = dailyTaskListVO.optJSONArray("waitCompleteTaskVOS");
+                if (waitComplete != null) {
+                    processAlchemyTasks(waitComplete, processedBlacklistTasks);
+                }
+            }
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".handleAlchemyTaskList", t);
+        }
+    }
+    
+    /**
+     * 逐条处理炼金任务。三类分支（照抄参考实现）：
+     * <ol>
+     *   <li>黑名单任务 → 跳过</li>
+     *   <li>{@code bizType == "AD_TASK"} → 广告任务，取 {@code logExtMap.bizId} 等待后上报</li>
+     *   <li>{@code bizType == "LIFE_RECORD"} → 生活记录任务，{@code joinSesameTask} + {@code finishSesameTask}</li>
+     * </ol>
+     *
+     * @param taskList              任务数组
+     * @param processedBlacklistTasks 已处理的黑名单任务标题集合，避免重复打日志
+     */
+    private void processAlchemyTasks(JSONArray taskList, Set<String> processedBlacklistTasks) {
+        if (taskList == null) {
+            return;
+        }
+        for (int i = 0; i < taskList.length(); i++) {
+            try {
+                JSONObject task = taskList.getJSONObject(i);
+                String title = task.optString("title");
+                String templateId = task.optString("templateId");
+                boolean finishFlag = task.optBoolean("finishFlag", false);
+                String bizType = task.optString("bizType", "");
+
+                // 登记到炼金黑名单映射（供「芝麻炼金 | 黑名单列表」界面展示、用户手动勾选）
+                if (!title.isEmpty() && !SesameAlchemyTaskListMap.getMap().containsKey(title)) {
+                    SesameAlchemyTaskListMap.add(title, title);
+                }
+                
+                // 已完成任务跳过
+                if (finishFlag) {
+                    continue;
+                }
+                // 黑名单任务跳过。查两个来源：
+                //  ① 炼金专属列表（SesameAlchemyTaskList，自动拉黑写这里）
+                //  ② 芝麻粒共享列表（历史版本炼金任务曾被写进这里，保留兼容避免用户旧配置失效）
+                if (SesameAlchemyTaskList.getValue().contains(title)
+                        || MemberCreditSesameTaskList.getValue().contains(title)) {
+                    if (!processedBlacklistTasks.contains(title)) {
+                        Log.other("芝麻炼金⚗️跳过黑名单任务: " + title);
+                        processedBlacklistTasks.add(title);
+                    }
+                    continue;
+                }
+                
+                // 分支一：广告任务
+                if ("AD_TASK".equals(bizType)) {
+                    JSONObject logExtMap = task.optJSONObject("logExtMap");
+                    if (logExtMap == null) {
+                        Log.other("芝麻炼金⚗️广告任务缺少logExtMap, 跳过: " + title);
+                        continue;
+                    }
+                    String bizId = logExtMap.optString("bizId", "");
+                    if (bizId.isEmpty()) {
+                        Log.other("芝麻炼金⚗️广告任务缺少bizId, 跳过: " + title);
+                        continue;
+                    }
+                    Log.other("芝麻炼金⚗️广告任务: " + title + " 准备执行");
+                    // 广告需真实"看完"：标题含 15秒/15s 等 10s，否则 8s
+                    boolean longAd = title.contains("15秒") || title.contains("15s");
+                    TimeUtil.sleep(longAd ? 10000 : 8000);
+                    JSONObject finishJo = new JSONObject(AntMemberRpcCall.taskFinish(bizId));
+                    // 上报结果以 checkSuccess 或 errCode=="0" 判定成功（对齐参考实现 ww0.n 语义）
+                    boolean ok = MessageUtil.checkSuccess(TAG, finishJo) || "0".equals(finishJo.optString("errCode"));
+                    if (ok) {
+                        int reward = task.optInt("rewardAmount", 0);
+                        Log.other("芝麻炼金⚗️[广告任务完成: " + title + "]#获得" + reward + "粒");
+                    }
+                    else {
+                        Log.error("芝麻炼金广告任务上报失败: " + title + " - " + finishJo);
+                    }
+                    continue;
+                }
+                
+                // 分支二：生活记录任务
+                if (!bizType.isEmpty() && !"LIFE_RECORD".equals(bizType)) {
+                    Log.record("芝麻炼金任务: 非生活记录任务(" + bizType + ")，跳过 " + title);
+                    continue;
+                }
+                // 邀请/上传/认证/办理类不做
+                if (templateId.contains("invite") || templateId.contains("upload")
+                        || templateId.contains("auth") || templateId.contains("banli")) {
+                    continue;
+                }
+                String actionUrl = task.optString("actionUrl", "");
+                if (actionUrl.startsWith("alipays://") && !actionUrl.contains("chInfo")) {
+                    continue;
+                }
+                Log.other("芝麻炼金任务: " + title);
+                String recordId = task.optString("recordId", "");
+                if (recordId.isEmpty()) {
+                    // 模板为空则无从领取，跳过
+                    if (templateId.isEmpty()) {
+                        Log.other("芝麻炼金任务: 模板为空，跳过 " + title);
+                        continue;
+                    }
+                    // 未参与 → 先领取，并从返回的 data 里取新 recordId（照抄参考实现：
+                    // 领取成功后必须用新 recordId 去完成，否则会出现「领了但从不完成」）
+                    JSONObject joinJo = new JSONObject(AntMemberRpcCall.joinSesameTask(templateId));
+                    if (MessageUtil.checkSuccess(TAG, joinJo)) {
+                        JSONObject joinData = joinJo.optJSONObject("data");
+                        recordId = joinData != null ? joinData.optString("recordId") : "";
+                        Log.other("芝麻炼金任务领取成功: " + title);
+                        TimeUtil.sleep(1000);
+                    }
+                    else {
+                        Log.error("芝麻炼金任务领取失败: " + title + " - " + joinJo);
+                    }
+                }
+                // 提交完成（recordId 非空才提交）
+                if (!recordId.isEmpty()) {
+                    // ⚠️ 顺序不能省：PromiseRpcManager.pushActivity 之前必须先 taskFeedback
+                    // 回传「已完成」，否则服务端报 ILLEGAL_ARGUMENT「参数[promiseActivityExtCheck]不是有效的入参」
+                    // （实测 2026-10-04：漏掉此步 → 任务完成失败）。传 templateId，不是 recordId。
+                    String feedbackRes = AntMemberRpcCall.feedBackSesameTask(templateId);
+                    boolean waitLong = title.contains("浏览") || title.contains("逛");
+                    Log.other("芝麻炼金⏩回传完成: " + title + " [template=" + templateId
+                            + " wait=" + (waitLong ? "15s" : "3s") + "]"
+                            + (feedbackRes == null ? " 应答=null" : ""));
+                    TimeUtil.sleep(waitLong ? 15000 : 3000);
+                    JSONObject finishJo = new JSONObject(AntMemberRpcCall.finishSesameTask(recordId));
+                    if (MessageUtil.checkSuccess(TAG, finishJo)) {
+                        int reward = task.optInt("rewardAmount", 0);
+                        Log.other("芝麻炼金⚗️[任务完成: " + title + "]#获得" + reward + "粒");
+                    }
+                    else {
+                        Log.error("芝麻炼金任务完成失败: " + title + " - " + finishJo);
+                        // 连续多次被服务端拒绝（如 promiseActivityExtCheck）→ 自动加入炼金黑名单，
+                        // 避免每天重复空试。判据与白名单在 MessageUtil.checkResultCodeAndMarkTaskBlackList 内。
+                        if (AutoSesameAlchemyTaskList.getValue()) {
+                            MessageUtil.checkResultCodeAndMarkTaskBlackList(
+                                    "SesameAlchemyTaskList", title, finishJo);
+                        }
+                    }
+                }
+            }
+            catch (Throwable e) {
+                Log.printStackTrace(TAG + ".processAlchemyTasks", e);
+            }
+        }
+    }
+    
+    /**
+     * 判断炼金响应是否已达盖帽值（{@code resultCode == "CAP_REACHED"}）。
+     */
+    private boolean isAlchemyCapReached(JSONObject responseObj) {
+        return responseObj != null && "CAP_REACHED".equals(responseObj.optString("resultCode"));
+    }
+    
+    /**
+     * 收取炼金产出的芝麻粒：先查待收取列表，非空则一键收取。
+     */
+    private void collectAlchemyCredit() {
+        try {
+            JSONObject jo = new JSONObject(AntMemberRpcCall.queryCreditFeedback());
+            if (!MessageUtil.checkResultCode(TAG, jo)) {
+                return;
+            }
+            JSONArray creditFeedbackVOS = jo.optJSONArray("creditFeedbackVOS");
+            if (creditFeedbackVOS == null || creditFeedbackVOS.length() == 0) {
+                Log.other("芝麻炼金⚗️[当前无待收取芝麻粒]");
+                Log.other("芝麻炼金⚗️[任务处理完毕，准备收取芝麻粒]");
+                return;
+            }
+            Log.other("芝麻炼金⚗️[发现" + creditFeedbackVOS.length() + "个待收取项，执行一键收取]");
+            JSONObject collectJo = new JSONObject(AntMemberRpcCall.collectAllCreditFeedback());
+            if (MessageUtil.checkResultCode(TAG, collectJo)) {
+                Log.other("芝麻炼金⚗️[一键收取成功]#收割完毕");
+            }
+            else {
+                Log.other("芝麻炼金⚗️[一键收取失败]#" + collectJo.optString("resultView"));
+            }
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".collectAlchemyCredit", t);
+        }
+    }
+    
+    // ==================== 芝麻树（独立开关 enableZhimaTree） ====================
+    // 实现来源：同类模块「森」的 doZhimaTree/doHomeTasks/doRentGreenTasks/doPurification 反编译还原。
+    // 三阶段：主页浏览任务 → 任务列表 → 净化。接口统一走 alipay.promoprod.play.trigger。
+    
+    /**
+     * 芝麻树主流程：主页任务 → 任务列表 → 净化。
+     */
+    private void doZhimaTree() {
+        try {
+            Log.other("芝麻树🌳开始执行");
+            doZhimaTreeHomeTasks();
+            doZhimaTreeRentGreenTasks();
+            doPurification();
+            Log.other("芝麻树🌳执行结束");
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".doZhimaTree", t);
+        }
+    }
+    
+    /**
+     * 芝麻树主页任务：{@code extInfo.zhimaTreeHomePageQueryResult} 下的
+     * {@code browseTaskList} 与 {@code taskStatusList} 两个数组，逐条处理。
+     */
+    private void doZhimaTreeHomeTasks() {
+        try {
+            JSONObject jo = new JSONObject(AntMemberRpcCall.getSesameTreeHomePage());
+            // 芝麻树走 alipay.promoprod.play.trigger，应答应答只有 success（无 desc），
+            // 必须用 checkSuccess（对齐森 ww0.n 语义），用 checkResultCode 会恒判失败。
+            if (!MessageUtil.checkSuccess(TAG, jo)) {
+                Log.other("芝麻树🌳主页查询失败");
+                return;
+            }
+            JSONObject extInfo = jo.optJSONObject("extInfo");
+            JSONObject queryResult = extInfo != null ? extInfo.optJSONObject("zhimaTreeHomePageQueryResult") : null;
+            if (queryResult == null) {
+                Log.other("芝麻树🌳主页无 queryResult（可能未开通）");
+                return;
+            }
+            JSONArray browseTaskList = queryResult.optJSONArray("browseTaskList");
+            if (browseTaskList != null) {
+                for (int i = 0; i < browseTaskList.length(); i++) {
+                    processZhimaTreeTask(browseTaskList.optJSONObject(i));
+                }
+            }
+            JSONArray taskStatusList = queryResult.optJSONArray("taskStatusList");
+            if (taskStatusList != null) {
+                for (int i = 0; i < taskStatusList.length(); i++) {
+                    processZhimaTreeTask(taskStatusList.optJSONObject(i));
+                }
+            }
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".doZhimaTreeHomeTasks", t);
+        }
+    }
+    
+    /**
+     * 芝麻树任务列表：{@code extInfo.taskDetailList.taskDetailList} 逐条处理。
+     */
+    private void doZhimaTreeRentGreenTasks() {
+        try {
+            JSONObject jo = new JSONObject(AntMemberRpcCall.getSesameTreeTaskList());
+            if (!MessageUtil.checkSuccess(TAG, jo)) {
+                Log.other("芝麻树🌳任务列表查询失败");
+                return;
+            }
+            JSONObject extInfo = jo.optJSONObject("extInfo");
+            JSONObject taskDetailListObj = extInfo != null ? extInfo.optJSONObject("taskDetailList") : null;
+            JSONArray taskDetailList = taskDetailListObj != null ? taskDetailListObj.optJSONArray("taskDetailList") : null;
+            if (taskDetailList == null) {
+                return;
+            }
+            for (int i = 0; i < taskDetailList.length(); i++) {
+                processZhimaTreeTask(taskDetailList.optJSONObject(i));
+            }
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".doZhimaTreeRentGreenTasks", t);
+        }
+    }
+    
+    /**
+     * 处理单个芝麻树任务。
+     * <p>跳过：{@code sendCampTriggerType == "EVENT_TRIGGER"}、标题含 邀请/下单/开通。
+     * <p>{@code taskProcessStatus}：
+     * <ul>
+     *   <li>{@code NOT_DONE}/{@code SIGNUP_COMPLETE} → 先 {@code send} 再等 16s 后 {@code receive}</li>
+     *   <li>{@code TO_RECEIVE} → 直接 {@code receive}</li>
+     * </ul>
+     */
+    private void processZhimaTreeTask(JSONObject task) {
+        if (task == null) {
+            return;
+        }
+        try {
+            if ("EVENT_TRIGGER".equals(task.optString("sendCampTriggerType"))) {
+                return;
+            }
+            JSONObject taskBaseInfo = task.optJSONObject("taskBaseInfo");
+            if (taskBaseInfo == null) {
+                return;
+            }
+            String taskId = taskBaseInfo.optString("appletId");
+            if (taskId.isEmpty()) {
+                taskId = task.optString("taskId");
+            }
+            String title = taskBaseInfo.optString("appletName");
+            if (title.isEmpty()) {
+                title = taskBaseInfo.optString("title", taskId);
+            }
+            String taskProcessStatus = task.optString("taskProcessStatus");
+            // 邀请/下单/开通类任务不做
+            if (title.contains("邀请") || title.contains("下单") || title.contains("开通")) {
+                return;
+            }
+            String prizeName = getZhimaTreePrizeName(task);
+            if ("NOT_DONE".equals(taskProcessStatus) || "SIGNUP_COMPLETE".equals(taskProcessStatus)) {
+                Log.other("芝麻树🌳[开始任务] " + title + (prizeName.isEmpty() ? "" : " (" + prizeName + ")"));
+                boolean sent = doZhimaTreeTaskAction(taskId, "send");
+                if (sent) {
+                    TimeUtil.sleep(16000);
+                    if (doZhimaTreeTaskAction(taskId, "receive")) {
+                        Log.other("芝麻树🌳[完成任务] " + title + " #" + (prizeName.isEmpty() ? "奖励已领取" : prizeName));
+                    }
+                }
+            }
+            else if ("TO_RECEIVE".equals(taskProcessStatus)) {
+                if (doZhimaTreeTaskAction(taskId, "receive")) {
+                    Log.other("芝麻树🌳[领取奖励] " + title + " #" + (prizeName.isEmpty() ? "奖励已领取" : prizeName));
+                }
+            }
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".processZhimaTreeTask", t);
+        }
+    }
+    
+    /**
+     * 芝麻树任务动作（send 开始 / receive 领取）。
+     */
+    private boolean doZhimaTreeTaskAction(String taskId, String stageCode) {
+        try {
+            String res = AntMemberRpcCall.finishSesameTreeTask(taskId == null ? "" : taskId,
+                    stageCode == null ? "" : stageCode);
+            if (res == null) {
+                return false;
+            }
+            return MessageUtil.checkSuccess(TAG, new JSONObject(res));
+        }
+        catch (Throwable e) {
+            Log.printStackTrace(TAG + ".doZhimaTreeTaskAction", e);
+            return false;
+        }
+    }
+    
+    /**
+     * 从芝麻树任务对象里取奖励名（供日志展示）。
+     */
+    private String getZhimaTreePrizeName(JSONObject task) {
+        try {
+            JSONArray prizeList = task.optJSONArray("prizeList");
+            if (prizeList != null && prizeList.length() > 0) {
+                JSONObject prize = prizeList.optJSONObject(0);
+                if (prize != null) {
+                    String name = prize.optString("prizeName");
+                    if (!name.isEmpty()) {
+                        return name;
+                    }
+                }
+            }
+            return task.optString("prizeName", task.optString("rewardDesc", ""));
+        }
+        catch (Throwable t) {
+            return "";
+        }
+    }
+    
+    /**
+     * 净化芝麻树。按主页 {@code purificationScore/100} 计算可点击次数，
+     * 逐次调用 {@code ZHIMA_TREE_CLEAN_AND_PUSH}，每次间隔 1500ms。
+     */
+    private void doPurification() {
+        try {
+            JSONObject jo = new JSONObject(AntMemberRpcCall.getSesameTreeHomePage());
+            if (!MessageUtil.checkSuccess(TAG, jo)) {
+                return;
+            }
+            JSONObject extInfo = jo.optJSONObject("extInfo");
+            JSONObject queryResult = extInfo != null ? extInfo.optJSONObject("zhimaTreeHomePageQueryResult") : null;
+            if (queryResult == null) {
+                return;
+            }
+            // 可点击次数：优先 currentCleanNum，其次 purificationScore，均按 /100 折算
+            int score = queryResult.optInt("purificationScore", queryResult.optInt("currentCleanNum", 0));
+            int clickTimes = score / 100;
+            String treeCode = "ZHIMA_TREE";
+            JSONArray trees = queryResult.optJSONArray("trees");
+            if (trees != null && trees.length() > 0) {
+                JSONObject tree = trees.optJSONObject(0);
+                if (tree != null) {
+                    treeCode = tree.optString("treeCode", treeCode);
+                    if (tree.has("remainPurificationClickNum")) {
+                        clickTimes = Math.max(0, tree.optInt("remainPurificationClickNum", clickTimes));
+                    }
+                }
+            }
+            if (clickTimes <= 0) {
+                Log.other("芝麻树🌳[无需净化] 净化值不足（当前: " + score + "g，可点击: " + clickTimes + "次）");
+                return;
+            }
+            Log.other("芝麻树🌳[开始净化] 可点击 " + clickTimes + " 次");
+            for (int i = 0; i < clickTimes; i++) {
+                JSONObject cleanJo = new JSONObject(AntMemberRpcCall.cleanSesameTreeByClick(treeCode));
+                if (!MessageUtil.checkSuccess(TAG, cleanJo)) {
+                    break;
+                }
+                JSONObject cleanExtInfo = cleanJo.optJSONObject("extInfo");
+                JSONObject cleanResult = cleanExtInfo != null ? cleanExtInfo.optJSONObject("zhimaTreeCleanAndPushResult") : null;
+                int remainScore = -1;
+                if (cleanResult != null && cleanResult.has("purificationScore")) {
+                    remainScore = cleanResult.optInt("purificationScore", -1);
+                }
+                if (remainScore == -1) {
+                    remainScore = score - (i + 1) * 100;
+                }
+                int growth = -1;
+                if (cleanResult != null) {
+                    JSONObject currentTreeInfo = cleanResult.optJSONObject("currentTreeInfo");
+                    if (currentTreeInfo != null) {
+                        growth = currentTreeInfo.optInt("scoreSummary", -1);
+                    }
+                }
+                StringBuilder sb = new StringBuilder("芝麻树🌳[净化]第" + (i + 1) + "次 | 剩:" + remainScore + "g");
+                if (growth != -1) {
+                    sb.append("|成长:").append(growth);
+                }
+                Log.other(sb.append(" ✅").toString());
+                TimeUtil.sleep(1500);
+            }
+        }
+        catch (Throwable t) {
+            Log.printStackTrace(TAG + ".doPurification", t);
         }
     }
     

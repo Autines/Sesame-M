@@ -611,11 +611,34 @@ public class AntMemberRpcCall {
     }
 
     /**
-     * 芝麻炼金 - 执行炼金动作
+     * 芝麻炼金 - 执行炼金动作（消耗芝麻粒换金）。
+     * <p>⚠️ 报文是 {@code [{}]} 而不是 {@code [null]}：{@code [null]} 会被服务端按非法参数拒掉
+     * （原实现抄壳时写错，2026-10-04 参照「森」反编译报文修正）。
+     * <p>响应 {@code resultCode == "CAP_REACHED"} 表示已达盖帽值，应停止本轮炼金。
      */
     public static String doAlchemy() {
-        return ApplicationHook.requestString("com.antgroup.zmxy.zmmemberop.biz.rpc.AlchemyRpcManager.alchemy", "[null]");
+        return ApplicationHook.requestString("com.antgroup.zmxy.zmmemberop.biz.rpc.AlchemyRpcManager.alchemy", "[{}]");
     }
+
+    /**
+     * 芝麻炼金 - 广告任务上报（{@code bizType == "AD_TASK"} 的任务）。
+     * @param bizId 取自任务对象 {@code logExtMap.bizId}
+     */
+    public static String taskFinish(String bizId) {
+        return ApplicationHook.requestString("com.alipay.adtask.biz.mobilegw.service.task.finish",
+                "[{\"bizId\":\"" + bizId + "\"}]");
+    }
+
+    /**
+     * 芝麻树 - 前端资源标识（playInfo / refer）。
+     * <p>⚠️ 注意 {@code refer} 里的 chInfo **只是 URL 参数**，与请求体 {@code extInfo.chInfo} 不是一回事：
+     * 前者固定为 {@code ch_zmzltf__chsub_xinyongsyyingxiaowei}，后者「森」实际用的是
+     * {@link #ZHIMA_TREE_CH_INFO}。混用会导致服务端取不到任务数据。
+     */
+    private static final String ZHIMA_TREE_PLAY_INFO = "SwbtxJSo8OOUrymAU%2FHnY2jyFRc%2BkCJ3";
+    private static final String ZHIMA_TREE_REFER = "https://render.alipay.com/p/yuyan/180020010001269849/zmTree.html?caprMode=sync&chInfo=chInfo=ch_zmzltf__chsub_xinyongsyyingxiaowei";
+    /** 芝麻树请求体 extInfo.chInfo 的真实取值（参照「森」反编译，原实现抄成了 refer 里那个）。 */
+    private static final String ZHIMA_TREE_CH_INFO = "ch_share__chsub_ALPContact";
 
     /**
      * 芝麻树通用触发器
@@ -624,10 +647,8 @@ public class AntMemberRpcCall {
      * @return RPC响应
      */
     private static String sesameTreeTrigger(String operation, String extInfoJson) {
-        String playInfo = "SwbtxJSo8OOUrymAU%2FHnY2jyFRc%2BkCJ3";
-        String refer = "https://render.alipay.com/p/yuyan/180020010001269849/zmTree.html?caprMode=sync&chInfo=chInfo=ch_zmzltf__chsub_xinyongsyyingxiaowei";
         String requestData = String.format("[{\"operation\":\"%s\",\"playInfo\":\"%s\",\"refer\":\"%s\",\"extInfo\":%s}]",
-                operation, playInfo, refer, extInfoJson);
+                operation, ZHIMA_TREE_PLAY_INFO, ZHIMA_TREE_REFER, extInfoJson);
         return ApplicationHook.requestString("alipay.promoprod.play.trigger", requestData);
     }
 
@@ -644,43 +665,45 @@ public class AntMemberRpcCall {
      * @return RPC响应
      */
     public static String getSesameTreeTaskList() {
-        String extInfo = "{\"batchId\":\"\",\"chInfo\":\"ch_zmzltf__chsub_xinyongsyyingxiaowei\"}";
+        String extInfo = "{\"batchId\":\"\",\"chInfo\":\"" + ZHIMA_TREE_CH_INFO + "\"}";
         return sesameTreeTrigger("RENT_GREEN_TASK_LIST_QUERY", extInfo);
     }
 
     /**
      * 净化芝麻树（通过点击按钮，消耗净化次数）
+     * @param treeCode 树标识，取自主页 {@code extInfo.zhimaTreeHomePageQueryResult.trees[0].treeCode}，默认 {@code ZHIMA_TREE}
      * @return RPC响应
      */
-    public static String cleanSesameTreeByClick() {
-        String extInfo = "{\"clickNum\":\"1\",\"treeCode\":\"ZHIMA_TREE\"}";
+    public static String cleanSesameTreeByClick(String treeCode) {
+        String extInfo = "{\"clickNum\":\"1\",\"treeCode\":\"" + treeCode + "\"}";
         return sesameTreeTrigger("ZHIMA_TREE_CLEAN_AND_PUSH", extInfo);
     }
 
     /**
-     * 完成芝麻树任务
-     * @param taskId 任务ID
+     * 完成/领取芝麻树任务（同一个 trigger 的两个阶段）
+     * @param taskId    任务ID（/{@code appletId}，优先 appletId）
+     * @param stageCode {@code send} 开始任务 / {@code receive} 领取奖励
      * @return RPC响应
      */
-    public static String finishSesameTreeTask(String taskId) {
-        String chInfo = "ch_zmzltf__chsub_xinyongsyyingxiaowei";
+    public static String finishSesameTreeTask(String taskId, String stageCode) {
         String extInfo = String.format(
-                "{\"chInfo\":\"%s\",\"stageCode\":\"send\",\"taskId\":\"%s\"}",
-                chInfo, taskId);
+                "{\"chInfo\":\"%s\",\"stageCode\":\"%s\",\"taskId\":\"%s\"}",
+                ZHIMA_TREE_CH_INFO, stageCode, taskId);
         return sesameTreeTrigger("RENT_GREEN_TASK_FINISH", extInfo);
     }
 
     /**
-     * 领取芝麻树任务奖励
-     * @param taskId 任务ID
-     * @return RPC响应
+     * 完成芝麻树任务（开始阶段，{@code stageCode=send}）
+     */
+    public static String finishSesameTreeTask(String taskId) {
+        return finishSesameTreeTask(taskId, "send");
+    }
+
+    /**
+     * 领取芝麻树任务奖励（{@code stageCode=receive}）
      */
     public static String receiveSesameTreeTaskReward(String taskId) {
-        String chInfo = "ch_zmzltf__chsub_xinyongsyyingxiaowei";
-        String extInfo = String.format(
-                "{\"chInfo\":\"%s\",\"stageCode\":\"receive\",\"taskId\":\"%s\"}",
-                chInfo, taskId);
-        return sesameTreeTrigger("RENT_GREEN_TASK_FINISH", extInfo);
+        return finishSesameTreeTask(taskId, "receive");
     }
 
     // ================= 保障金相关RPC方法 =================
