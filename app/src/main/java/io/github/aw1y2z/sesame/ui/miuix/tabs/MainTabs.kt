@@ -191,17 +191,14 @@ fun StatisticsTable(activity: MiuixMainActivity) {
 @Composable
 fun LogsTab(activity: MiuixMainActivity) {
     // ── 分类记录：每个配置分组一个条目（森林/庄园/新村/农场/金豆/运动/会员/其他） ──
-    // 8 个分组里只有 4 个有自己的日志文件（forest / farm / goldenbeans / other），
-    // 另外 4 个（新村/农场 → farm.log，运动/会员 → other.log）与父项**共用文件**，
-    // 拿不到独立开关（开关是按文件给的）。于是把它们渲染成父项下的**轻量子项**、
-    // 只给查看入口 —— 把「共用关系」画出来，用户才不会以为这几行漏了开关。
+    // 全部**平级**展示，每行都有自己的写入开关。
+    // 其中 4 个分组（新村/农场 → farm.log，运动/会员 → other.log）与森林/庄园等
+    // **共用日志文件**，但开关是按分组给的（见 AppConfig.isEnableStallLog 等，
+    // 写入侧由 Log.allowCategoryFile 按模块名路由），所以它们并不需要跟着谁走。
     SesameSectionTitle(text = "分类记录")
     SesameCardGroup {
-        for (parent in LogType.toggleableCategories) {
-            CategoryParentRow(activity, parent)
-            for (child in LogType.childrenOf(parent)) {
-                CategoryViewRow(activity, child, isChild = true)
-            }
+        for (entry in LogType.displayOrder) {
+            CategoryRow(activity, entry)
         }
     }
 
@@ -253,15 +250,19 @@ fun LogsTab(activity: MiuixMainActivity) {
 }
 
 /**
- * 「分类记录」里有独立日志文件、可开关的分组行（森林 / 庄园 / 金豆 / 其他）。
+ * 「分类记录」里的一行：分组名 + 该分组自己的**写入开关**（8 个分组平级，全都有开关）。
  *
  * `showArrow = false`：开关本身就是行尾控件（MD3 的常规），不再并排一个箭头 ——
- * 两者并存会让行尾显得拥挤。同一张卡里的**子项**才用箭头，行的角色因此一眼可分。
+ * 两者并存会让行尾显得拥挤；点整行仍是进日志查看页。
+ *
+ * ⚠️ 关闭开关**只停写新的**，不删已有历史日志：同一个文件里还混着兄弟分组的日志
+ * （farm.log 里同时有庄园/新村/农场），按文件清空会误伤邻家。
+ * 想清掉本分组的历史记录，请到查看页点「删除」（按 `[模块名]` 精确删，见 clearGroupLines）。
  */
 @Composable
-private fun CategoryParentRow(activity: MiuixMainActivity, entry: LogType) {
+private fun CategoryRow(activity: MiuixMainActivity, entry: LogType) {
     val toggle = categoryToggleOf(entry) ?: return
-    var enabled by remember { mutableStateOf(toggle.getValue() ?: true) }
+    var enabled by remember { mutableStateOf(toggle.getValue()) }
     SesameSwitchRow(
         title = entry.displayName,
         icon = groupIconOf(entry.groupCode.orEmpty()),
@@ -272,64 +273,65 @@ private fun CategoryParentRow(activity: MiuixMainActivity, entry: LogType) {
             toggle.setValue(it)
             AppConfig.save()
             activity.broadcastReloadConfig()
-            if (!it) FileUtil.clearLog(toggle.logName)
+            // 刻意不在这里清空文件：本分组的日志与兄弟分组同处一个文件
+            // （farm.log / other.log），整文件清空会把它们的日志一并删掉。
         },
         onClick = { openLog(activity, entry) }
     )
 }
 
 /**
- * 「分类记录」里与父项共用日志文件、因而没有独立开关的分组行
- * （新村 / 农场 / 运动 / 会员）。渲染成内缩的轻量子项，只给查看入口。
- */
-@Composable
-private fun CategoryViewRow(activity: MiuixMainActivity, entry: LogType, isChild: Boolean) {
-    SesameClickRow(
-        title = entry.displayName,
-        icon = groupIconOf(entry.groupCode.orEmpty()),
-        isChild = isChild,
-        onClick = { openLog(activity, entry) }
-    )
-}
-
-/**
- * 分类记录的开关描述子。
+ * 分类记录的开关描述子：读写 `AppConfig` 里对应分组的日志开关。
  *
- * 只有**有独立日志文件**的分组才有开关（`AppConfig` 里也只有这 4 个日志开关）。
- * 新村/农场/运动/会员与父项**共用同一个文件**（新村/农场 → farm.log，运动/会员 → other.log），
- * 开关是按文件给的，给它们各配一个就会变成「拨一个动两行」，因此返回 null ——
- * 页面把它们渲染成父项下的缩进子项，只作查看入口（见 [LogType.categoryTree]）。
+ * 8 个分组各有一个，互不影响；写入侧由 `Log.allowCategoryFile` 按模块名路由到同一个字段。
  */
 private class CategoryToggle(
-    /** 分类日志文件名前缀，用于关闭时按前缀清空（见 FileUtil.clearLog） */
-    val logName: String,
-    private val getter: () -> Boolean?,
+    private val getter: () -> Boolean,
     private val setter: (Boolean) -> Unit
 ) {
-    fun getValue(): Boolean? = getter()
+    fun getValue(): Boolean = getter()
     fun setValue(value: Boolean) = setter(value)
 }
 
-/** 取该分类对应的开关；没有独立开关的分组返回 null */
+/**
+ * 取该分类对应的开关。
+ *
+ * ⚠️ 这里的读法与写入侧 `Log.allowCategoryFile` 必须一一对应：
+ * 「森林」组管 AntForestV2、「金豆夺宝」组管 goldenbeans、「庄园」管 AntFarm、
+ * 「新村」管 AntStall、「农场」管 AntOrchard、「运动」管 AntSports、「会员」管 AntMember，
+ * 「其他」管剩下的全部模块。两边改一边不改，就会出现「拨了开关日志照写」。
+ */
 private fun categoryToggleOf(logType: LogType): CategoryToggle? = when (logType) {
     LogType.FOREST -> CategoryToggle(
-        "forest",
-        { AppConfig.INSTANCE.enableForestLog },
+        { AppConfig.INSTANCE.enableForestLog ?: true },
         { AppConfig.INSTANCE.enableForestLog = it }
     )
     LogType.FARM -> CategoryToggle(
-        "farm",
-        { AppConfig.INSTANCE.enableFarmLog },
+        { AppConfig.INSTANCE.enableFarmLog ?: true },
         { AppConfig.INSTANCE.enableFarmLog = it }
     )
+    LogType.STALL -> CategoryToggle(
+        { AppConfig.INSTANCE.isEnableStallLog },
+        { AppConfig.INSTANCE.setEnableStallLog(it) }
+    )
+    LogType.ORCHARD -> CategoryToggle(
+        { AppConfig.INSTANCE.isEnableOrchardLog },
+        { AppConfig.INSTANCE.setEnableOrchardLog(it) }
+    )
     LogType.GOLDENBEANS -> CategoryToggle(
-        "goldenbeans",
-        { AppConfig.INSTANCE.enableGoldenBeansLog },
+        { AppConfig.INSTANCE.enableGoldenBeansLog ?: true },
         { AppConfig.INSTANCE.enableGoldenBeansLog = it }
     )
+    LogType.SPORTS -> CategoryToggle(
+        { AppConfig.INSTANCE.isEnableSportsLog },
+        { AppConfig.INSTANCE.setEnableSportsLog(it) }
+    )
+    LogType.MEMBER -> CategoryToggle(
+        { AppConfig.INSTANCE.isEnableMemberLog },
+        { AppConfig.INSTANCE.setEnableMemberLog(it) }
+    )
     LogType.OTHER -> CategoryToggle(
-        "other",
-        { AppConfig.INSTANCE.enableOtherLog },
+        { AppConfig.INSTANCE.enableOtherLog ?: true },
         { AppConfig.INSTANCE.enableOtherLog = it }
     )
     else -> null

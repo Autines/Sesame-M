@@ -332,16 +332,58 @@ public class Log {
                 io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog(), goldenBeansLogger);
     }
 
+    /**
+     * 该模块是否允许写入分类文件。
+     *
+     * <p>分类文件是按**业务域**切的，一个文件里装着多个分组：farm.log 同时收
+     * 庄园（AntFarm）/ 新村（AntStall）/ 农场（AntOrchard），other.log 同时收
+     * 运动（AntSports）/ 会员（AntMember）等。而开关是**按分组**给的，
+     * 所以写文件前要先看"当前是哪个模块"，再查它所属分组的那个开关。
+     *
+     * <p>归属靠当前线程的模块名（{@link #getCurrentModule()}，由 ModelTask 在模块
+     * 执行线程内 {@code set(task.getName())}）。⚠️ 它取的是**模块的显示名（中文）**，
+     * 不是类简名 —— 如「庄园」「新村」「农场」「运动」「会员」，故 switch 用中文匹配。
+     * 不在模块上下文中（界面进程、或模块未登记）时**放行** ——
+     * 宁可多写一条，也不要因为认不出归属就把日志吞掉。
+     *
+     * <p>关闭开关只影响**以后**是否写；已经写进文件的历史日志保留不动
+     * （同一个文件里还混着兄弟分组的日志，按文件清空会误伤）。
+     */
+    private static boolean allowCategoryFile(String module) {
+        io.github.aw1y2z.sesame.data.AppConfig config = io.github.aw1y2z.sesame.data.AppConfig.INSTANCE;
+        if (module == null || module.isEmpty()) {
+            return true;
+        }
+        switch (module) {
+            case "庄园":
+                return config.getEnableFarmLog();
+            case "新村":
+                return config.isEnableStallLog();
+            case "农场":
+                return config.isEnableOrchardLog();
+            case "运动":
+                return config.isEnableSportsLog();
+            case "会员":
+                return config.isEnableMemberLog();
+            case "森林":
+                return config.getEnableForestLog();
+            case "金豆夺宝":
+                return config.getEnableGoldenBeansLog();
+            default:
+                return config.getEnableOtherLog();
+        }
+    }
+
     public static void farm(String s) {
         countModuleLog();
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeFarmLogger,
-                io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableFarmLog(), farmLogger);
+                allowCategoryFile(getCurrentModule()), farmLogger);
     }
 
     public static void other(String s) {
         countModuleLog();
         writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeOtherLogger,
-                io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableOtherLog(), otherLogger);
+                allowCategoryFile(getCurrentModule()), otherLogger);
     }
 
     public static void debug(String s) {

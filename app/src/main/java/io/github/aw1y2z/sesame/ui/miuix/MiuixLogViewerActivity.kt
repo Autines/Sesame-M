@@ -155,31 +155,17 @@ enum class LogType(val displayName: String) {
         }
 
         /**
-         * 「分类记录」的分组层级：`父项 to 它的子项`，顺序对齐 ModelGroup 的声明顺序
+         * 「分类记录」的展示顺序：**平铺**，顺序对齐 ModelGroup 的声明顺序
          * （基础不在此列：基础日志由运行日志承载）。
          *
-         * **父项**有自己的日志文件（forest / farm / goldenbeans / other）与写入开关；
-         * **子项**的日志与父项**共用同一个文件** —— 新村的 `Log.farm()` 落在 farm.log、
-         * 农场的也落在 farm.log，运动的 `Log.other()` 与其他的一样落在 other.log ——
-         * 所以它们拿不到独立开关（开关是**按文件**给的，`AppConfig` 里也只有这 4 个）。
-         *
-         * 把父子关系画出来，用户才不会以为「这几行漏了开关」。
+         * 历史上这里是两级结构（森林/庄园/金豆/其他 为父项，新村/农场/运动/会员 缩进为子项），
+         * 因为后者与父项**共用日志文件**（新村/农场 → farm.log，运动/会员 → other.log）、
+         * 而开关是按文件给的就只能跟着父项走。2026-10-04 起每个分组都有了自己的写入开关
+         * （见 `AppConfig.isEnableStallLog` 等，`Log.allowCategoryFile` 按模块名路由），
+         * 「共用文件」不再意味着「共用一个开关」，子项因此全部提为一级、与自己平级展示。
          */
-        val categoryTree: List<Pair<LogType, List<LogType>>>
-            get() = listOf(
-                FOREST to emptyList(),
-                FARM to listOf(STALL, ORCHARD),
-                GOLDENBEANS to emptyList(),
-                OTHER to listOf(SPORTS, MEMBER)
-            )
-
-        /** 有独立日志文件、可开关的分组（即 [categoryTree] 的父项） */
-        val toggleableCategories: List<LogType>
-            get() = categoryTree.map { it.first }
-
-        /** 与 [parent] 共用日志文件、因而没有独立开关的子项；[parent] 无子项时返回空表 */
-        fun childrenOf(parent: LogType): List<LogType> =
-            categoryTree.firstOrNull { it.first == parent }?.second.orEmpty()
+        val displayOrder: List<LogType>
+            get() = listOf(FOREST, FARM, STALL, ORCHARD, GOLDENBEANS, SPORTS, MEMBER, OTHER)
 
         /**
          * 该分组对应的分类日志标签，用于**兜底归属**：
@@ -324,6 +310,10 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
      * 改成按分组声明固定展示后，森林组的「森林/保护/物种/海洋」恒定可见；
      * 计数为 0 表示当前日志里还没有该模块写下的记录。
      *
+     * ⚠️ **计数为 0 的模块不再展示**（2026-10-04）：老板没开「保护」这类功能时，
+     * 它永远写不出日志，一个恒为 0 的 chip 只是噪音 —— 现在直接从筛选条里剔除。
+     * 但「全部」chip 与是否展示筛选条本身要看**总条数**，见 [hasAnyModuleLog]。
+     *
      * 计数口径与列表筛选、卡片标签**同源**（都走 [moduleOf]）。之前这里只认
      * `[模块名]` 前缀，而列表还能靠「执行开始-X」标记归属，于是出现「标签写 0、
      * 列表里却有条目、点标签还筛不出东西」的分裂 —— 真机见过：物种计数 0，
@@ -334,11 +324,34 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
             .groupBy { it }
             .mapValues { it.value.size }
         val ordered = LinkedHashMap<String, Int>()
-        groupFilter.modules.mapNotNull { it.displayName }.forEach { ordered[it] = actual[it] ?: 0 }
+        // ① 分组声明的模块按配置顺序排在前（计数为 0 的不收 —— 见上方说明）
+        groupFilter.modules.mapNotNull { it.displayName }.forEach { name ->
+            val count = actual[name] ?: 0
+            if (count > 0) ordered[name] = count
+        }
+        // ② 日志里实际出现过、但不在分组声明里的模块（多由老日志带来）追加在后
         actual.entries.sortedByDescending { it.value }.forEach { (name, count) ->
             if (!ordered.containsKey(name)) ordered[name] = count
         }
         ordered
+    }
+
+    /**
+     * 是否存在任何带归属模块的日志 —— 决定要不要展示整条筛选条。
+     *
+     * 与 [moduleCounts] 的「非空」严格等价（两者都只认 `moduleOf(it) != null` 的条目），
+     * 这里直接复用它的判据而不是另写一遍 `any {}`，避免两处口径将来走偏。
+     */
+    val hasAnyModuleLog = moduleCounts.isNotEmpty()
+
+    // 选中的模块可能因日志刷新（该模块的记录被挤出窗口 / 被清除）而离开筛选条，
+    // 此时筛选条上不再有对应 chip，但列表却仍被它过滤 —— 界面会自相矛盾。
+    // 一旦发现选中项已不在可选项里，就地取消选中，回到「全部」。
+    LaunchedEffect(moduleCounts, selectedModule) {
+        val current = selectedModule
+        if (current != null && !moduleCounts.containsKey(current)) {
+            selectedModule = null
+        }
     }
 
     Scaffold(
@@ -420,13 +433,14 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                 )
             }
             // ── 模块选择条 ──────────────────────────────────────────────
-            // 该分组声明了多个子模块时才展示（如森林组有 森林/保护/物种/海洋）。
-            // 模块名以分组声明为准（稳定），日志里的 [模块名] 前缀只用来统计条数。
+            // 只在**确有可筛模块**时展示：有归属模块的日志至少一条（[hasAnyModuleLog]）。
+            // 计数为 0 的模块已经不在 [moduleCounts] 里了，所以本组这次没产生日志的模块
+            // 不会占位；整组都没日志时这条干脆不出现（见 [hasAnyModuleLog] 注释）。
             //
             // 注：运行日志页过去还并排着一排「文件标签」筛选项（RUNTIME / FARM /
             // FOREST / OTHER …），它和本排是同一批业务域的两种写法（森林↔FOREST、
             // 庄园↔FARM），既重复又是全英文，已删除，各日志页统一只保留本排中文模块筛选。
-            if (moduleCounts.size > 1) {
+            if (hasAnyModuleLog) {
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -460,13 +474,11 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                     contentAlignment = Alignment.Center
                 ) {
                     if (searchQuery.isNotEmpty() || selectedModule != null) {
-                        // 选中的模块在当前日志里一条都没有时，不要只说「无匹配日志」，
-                        // 要说清是「这个模块还没写过日志」，否则容易被当成筛选坏了。
-                        val emptyModule = selectedModule?.takeIf { moduleCounts[it] == 0 }
+                        // 走到这里只可能是「搜了关键词但没匹配到」—— 已选模块必定在列表里有条目，
+                        // 因为计数为 0 的模块根本不会出现在筛选条上、也就选不中（见 moduleCounts）。
                         SesameEmptyState(
-                            text = if (emptyModule != null) "当前日志里没有「$emptyModule」的记录" else "无匹配日志",
-                            hint = if (emptyModule != null) "该模块执行过一次后就会有记录"
-                            else "换个关键词或清空筛选条件试试"
+                            text = "无匹配日志",
+                            hint = "换个关键词或清空筛选条件试试"
                         )
                     } else if (logType.isGrouped) {
                         // 分组页空了通常不是"坏了"，而是本组模块这次没产生日志

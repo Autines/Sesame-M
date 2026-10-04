@@ -44,6 +44,18 @@ public class AppConfig {
     private Boolean enableGoldenBeansLog = true;
     private Boolean enableFarmLog = true;
     private Boolean enableOtherLog = true;
+    /**
+     * 与父项共用日志文件的 4 个分组各自的独立开关
+     * （新村/农场 → farm.log，运动/会员 → other.log）。
+     * <p>旧版本这几个分组没有独立开关，只能跟着父项走；现在拆开，
+     * 关闭某个分组只会让它**不再写入**分类文件（历史日志保留、不清空），
+     * 父项与其它兄弟分组不受影响。
+     * <p>null（旧配置里没有这些字段）按 true 处理，见各自的 getter。
+     */
+    private Boolean enableStallLog = true;
+    private Boolean enableOrchardLog = true;
+    private Boolean enableSportsLog = true;
+    private Boolean enableMemberLog = true;
     private Boolean enableDebugLog = false;
     private Boolean enableViewErrorLog = true;
     private Boolean enableViewRuntimeLog = true;
@@ -147,6 +159,23 @@ public class AppConfig {
 
     public Boolean getEnableOtherLog() { return enableOtherLog; }
     public void setEnableOtherLog(Boolean value) { enableOtherLog = value; }
+
+    /**
+     * 以下四个 getter 对 null 回落为 true。
+     * <p>用户升级上来时 appConfig.json 里没有这些字段，反序列化后是 null；
+     * 若直接当 false 用，升级瞬间这 4 个分组的日志会集体停写 —— 属于静默回归。
+     */
+    public boolean isEnableStallLog() { return enableStallLog == null || enableStallLog; }
+    public void setEnableStallLog(Boolean value) { enableStallLog = value; }
+
+    public boolean isEnableOrchardLog() { return enableOrchardLog == null || enableOrchardLog; }
+    public void setEnableOrchardLog(Boolean value) { enableOrchardLog = value; }
+
+    public boolean isEnableSportsLog() { return enableSportsLog == null || enableSportsLog; }
+    public void setEnableSportsLog(Boolean value) { enableSportsLog = value; }
+
+    public boolean isEnableMemberLog() { return enableMemberLog == null || enableMemberLog; }
+    public void setEnableMemberLog(Boolean value) { enableMemberLog = value; }
 
     public Boolean getEnableDebugLog() { return enableDebugLog; }
     public void setEnableDebugLog(Boolean value) { enableDebugLog = value; }
