@@ -658,11 +658,18 @@ public class AntSports extends ModelTask {
         }
         try {
             JSONObject jo = queryPath(goingPathId);
-            jo = jo.getJSONObject("userPathStep");
+            // 接口异常/网络不可用时 queryPath 返回 null，需防御
+            if (jo == null) {
+                return false;
+            }
+            jo = jo.optJSONObject("userPathStep");
+            if (jo == null) {
+                return false;
+            }
             if (jo.optBoolean("dayLimit")) {
                 return true;
             }
-            String pathCompleteStatus = jo.getString("pathCompleteStatus");
+            String pathCompleteStatus = jo.optString("pathCompleteStatus");
             if (PathCompleteStatus.COMPLETED.name().equals(pathCompleteStatus)) {
                 return true;
             }
@@ -952,11 +959,18 @@ public class AntSports extends ModelTask {
     public static Boolean checkJoinPathId(String joinPathId) {
         try {
             JSONObject jo = queryPath(joinPathId);
+            // 接口异常/网络不可用时 queryPath 返回 null，需防御
+            if (jo == null) {
+                return false;
+            }
             String goingPathId = jo.optString("goingPathId");
             if (Objects.equals(goingPathId, joinPathId)) {
                 return false;
             }
-            jo = jo.getJSONObject("userPathStep");
+            jo = jo.optJSONObject("userPathStep");
+            if (jo == null) {
+                return false;
+            }
             return !jo.optBoolean("dayLimit");
         } catch (Throwable t) {
             Log.err(TAG, "checkJoinPathId err:", t);

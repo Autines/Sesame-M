@@ -100,6 +100,67 @@ public class MessageUtil {
         return false;
     }
 
+    /**
+     * 业务级"不支持/跳过"错误：服务端明确告知该任务类型/参数组合不受支持，属**预期内的跳过**，
+     * 不是故障。典型是会员任务遍历上报 `TaskManageFacade.executeTask` 时，支付宝侧对
+     * 未开放的任务类型回 `PARAM_ILLEGAL` + `Unsupported bizType and bizSubType`
+     * （实测一轮刷 265 条，纯噪音）。
+     * <p>⚠️ 只降噪、不改变调用方判定：{@code checkResultCode} 仍返回 false，该跳过的照跳。
+     */
+    private static final int BIZ_UNSUPPORTED_LOG_LIMIT = 3;
+    /** tag → 已打印过的"业务不支持"次数（只增不减，进程重启即清零） */
+    private static final Map<String, int[]> BIZ_UNSUPPORTED_LOG_COUNT = new ConcurrentHashMap<>();
+
+    /** 业务级"不支持"的 resultCode。400000040 = 「不支持rpc调用」：任务类接口收到不支持的 taskType 时返回 */
+    private static final String[] BIZ_UNSUPPORTED_CODES = {"PARAM_ILLEGAL", "400000040"};
+
+    /** 业务级"不支持"的文案关键字 */
+    private static final String[] BIZ_UNSUPPORTED_KEYWORDS = {
+            "Unsupported bizType", "bizType and bizSubType", "不支持rpc调用"};
+
+    /**
+     * 是否业务级"不支持/跳过"：`resultCode=PARAM_ILLEGAL` 或命中"Unsupported bizType"文案。
+     * <p>这类错误重复且无信息量，调用方**不需要**据此拉黑或熔断，只是本次任务不支持。
+     */
+    public static boolean isBizUnsupported(JSONObject jo) {
+        if (jo == null) {
+            return false;
+        }
+        for (String code : BIZ_UNSUPPORTED_CODES) {
+            if (code.equals(jo.optString("resultCode", "").trim())) {
+                return true;
+            }
+        }
+        for (String keyword : BIZ_UNSUPPORTED_KEYWORDS) {
+            if (anyFieldContains(jo, keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 业务级"不支持"是否还应该打印日志：同一 tag 前 {@link #BIZ_UNSUPPORTED_LOG_LIMIT} 次打印，
+     * 之后静默（最后一次提示"已静默"，免得看日志的人以为这类错误消失了）。
+     */
+    private static boolean shouldLogBizUnsupported(String tag) {
+        String key = StringUtil.isEmpty(tag) ? UNKNOWN_TAG : tag;
+        int printed;
+        synchronized (MessageUtil.class) {
+            int[] state = BIZ_UNSUPPORTED_LOG_COUNT.computeIfAbsent(key, k -> new int[]{0});
+            if (state[0] >= BIZ_UNSUPPORTED_LOG_LIMIT) {
+                return false;
+            }
+            state[0]++;
+            printed = state[0];
+        }
+        if (printed == BIZ_UNSUPPORTED_LOG_LIMIT) {
+            Log.record(key + "：本模块「业务不支持(PARAM_ILLEGAL)」已累计" + printed
+                    + "次，后续同类不再打印（任务照常跳过，不影响执行）");
+        }
+        return true;
+    }
+
     /** 风控挑战：错误码所在的字段（各接口字段不统一） */
     private static final String[] RISK_CONTROL_CODE_FIELDS = {"errorTip", "error", "errorCode", "errorNo"};
 
@@ -219,6 +280,10 @@ public class MessageUtil {
                 return;
             }
             if (isRiskControl(jo) && !shouldLogRiskControl(tag)) {
+                return;
+            }
+            // 业务级"不支持"(如 Unsupported bizType)：预期内的跳过，重复且无信息量 → 降噪
+            if (isBizUnsupported(jo) && !shouldLogBizUnsupported(tag)) {
                 return;
             }
             // 同一次失败只写一行：原先「友好文案」与「原始应答」各占一行，而完整应答在
@@ -427,8 +492,7 @@ public class MessageUtil {
         BLACKLIST_LIST_TARGETS.put("AntOceanAntiepTaskList", new String[]{"AntOcean", "神奇海洋普通任务"});
         BLACKLIST_LIST_TARGETS.put("AntOceanFishBlackList", new String[]{"AntOcean", "神奇海洋去摸鱼任务"});
         BLACKLIST_LIST_TARGETS.put("AntOrchardTaskList", new String[]{"AntOrchard", "农场肥料任务"});
-        BLACKLIST_LIST_TARGETS.put("AntOrchardDrawTaskList", new String[]{"AntOrchard", "金豆夺宝专场任务"});
-        BLACKLIST_LIST_TARGETS.put("OrchardChouChouLeTaskList", new String[]{"AntOrchard", "农场抽抽乐任务"});
+        BLACKLIST_LIST_TARGETS.put("AntOrchardDrawTaskList", new String[]{"AntOrchard", "抽抽乐任务"});
         BLACKLIST_LIST_TARGETS.put("GoldenBeansTaskList", new String[]{"goldenbeans", "金豆夺宝任务"});
         BLACKLIST_LIST_TARGETS.put("AntStallTaskList", new String[]{"AntStall", "新村任务"});
         BLACKLIST_LIST_TARGETS.put("AntSportsTaskList", new String[]{"AntSports", "运动任务"});
@@ -473,7 +537,7 @@ public class MessageUtil {
         BLACKLIST_GROUP_NAMES.put("AntOrchardTaskList", "芭芭农场");
         BLACKLIST_LIST_NAMES.put("AntOrchardTaskList", "农场肥料黑名单");
         BLACKLIST_GROUP_NAMES.put("AntOrchardDrawTaskList", "芭芭农场");
-        BLACKLIST_LIST_NAMES.put("AntOrchardDrawTaskList", "金豆夺宝专场黑名单");
+        BLACKLIST_LIST_NAMES.put("AntOrchardDrawTaskList", "抽抽乐黑名单");
         // 庄园（AntFarm）
         BLACKLIST_GROUP_NAMES.put("AntFarmDoFarmTaskList", "庄园");
         BLACKLIST_LIST_NAMES.put("AntFarmDoFarmTaskList", "饲料黑名单");

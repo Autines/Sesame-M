@@ -2801,11 +2801,14 @@ public class AntMember extends ModelTask {
                 // 调用 trigger 方法
                 String triggerResponse = AntMemberRpcCall.trigger(taskId);
                 JSONObject triggerResult = new JSONObject(triggerResponse);
-                // 检查 success 字段
-                boolean success = triggerResult.getBoolean("success");
+                // 检查 success 字段（接口异常/网络不可用时可能没有该字段，用 opt 防御）
+                boolean success = triggerResult.optBoolean("success", false);
                 if (success) {
                     // 从 triggerResponse 中获取 prizeSendInfo 数组
-                    JSONArray prizeSendInfo = triggerResult.getJSONArray("prizeSendInfo");
+                    JSONArray prizeSendInfo = triggerResult.optJSONArray("prizeSendInfo");
+                    if (prizeSendInfo == null) {
+                        continue;
+                    }
                     if (prizeSendInfo.length() > 0) {
                         JSONObject prizeInfo = prizeSendInfo.getJSONObject(0);
                         JSONObject extInfo = prizeInfo.getJSONObject("extInfo");
@@ -2827,10 +2830,13 @@ public class AntMember extends ModelTask {
             // 调用 AntMemberRpcCall.queryOrdinaryTask() 获取 JSON 数据
             String response = AntMemberRpcCall.queryOrdinaryTask();
             JSONObject jsonResponse = new JSONObject(response);
-            // 检查是否请求成功
-            if (jsonResponse.getBoolean("success")) {
+            // 检查是否请求成功（接口异常/网络不可用时可能没有该字段，用 opt 防御）
+            if (jsonResponse.optBoolean("success", false)) {
                 // 获取任务详细列表
-                JSONArray taskDetailList = jsonResponse.getJSONArray("taskDetailList");
+                JSONArray taskDetailList = jsonResponse.optJSONArray("taskDetailList");
+                if (taskDetailList == null) {
+                    return;
+                }
                 // 遍历任务详细列表
                 for (int i = 0; i < taskDetailList.length(); i++) {
                     // 获取当前任务对象
@@ -2847,13 +2853,15 @@ public class AntMember extends ModelTask {
                         String sendtriggerResponse = AntMemberRpcCall.sendtrigger(taskId);
                         // 解析 sendtriggerResponse
                         JSONObject sendTriggerJson = new JSONObject(sendtriggerResponse);
-                        // 判断任务是否成功
-                        if (sendTriggerJson.getBoolean("success")) {
+                        // 判断任务是否成功（用 opt 防御，接口异常时无该字段）
+                        if (sendTriggerJson.optBoolean("success", false)) {
                             // 从 sendtriggerResponse 中获取 prizeSendInfo 数组
-                            JSONArray prizeSendInfo = sendTriggerJson.getJSONArray("prizeSendInfo");
-                            // 获取 prizeName
-                            String prizeName = prizeSendInfo.getJSONObject(0).getString("prizeName");
-                            Log.other("我的快递💌完成[" + prizeName + "]");
+                            JSONArray prizeSendInfo = sendTriggerJson.optJSONArray("prizeSendInfo");
+                            if (prizeSendInfo != null && prizeSendInfo.length() > 0) {
+                                // 获取 prizeName
+                                String prizeName = prizeSendInfo.getJSONObject(0).optString("prizeName");
+                                Log.other("我的快递💌完成[" + prizeName + "]");
+                            }
                         }
                         else {
                             Log.i(TAG, "sendtrigger failed for taskId: " + taskId);

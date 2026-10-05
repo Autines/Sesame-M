@@ -291,36 +291,40 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     }
 
     // 计算可见条目:根据搜索文本、模块、tag 三层过滤
+    // ⚠️ 模块匹配走 [displayLabelOf]（含子标签细分）—— 与计数、卡片标签同源，
+    //    否则会出现「点标签筛不出东西」的分裂（见 displayLabelOf 注释）。
     val filteredEntries = scopedEntries.filter { e ->
         val matchSearch = searchQuery.isBlank() ||
                 (e.tag?.contains(searchQuery, ignoreCase = true) == true) ||
                 e.body.contains(searchQuery, ignoreCase = true)
-        val matchModule = selectedModule == null || moduleOf(e) == selectedModule
+        val matchModule = selectedModule == null || displayLabelOf(e, groupFilter.subLabels) == selectedModule
         matchSearch && matchModule
     }
 
     /**
      * 顶部模块选择条的内容：以**该分组声明的子模块**为骨架（按配置顺序），
-     * 再并入日志里实际出现过的模块。
+     * 再并入日志里实际出现过的模块；有子标签的分组（运动/会员）再按正文特征细分。
      *
      * 为什么不只看「日志里出现过的模块」：分类日志（如 forest.log）里的每一行
      * 是否带 `[模块名]` 前缀，取决于写日志时模块有没有在运行线程里登记归属。
      * 用旧版模块写下的日志天然没有前缀 —— 若把「出现过多个模块」当作显示条件，
      * 选择条就会时有时无（同一页面对不同时期的日志表现不一致）。
-     * 改成按分组声明固定展示后，森林组的「森林/保护/物种/海洋」恒定可见；
-     * 计数为 0 表示当前日志里还没有该模块写下的记录。
+     * 改成按分组声明固定展示后，森林组的「森林/保护/物种/海洋」恒定可见。
      *
-     * ⚠️ **计数为 0 的模块不再展示**（2026-10-04）：老板没开「保护」这类功能时，
+     * ⚠️ **计数为 0 的项目不再展示**（2026-10-04）：老板没开「保护」这类功能时，
      * 它永远写不出日志，一个恒为 0 的 chip 只是噪音 —— 现在直接从筛选条里剔除。
-     * 但「全部」chip 与是否展示筛选条本身要看**总条数**，见 [hasAnyModuleLog]。
      *
-     * 计数口径与列表筛选、卡片标签**同源**（都走 [moduleOf]）。之前这里只认
+     * ⚠️ **单项目分组整条不显示**（2026-10-04）：庄园/新村/农场/金豆这类只有 1 个模块、
+     * 且没有子标签的分组，标签条上只会孤零零一个 chip，纯噪音 → 由 [showFilterBar] 收起。
+     *
+     * 计数口径与列表筛选、卡片标签**同源**（都走 [displayLabelOf]）。之前这里只认
      * `[模块名]` 前缀，而列表还能靠「执行开始-X」标记归属，于是出现「标签写 0、
      * 列表里却有条目、点标签还筛不出东西」的分裂 —— 真机见过：物种计数 0，
      * 实际有 4 条执行记录。
      */
     val moduleCounts = remember(scopedEntries, groupFilter) {
-        val actual = scopedEntries.mapNotNull { moduleOf(it) }
+        // 先按 [displayLabelOf] 归位（含子标签细分），再统计
+        val actual = scopedEntries.mapNotNull { displayLabelOf(it, groupFilter.subLabels) }
             .groupBy { it }
             .mapValues { it.value.size }
         val ordered = LinkedHashMap<String, Int>()
@@ -329,7 +333,12 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
             val count = actual[name] ?: 0
             if (count > 0) ordered[name] = count
         }
-        // ② 日志里实际出现过、但不在分组声明里的模块（多由老日志带来）追加在后
+        // ② 本分组定义的子标签按声明顺序紧随其后（同样只收计数 > 0 的）
+        groupFilter.subLabels.forEach { sub ->
+            val count = actual[sub.label] ?: 0
+            if (count > 0 && !ordered.containsKey(sub.label)) ordered[sub.label] = count
+        }
+        // ③ 日志里实际出现过、但既不在分组声明、也不在子标签里的名称追加在最后
         actual.entries.sortedByDescending { it.value }.forEach { (name, count) ->
             if (!ordered.containsKey(name)) ordered[name] = count
         }
@@ -337,12 +346,17 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     }
 
     /**
-     * 是否存在任何带归属模块的日志 —— 决定要不要展示整条筛选条。
+     * 是否展示整条筛选条。
      *
-     * 与 [moduleCounts] 的「非空」严格等价（两者都只认 `moduleOf(it) != null` 的条目），
-     * 这里直接复用它的判据而不是另写一遍 `any {}`，避免两处口径将来走偏。
+     * **只有"有东西可筛"时才展示**：可选项目数 > 1。单项（庄园/新村/农场/金豆这类
+     * 只有一个模块、且没子标签的分组）时标签条只是噪音 —— 一个孤零零的 chip 加一个
+     * 「全部」，点了也没有第二种选择，直接收起。
+     *
+     * ⚠️ 判据用 [moduleCounts] 的**实际条目数**而不是"分组声明的模块数"：
+     * 运动/会员这类有子标签的分组，声明的模块可能只有 1 个，但细分后会出现
+     * 「运动 + 健康岛」「会员 + 芝麻粒 + 黄金票」多个可选项，这时**要**展示。
      */
-    val hasAnyModuleLog = moduleCounts.isNotEmpty()
+    val showFilterBar = moduleCounts.size > 1
 
     // 选中的模块可能因日志刷新（该模块的记录被挤出窗口 / 被清除）而离开筛选条，
     // 此时筛选条上不再有对应 chip，但列表却仍被它过滤 —— 界面会自相矛盾。
@@ -433,14 +447,13 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                 )
             }
             // ── 模块选择条 ──────────────────────────────────────────────
-            // 只在**确有可筛模块**时展示：有归属模块的日志至少一条（[hasAnyModuleLog]）。
-            // 计数为 0 的模块已经不在 [moduleCounts] 里了，所以本组这次没产生日志的模块
-            // 不会占位；整组都没日志时这条干脆不出现（见 [hasAnyModuleLog] 注释）。
+            // 只在**确有可选项**（细分后 > 1 个）时展示，见 [showFilterBar]。
+            // 单项分组（庄园/新村/农场/金豆）整条收起，避免孤零零一个 chip 的噪音。
             //
             // 注：运行日志页过去还并排着一排「文件标签」筛选项（RUNTIME / FARM /
             // FOREST / OTHER …），它和本排是同一批业务域的两种写法（森林↔FOREST、
             // 庄园↔FARM），既重复又是全英文，已删除，各日志页统一只保留本排中文模块筛选。
-            if (hasAnyModuleLog) {
+            if (showFilterBar) {
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -514,7 +527,7 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                         key = { _, e -> "${e.source}-${e.lineNumber}-${e.hashCode()}" }
                     ) { _, entry ->
                         SesameLogCard(
-                            tag = logTagOf(entry),
+                            tag = logTagOf(entry, groupFilter.subLabels),
                             time = entry.time ?: "",
                             body = entry.body
                         )
@@ -539,10 +552,14 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
  *
  * [groupTags] 是旧日志的**兜底归属**依据（见 [scopeEntriesToGroup]）：
  * 有模块前缀的条目一律按前缀精确归属，只有在没有前缀时才看标签。
+ *
+ * [subLabels] 是本分组的**子标签**定义（见 [SubLabel]）：把同一模块的日志按正文特征再细分
+ * （如运动组的「健康岛」、会员组的「芝麻粒/黄金票」）。为空表示本分组不细分。
  */
 data class GroupFilter(
     val modules: List<ModuleRef>,
-    val groupTags: Set<String>
+    val groupTags: Set<String>,
+    val subLabels: List<SubLabel> = emptyList()
 ) {
     val isEmpty: Boolean get() = modules.isEmpty() && groupTags.isEmpty()
 
@@ -551,6 +568,71 @@ data class GroupFilter(
 
 /** 模块在分组视图里的引用：类简名 + 显示名 */
 data class ModuleRef(val code: String, val displayName: String)
+
+/**
+ * 分组内的**子标签**：把同一个模块写下的日志，按**正文特征**再细分成几类。
+ *
+ * 为什么需要它：日志的模块前缀（`[运动]` / `[会员]`）由 `Log.setCurrentModule(task.getName())`
+ * 在模块执行时一次性设定，**一个模块只能有一个前缀**。可有些模块内部装着几套彼此独立的业务
+ * （`AntSports` 里既有运动任务也有「悦动健康岛」；`AntMember` 里既有会员任务也有芝麻粒、黄金票），
+ * 它们全被写成一个前缀，界面上就混在一起了。
+ *
+ * 不能靠"改写入前缀"来拆：那样**历史日志拆不开**（旧日志一律写的是老前缀），
+ * 而且要动业务代码。所以这里改为**读取时按正文特征重新归属** —— 纯 UI 层，
+ * 新旧日志一视同仁，业务零改动。
+ *
+ * @param label 界面上显示的标签名（如「健康岛」「芝麻粒」）
+ * @param keywords 命中任一关键词即归入本子标签（大小写不敏感）
+ */
+data class SubLabel(val label: String, val keywords: List<String>)
+
+/**
+ * 各分组的子标签定义；未列出的分组没有子标签（整条筛选条按单模块处理）。
+ *
+ * ⚠️ 关键词必须**只在目标业务的日志里出现**，不能选那种在别处也用的通用词。
+ * 血的教训：「健康能量」看着像健康岛专属，其实「好友大战🉐抢购…花费[N]健康能量」也是
+ * 运动体系里的一句，用它当关键词会把好友大战误判进健康岛。改用 `悦动健康🚑️`
+ * 这个稳定的文案前缀（健康岛所有日志都带它）。
+ *
+ * ⚠️ 顺序有意义：**先匹配到的优先**。当前「芝麻炼金」与「芝麻粒」「芝麻信用」互不为子串、
+ * 暂无冲突，但新增关键词时要留意「短词会吃掉长词」的陷阱（如加「芝麻」就会吞掉另两个）。
+ */
+private val GROUP_SUB_LABELS: Map<String, List<SubLabel>> = mapOf(
+    ModelGroup.SPORTS.code to listOf(
+        SubLabel("健康岛", listOf("悦动健康", "健康岛"))
+    ),
+    ModelGroup.MEMBER.code to listOf(
+        SubLabel("黄金票", listOf("黄金票")),
+        SubLabel("芝麻粒", listOf("芝麻粒", "芝麻信用", "芝麻炼金", "攒芝麻分", "芝麻树"))
+    )
+)
+
+/** 取某分组的子标签定义；没有则返回空表 */
+fun subLabelsOf(groupCode: String?): List<SubLabel> =
+    if (groupCode == null) emptyList() else GROUP_SUB_LABELS[groupCode].orEmpty()
+
+/**
+ * 按正文特征判断条目落在哪个子标签上。
+ *
+ * @param module 条目归属的模块名（已解析）；为 null（无归属）时一律不细分
+ * @return 命中的子标签名；都不命中返回 null（表示归"主标签"，即模块名本身）
+ *
+ * ⚠️ 只有当条目归属的模块**在本分组的子标签体系内**时才细分：
+ * 森林页虽然有多个模块，但它们各是各的模块，不需要靠正文特征再拆。
+ */
+fun subLabelOf(entryModule: String?, body: String, subLabels: List<SubLabel>): String? {
+    if (entryModule == null || subLabels.isEmpty()) {
+        return null
+    }
+    for (sub in subLabels) {
+        for (kw in sub.keywords) {
+            if (body.contains(kw, ignoreCase = true)) {
+                return sub.label
+            }
+        }
+    }
+    return null
+}
 
 /** 构建指定分组的过滤元数据；分组 code 为 null 时返回空过滤（即全部日志） */
 fun buildGroupFilter(groupCode: String?): GroupFilter {
@@ -566,7 +648,8 @@ fun buildGroupFilter(groupCode: String?): GroupFilter {
     val tag = LogType.tagOf(groupCode)
     return GroupFilter(
         modules = modules,
-        groupTags = if (tag == null) emptySet() else setOf(tag)
+        groupTags = if (tag == null) emptySet() else setOf(tag),
+        subLabels = subLabelsOf(groupCode)
     )
 }
 
@@ -599,6 +682,10 @@ fun scopeEntriesToGroup(entries: List<LogEntry>, groupFilter: GroupFilter): List
         return entries
     }
     return entries.filter { entry ->
+        // ⚠️ 这里**必须**用 [moduleOf]（真实模块名），**不能**换成 [displayLabelOf]（含子标签细分）。
+        // 收口是"这条日志属不属于本分组"的判断，粒度必须是模块级；换成子标签粒度后，
+        // 子标签名（如「健康岛」）不在 moduleNames 里，会把本分组的日志误判成他组而丢弃。
+        // 子标签只影响"在分组内部怎么归类显示"，不影响"属不属于这个分组"。
         val module = moduleOf(entry)
         if (module != null) {
             module in moduleNames
@@ -704,13 +791,31 @@ private fun moduleOf(entry: LogEntry): String? =
         ?: moduleNameOf(END_MARK, entry.body)
 
 /**
- * 日志卡片要显示的标签，优先级：
- * ① 正文解析出的模块名（方案 B 写入的 `[模块名]` 前缀，最准）；
- * ② 「执行开始-X」/「执行结束-X」标记里的模块名（老日志兼容）；
- * ③ 文件自带的 tag（`FOREST` / `FARM` / `RUNTIME` 等）。
+ * 条目在界面上**实际显示的标签** —— 顶部计数、模块筛选、卡片标签、选中判必须共用这一个函数。
+ *
+ * 比 [moduleOf] 多一层：拿到模块名后，若本分组定义了子标签（[SubLabel]），
+ * 再按正文特征把它细分（如运动组的「健康岛」、会员组的「芝麻粒/黄金票」）。
+ * 都命中不了就回落到模块名（即"主标签"）。
+ *
+ * ⚠️ 计数、筛选、卡片标签**必须全部走这个函数**。历史上就因为计数与筛选口径不同，
+ * 出现过「标签写 0、列表里却有条目、点标签还筛不出东西」的分裂（见 [moduleOf] 注释）。
+ *
+ * @param subLabels 本分组的子标签定义；空表时退化为纯 [moduleOf]，不影响其它分组。
  */
-private fun logTagOf(entry: LogEntry): String {
-    return moduleOf(entry) ?: entry.tag ?: "日志"
+private fun displayLabelOf(entry: LogEntry, subLabels: List<SubLabel>): String? {
+    val module = moduleOf(entry) ?: return null
+    return subLabelOf(module, entry.body, subLabels) ?: module
+}
+
+/**
+ * 日志卡片要显示的标签，优先级：
+ * ① 正文细分出的子标签（如「健康岛」「芝麻粒」，见 [SubLabel]）；
+ * ② 正文解析出的模块名（`[模块名]` 前缀，最准）；
+ * ③ 「执行开始-X」/「执行结束-X」标记里的模块名（老日志兼容）；
+ * ④ 文件自带的 tag（`FOREST` / `FARM` / `RUNTIME` 等）。
+ */
+private fun logTagOf(entry: LogEntry, subLabels: List<SubLabel>): String {
+    return displayLabelOf(entry, subLabels) ?: entry.tag ?: "日志"
 }
 
 /** 日志查看时最多从文件尾部读取的字节数(避免大文件全量加载导致卡顿) */
