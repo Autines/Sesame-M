@@ -166,10 +166,6 @@ class MiuixMainActivity : MiuixBaseActivity() {
                             isClick = false
                         }
                     }
-
-                    "io.github.aw1y2z.sesame.update" -> {
-                        refreshStatistics()
-                    }
                 }
             }
         }
@@ -196,7 +192,6 @@ class MiuixMainActivity : MiuixBaseActivity() {
         updateSubTitle(ViewAppInfo.getRunType())
         val intentFilter = IntentFilter()
         intentFilter.addAction("io.github.aw1y2z.sesame.status")
-        intentFilter.addAction("io.github.aw1y2z.sesame.update")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(broadcastReceiver, intentFilter, Context.RECEIVER_EXPORTED)
         } else {
@@ -560,7 +555,11 @@ fun MainScreen(activity: MiuixMainActivity) {
                     // 选中态绑 selectedTab（点击即定为目标页，不会经过中间页闪烁）；
                     // 手指滑动时第二个 LaunchedEffect 会把 selectedTab 跟到当前页，高亮仍跟随手指。
                     selected = selectedTab,
-                    onSelect = { selectedTab = it },
+                    onSelect = {
+                        selectedTab = it
+                        // 切回首页时刷新数据统计，避免停留在旧值（对齐上游 v1.2.8）
+                        if (it == 0) activity.refreshStatistics()
+                    },
                     // 玻璃开启时导航栏自身不画实色底、且切成紧凑胶囊形态，外观交给玻璃面
                     transparent = glassEnabled,
                     compact = glassEnabled

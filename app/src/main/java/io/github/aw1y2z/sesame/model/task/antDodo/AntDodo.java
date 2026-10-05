@@ -98,7 +98,7 @@ public class AntDodo extends ModelTask {
     @Override
     public Boolean check() {
         if (TaskCommon.IS_ENERGY_TIME) {
-            Log.forest("任务暂停⏸️神奇物种:当前为仅收能量时间");
+            Log.i("任务暂停⏸️神奇物种:当前为仅收能量时间");
             return false;
         }
         return true;
@@ -228,7 +228,7 @@ public class AntDodo extends ModelTask {
             if (MessageUtil.checkResultCode(TAG, jo)) {
                 JSONObject data = jo.getJSONObject("data");
                 if (data.getBoolean("collect")) {
-                    Log.record("神奇物种卡片今日收集完成！");
+                    Log.forest("神奇物种卡片今日收集完成！");
                 } else {
                     collectAnimalCard();
                 }

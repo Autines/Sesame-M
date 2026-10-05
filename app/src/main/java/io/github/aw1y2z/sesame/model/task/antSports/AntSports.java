@@ -168,7 +168,7 @@ public class AntSports extends ModelTask {
     @Override
     public Boolean check() {
         if (TaskCommon.IS_ENERGY_TIME) {
-            Log.other("任务暂停⏸️支付宝运动:当前为仅收能量时间");
+            Log.i("任务暂停⏸️支付宝运动:当前为仅收能量时间");
             return false;
         }
         return true;
@@ -197,7 +197,7 @@ public class AntSports extends ModelTask {
                             Object rpcManager = XHelpers.callStaticMethod(rpcManagerClass, "a");
                             if ((Boolean) XHelpers.callMethod(rpcManager, "a", step, Boolean.FALSE, "system")) {
                                 Toast.show("同步步数🏃🏻‍♂️[" + step + "步]");
-                                Log.other("同步步数🏃🏻‍♂️[" + step + "步]");
+                                Log.i("同步步数🏃🏻‍♂️[" + step + "步]");
                                 Status.flagToday("sport::syncStepPush");
                             } else {
                                 Log.record("同步运动步数失败:" + step);
@@ -379,6 +379,15 @@ public class AntSports extends ModelTask {
 
     }
 
+    /** 运动任务之间的间隔（毫秒，随机抖动）：原先 1~2 秒连刷曾被风控（1009），放慢到 5~9 秒 */
+    private static final int TASK_INTERVAL_MIN_MS = 5000;
+    private static final int TASK_INTERVAL_MAX_MS = 9000;
+
+    /** 任务之间随机间隔，避免机器式的固定频率 */
+    private void sleepTaskInterval() {
+        TimeUtil.sleep(RandomUtil.nextInt(TASK_INTERVAL_MIN_MS, TASK_INTERVAL_MAX_MS));
+    }
+
     // 运动
     private void sportsTasks() {
         try {
@@ -404,7 +413,7 @@ public class AntSports extends ModelTask {
                     String assetId = jo.getString("assetId");
                     int prizeAmount = jo.getInt("prizeAmount");
                     if (receiveCoinAsset(assetId, prizeAmount, taskName)) {
-                        TimeUtil.sleep(1000);
+                        sleepTaskInterval();
                     }
                     continue;
                 }
@@ -427,7 +436,7 @@ public class AntSports extends ModelTask {
                         continue;
                     }
                     if (completeTask(taskAction, taskId, taskName, jo.optString("sceneCode", ""))) {
-                        TimeUtil.sleep(2000);
+                        sleepTaskInterval();
                     }
                     continue;
                 }
@@ -435,7 +444,9 @@ public class AntSports extends ModelTask {
                 //兜底操作
                 String taskAction = jo.getString("taskAction");
                 String taskId = jo.getString("taskId");
-                completeTask(taskAction, taskId, taskName, jo.optString("sceneCode", ""));
+                if (completeTask(taskAction, taskId, taskName, jo.optString("sceneCode", ""))) {
+                    sleepTaskInterval();
+                }
             }
         } catch (Throwable t) {
             Log.err(TAG, "sportsTasks err:", t);
@@ -621,7 +632,7 @@ public class AntSports extends ModelTask {
                     }
                 }
             }
-            Log.other("切换路线🚶🏻‍♂️选择主题[" + minThemeName + "]城市[" + MinName + "]线路[" + MinCityPathName + "](" + minPathId + ")目前" + minCompleteCount + "次");
+            Log.i("切换路线🚶🏻‍♂️选择主题[" + minThemeName + "]城市[" + MinName + "]线路[" + MinCityPathName + "](" + minPathId + ")目前" + minCompleteCount + "次");
         } catch (Throwable t) {
             Log.err(TAG, "getWalkPathMinCompleteCount err:", t);
         }
@@ -760,7 +771,7 @@ public class AntSports extends ModelTask {
             JSONObject jo = new JSONObject(AntSportsRpcCall.walkGo(date, pathId, useStepCount));
             if (MessageUtil.checkSuccess(TAG, jo)) {
                 result = true;
-                Log.other("行走路线🚶🏻‍♂️行走[" + pathName + "]#前进了" + useStepCount + "步");
+                Log.i("行走路线🚶🏻‍♂️行走[" + pathName + "]#前进了" + useStepCount + "步");
                 jo = jo.getJSONObject("data");
                 if (jo.has("completeInfo")) {
                     Log.other("行走路线🚶🏻‍♂️完成[" + pathName + "]");
@@ -1228,7 +1239,7 @@ public class AntSports extends ModelTask {
                             jo = jo.getJSONObject("data");
                             String roundDescription = jo.getString("roundDescription");
                             int targetStepCount = jo.getInt("targetStepCount");
-                            Log.other("走路挑战🚶🏻‍♂️[" + roundDescription + "]#" + targetStepCount);
+                            Log.i("走路挑战🚶🏻‍♂️[" + roundDescription + "]#" + targetStepCount);
                         } else {
                             Log.record("走路挑战赛" + " " + jo);
                         }
@@ -1268,12 +1279,12 @@ public class AntSports extends ModelTask {
                         }
                         Log.other("领取奖励🎖️[" + taskName + "]#" + award);
                     } else {
-                        Log.record("文体中心领取奖励");
+                        Log.other("文体中心领取奖励失败");
                         Log.i(jo.toString());
                     }
                 }
             } else {
-                Log.record("文体中心领取奖励");
+                Log.other("文体中心领取奖励失败");
                 Log.i(s);
             }
         } catch (Throwable t) {
@@ -1345,12 +1356,12 @@ public class AntSports extends ModelTask {
                         }
                         Log.other("文体宝箱🎁[" + award + "]");
                     } else {
-                        Log.record("文体中心开宝箱");
+                        Log.other("文体中心开宝箱失败");
                         Log.i(jo.toString());
                     }
                 }
             } else {
-                Log.record("文体中心开宝箱");
+                Log.other("文体中心开宝箱失败");
                 Log.i(s);
             }
         } catch (Throwable t) {
@@ -1378,7 +1389,7 @@ public class AntSports extends ModelTask {
             JSONObject jo = new JSONObject(s);
             if (jo.optBoolean("success")) {
                 jo = jo.getJSONObject("userPath");
-                Log.other("行走线路🚶🏻‍♂️[" + title + "]#前进了" + jo.getInt("userPathRecordForwardStepCount") + "步");
+                Log.i("行走线路🚶🏻‍♂️[" + title + "]#前进了" + jo.getInt("userPathRecordForwardStepCount") + "步");
                 pathMapHomepage(pathId);
                 boolean completed = "COMPLETED".equals(jo.getString("userPathRecordStatus"));
                 if (completed) {
@@ -1811,7 +1822,7 @@ public class AntSports extends ModelTask {
                 JSONObject data = jsonResult.getJSONObject("data");
                 int step = data.getJSONArray("mapAwards").getJSONObject(0).getInt("step");
                 int leftCount = data.getInt("leftCount");
-                Log.other("悦动健康🚑️能量泵[" + mapName + "]#前进[" + step + "步]");
+                Log.i("悦动健康🚑️能量泵[" + mapName + "]#前进[" + step + "步]");
 
                 JSONArray rewards = data.getJSONArray("userItems");
                 ArrayList<String> rewardList = parseRewards(rewards);
@@ -1838,7 +1849,7 @@ public class AntSports extends ModelTask {
                 int buildingEnergyFinal = endStageInfo.optInt("buildingEnergyFinal");
                 String buildingId = endStageInfo.optString("buildingId");
                 int endbuildingEnergyProcess = endStageInfo.optInt("buildingEnergyProcess");
-                Log.other("悦动健康🚑️能量泵[" + mapName + "]建造[" + buildingId + "]进度(" + endbuildingEnergyProcess + "/" + buildingEnergyFinal + ")#消耗" + multiNum * 5 + "g能量");
+                Log.i("悦动健康🚑️能量泵[" + mapName + "]建造[" + buildingId + "]进度(" + endbuildingEnergyProcess + "/" + buildingEnergyFinal + ")#消耗" + multiNum * 5 + "g能量");
                 JSONArray rewards = data.getJSONArray("rewards");
                 ArrayList<String> rewardList = parseRewards(rewards);
                 if (!rewardList.isEmpty()) {
@@ -2355,7 +2366,7 @@ public class AntSports extends ModelTask {
                             if (!status.contains("FINISH")) {
                                 JSONObject jo = new JSONObject(AntSportsRpcCall.mapChooseFree(branchId, mapId));
                                 if (MessageUtil.checkSuccess(TAG, jo)) {
-                                    Log.other("悦动健康🚑️切换到[" + mapName + "](" + mapId + ")");
+                                    Log.i("悦动健康🚑️切换到[" + mapName + "](" + mapId + ")");
                                     break;
                                 }
                             }

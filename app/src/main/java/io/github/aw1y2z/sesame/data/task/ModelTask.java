@@ -67,6 +67,8 @@ public abstract class ModelTask extends Model {
             int droppedPrev = Log.takeDroppedStaleLogCount();
             // 与执行槽配对：只有真正拿到槽的线程才计入 runningCount；同时驱动状态栏显示当前在跑的模块
             NotificationUtil.trackTaskStart(task.getName());
+            ModelGroup group = task.getGroup();
+            String prevModule = Log.beginModule(group == null ? null : group.getCode());
             Log.record("执行开始-" + task.getName());
             Log.startModuleLogCount();
             // 标记本线程所属模块：Log 写入时会自动加 [模块名] 前缀。
@@ -109,6 +111,7 @@ public abstract class ModelTask extends Model {
                     Log.record(task.getName() + "✅本轮无操作");
                 }
                 Log.record("执行结束-" + task.getName());
+                Log.endModule(prevModule);
                 // 身份化移除：只删本线程登记的那条，避免旧代收尾误删新一代条目
                 MAIN_TASK_MAP.remove(task, Thread.currentThread());
                 task.running.set(false);
@@ -409,6 +412,8 @@ public abstract class ModelTask extends Model {
             Log.record("⏸全局风控暂停中（约剩 " + remainMin + " 分钟），本轮全部任务跳过");
             return;
         }
+        // 整轮开始：清零本轮收取能量。单分组执行（startGroupTask）不算整轮，故不在此清零
+        NotificationUtil.startRound();
         //自动触发备份配置文件
         if (!Status.hasFlagToday("Config::backup")) {
             FileUtil.backupConfigV2WithRolling(UserIdMap.getCurrentUid());
@@ -446,7 +451,7 @@ public abstract class ModelTask extends Model {
      * @return 实际触发的任务数
      */
     public static int startGroupTask(String groupCode) {
-        int count = 0;
+        List<Model> targets = new ArrayList<>();
         for (Model model : getModelArray()) {
             if (model == null || ModelType.TASK != model.getType()) {
                 continue;
@@ -455,6 +460,15 @@ public abstract class ModelTask extends Model {
             if (group == null || !groupCode.equals(group.getCode())) {
                 continue;
             }
+            targets.add(model);
+        }
+        if (targets.isEmpty()) {
+            return 0;
+        }
+        // 手动执行分组也算新一轮：先清零本轮收取能量，再起跑
+        NotificationUtil.startRound();
+        int count = 0;
+        for (Model model : targets) {
             if (((ModelTask) model).startTask(false)) {
                 count++;
             }
@@ -562,7 +576,15 @@ public abstract class ModelTask extends Model {
         }
 
         public final void run() {
-            runnable.run();
+            // 子任务线程继承所属模块：这些流程日志也带模块 tag（嵌套时恢复上层）
+            ModelTask owner = modelTask;
+            ModelGroup group = owner == null ? null : owner.getGroup();
+            String prevModule = Log.beginModule(group == null ? null : group.getCode());
+            try {
+                runnable.run();
+            } finally {
+                Log.endModule(prevModule);
+            }
         }
 
         protected void setCancelTask(CancelTask cancelTask) {

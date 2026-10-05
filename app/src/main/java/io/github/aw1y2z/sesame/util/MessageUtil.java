@@ -264,9 +264,13 @@ public class MessageUtil {
     }
 
     /**
-     * 打印失败应答。唯一的特殊处理是**服务端繁忙（102）的日志降噪**：同一 tag 累计打印满
-     * {@link #SERVER_BUSY_LOG_LIMIT} 次后不再打印，避免限流期间刷屏。
-     * <p>注意：这里不拦截、不退避、不跳过——请求该发照发，只是少写几行日志。
+     * 打印失败应答。三类**日志降噪**（只少写几行日志，不拦截、不退避、不跳过）：
+     * <ol>
+     *   <li>服务端繁忙 102：同一 tag 累计满 {@link #SERVER_BUSY_LOG_LIMIT} 次后静默；</li>
+     *   <li>风控（1009 / 保护文案）：同一 tag 累计满 {@link #RISK_CONTROL_LOG_LIMIT} 次后静默；</li>
+     *   <li>业务级「不支持」：同一 tag 累计满 {@link #BIZ_UNSUPPORTED_LOG_LIMIT} 次后静默（本地定制）。</li>
+     * </ol>
+     * <p>本地定制：失败应答交由 {@link #recordFailure} 按模块 tag 归档到分类文件（上游 v1.2.8 引入）。
      */
     public static void printErrorMessage(String tag, JSONObject jo, String errorMessageField) {
         try {
@@ -286,11 +290,37 @@ public class MessageUtil {
             if (isBizUnsupported(jo) && !shouldLogBizUnsupported(tag)) {
                 return;
             }
-            // 同一次失败只写一行：原先「友好文案」与「原始应答」各占一行，而完整应答在
-            // 异常日志的 `new rpc response` 行里本就有一份，运行日志没必要再存两行。
-            Log.record(tag + " error:" + memo + ", " + jo);
+            // 失败应答按模块 tag 归档到分类文件（上游 v1.2.8）；归档器内部会同时写一份运行日志。
+            recordFailure(tag, memo);
         } catch (Throwable t) {
             Log.err(TAG, "printErrorMessage err:", t);
+        }
+    }
+
+    /**
+     * 失败应答属「结果」，按模块 tag 落到对应分类文件（与 {@code Log.forest/farm/...} 一样会同时写一份运行日志）。
+     * <p>未登记的 tag 落到「其他记录」：宁可走兜底分类，也不要让结果停在没有模块归属的运行日志里。
+     */
+    private static void recordFailure(String tag, String memo) {
+        String s = tag + " error:" + memo;
+        switch (StringUtil.isEmpty(tag) ? UNKNOWN_TAG : tag) {
+            case "AntForestV2":
+            case "AntDodo":
+            case "ProtectEcology":
+            case "WhackMole":
+            case "Privilege":
+                Log.forest(s);
+                break;
+            case "AntFarm":
+            case "AntStall":
+            case "AntOrchard":
+                Log.farm(s);
+                break;
+            case "金豆夺宝":
+                Log.goldenBeans(s);
+                break;
+            default:
+                Log.other(s);
         }
     }
 

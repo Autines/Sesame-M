@@ -155,7 +155,7 @@ public class AntOrchard extends ModelTask {
         // 假设TaskCommon.IS_ENERGY_TIME存在
         // 如果没有这个字段，可以注释掉或创建
         if (TaskCommon.IS_ENERGY_TIME) {
-            Log.farm("任务暂停⏸️芭芭农场:当前为只收能量时间");
+            Log.i("任务暂停⏸️芭芭农场:当前为只收能量时间");
             return false;
         }
         return true;
@@ -833,7 +833,7 @@ public class AntOrchard extends ModelTask {
 
             // 检查是否可兑换
             if (plantInfo.getBoolean("canExchange")) {
-                Log.farm("农场果树似乎可以兑换了！");
+                Log.i("农场果树似乎可以兑换了！");
                 Toast.show("芭芭农场果树似乎可以兑换了！");
             }
             // 更新施肥进度
@@ -921,12 +921,15 @@ public class AntOrchard extends ModelTask {
             Log.farm("芭芭农场🌳" + scene.nickname() + "施肥#消耗[" + cost + "g肥料]"
                     + (batch ? "#一键5次" : "") + "#目标[" + targetSpreadTimes() + "次]");
 
-            // 检查施肥进度
+            // 检查施肥进度：单次只加 0.01%(1) 或 一键5次只加 0.05%(5) 即被限制施肥，当天不再施肥
             if (taobaoData.has("currentStage")) {
                 JSONObject stage = taobaoData.getJSONObject("currentStage");
                 int newProgress = stage.optInt("totalValue", fertilizerProgress);
-                if (newProgress - fertilizerProgress <= 1) {
-                    Log.record("施肥只加0.01%进度今日停止施肥！");
+                int delta = newProgress - fertilizerProgress;
+                int spreadTimes = batch ? BATCH_SPREAD_SIZE : 1;
+                // delta 为负＝跨场景或基线过期，不作判据（判了会把没被限制的场景也停掉）
+                if (delta >= 0 && delta <= spreadTimes) {
+                    Log.record("施肥" + (batch ? "一键5次只加0.05%" : "1次只加0.01%") + "进度今日停止施肥！");
                     Status.flagToday("spreadManureLimit:" + sceneName, userId);
                 }
                 fertilizerProgress = newProgress;
@@ -1342,7 +1345,7 @@ public class AntOrchard extends ModelTask {
                 // 记下来，由 handleTaskList 在列表处理完后**按任务列表状态核对**
                 pendingVerifyTasks.put(taskId, taskTitle);
             }
-            Log.farm("肥料任务🕓已触发[" + taskTitle + "]#finishTask=" + finishResponse.optString("code")
+            Log.i("肥料任务🕓已触发[" + taskTitle + "]#finishTask=" + finishResponse.optString("code")
                     + "#doFarmTask=" + TaskAlternative.describe(doFarmResponse) + "，结果以任务列表为准");
         } catch (Throwable t) {
             Log.err(TAG, "finishTaskTwice err:", t);
@@ -1413,7 +1416,7 @@ public class AntOrchard extends ModelTask {
                     if (MessageUtil.checkResultCode(TAG, triggerJo)) {
                         Log.farm("肥料领取🎖️任务[" + title + "]奖励#获得[" + awardCount + "g]");
                     } else {
-                        //Log.record("领取奖励失败: " + triggerJo.toString());
+                        //Log.farm("领取奖励失败: " + triggerJo.toString());
                     }
                 }
             } else {
@@ -1707,7 +1710,7 @@ public class AntOrchard extends ModelTask {
                     }
 
                 } else {
-                    Log.record("砸金蛋失败: " + jo.optString("resultDesc", "未知错误"));
+                    Log.farm("砸金蛋失败: " + jo.optString("resultDesc", "未知错误"));
                 }
 
                 // 每次砸蛋后等待一下
@@ -1730,7 +1733,7 @@ public class AntOrchard extends ModelTask {
             String response = AntOrchardRpcCall.receiveOrchardVisitAward();
             JSONObject jo = new JSONObject(response);
             if (!MessageUtil.checkSuccess(TAG, jo)) {
-                Log.record("领取回访奖励失败: " + response);
+                Log.farm("领取回访奖励失败: " + response);
                 return;
             }
             int manureCount = jo.optInt("manureCount", 0);
@@ -1739,7 +1742,7 @@ public class AntOrchard extends ModelTask {
             if (manureCount > 0) {
                 Log.farm("回访奖励🎖️领取肥料*" + manureCount);
             } else if (canCollect || needManualReceive) {
-                Log.farm("回访奖励🎖️有待领奖励[canCollect=" + canCollect + "#需手动领取=" + needManualReceive + "]");
+                Log.i("回访奖励🎖️有待领奖励[canCollect=" + canCollect + "#需手动领取=" + needManualReceive + "]");
             }
             // 无奖励时不打日志：官方每次进农场都会调一次，属正常空返回
         } catch (Throwable t) {
@@ -1857,7 +1860,7 @@ public class AntOrchard extends ModelTask {
                                     return;
                                 }
                             }
-                            Log.record("施肥任务成功完成 " + need + " 次");
+                            Log.farm("施肥任务成功完成 " + need + " 次");
                         }
                         break;
 
@@ -1865,9 +1868,9 @@ public class AntOrchard extends ModelTask {
                         String r = AntOrchardRpcCall.noticeGame("2021004165643274");
                         JSONObject jr = new JSONObject(r);
                         if (MessageUtil.checkResultCode(TAG, jr)) {
-                            Log.record("游戏任务触发成功 → 子任务应当自动完成");
+                            Log.farm("游戏任务触发成功 → 子任务应当自动完成");
                         } else {
-                            Log.record("游戏任务触发失败，返回: " + r);
+                            Log.farm("游戏任务触发失败，返回: " + r);
                         }
                         break;
 
@@ -1884,9 +1887,9 @@ public class AntOrchard extends ModelTask {
                         String finishResult = AntOrchardRpcCall.finishTask(sceneCode, childTaskId);
                         JSONObject finishJo = new JSONObject(finishResult);
                         if (MessageUtil.checkResultCode(TAG, finishJo)) {
-                            Log.record("广告任务触发成功");
+                            Log.farm("广告任务触发成功");
                         } else {
-                            Log.record("广告任务触发失败: " + finishResult);
+                            Log.farm("广告任务触发失败: " + finishResult);
                         }
                         break;
 

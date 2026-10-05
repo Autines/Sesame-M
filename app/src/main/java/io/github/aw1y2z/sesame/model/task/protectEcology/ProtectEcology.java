@@ -90,7 +90,7 @@ public class ProtectEcology extends ModelTask {
     @Override
     public Boolean check() {
         if (TaskCommon.IS_ENERGY_TIME) {
-            Log.forest("任务暂停⏸️生态保护:当前为仅收能量时间");
+            Log.i("任务暂停⏸️生态保护:当前为仅收能量时间");
             return false;
         }
         return true;
@@ -442,7 +442,7 @@ public class ProtectEcology extends ModelTask {
                 return;
             }
             jo = jo.getJSONObject("goldAnimalCertVO");
-            Log.record("生态保护🏕️点亮[" + jo.getString("name") + "]");
+            Log.forest("生态保护🏕️点亮[" + jo.getString("name") + "]");
         }
         catch (Throwable t) {
             Log.err(TAG, "applyGoldAnimalCert err:", t);

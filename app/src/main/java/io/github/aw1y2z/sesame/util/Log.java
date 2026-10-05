@@ -15,6 +15,8 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Log {
 
@@ -107,17 +109,67 @@ public class Log {
             .flattener(new PatternFlattener("{d HH:mm:ss.SSS} {t}: {m}"))
             .build();
 
-    /** 通用运行日志（用于 system/i 调用），tag 固定为 RUNTIME */
+    /** 通用运行日志（不在模块上下文时使用），tag 为 RUNTIME */
     private static final Logger runtimeLogger = XLog.tag("RUNTIME").printers(RUNTIME_FILE_PRINTER).build();
 
-    /** 各模块向 runtime.log 写入时使用的专用 logger（不同 tag，同文件） */
-    private static final Logger runtimeForestLogger = XLog.tag("FOREST").printers(RUNTIME_FILE_PRINTER).build();
+    /**
+     * 当前线程所属模块（{@code ModelGroup.getCode()}，如 FOREST/FARM/…）。
+     * <p>只决定流程日志在运行日志里的 tag：查看器的 tag 过滤条据此按模块切分流程。
+     * 模块结果不经过这里，它们只写各自的分类文件。
+     */
+    private static final ThreadLocal<String> MODULE_TAG = new ThreadLocal<>();
 
-    private static final Logger runtimeGoldenBeansLogger = XLog.tag("GOLDENBEANS").printers(RUNTIME_FILE_PRINTER).build();
+    /** 按 tag 缓存的运行日志 logger：同一个文件、同一组缓冲，只是 tag 不同 */
+    private static final Map<String, Logger> RUNTIME_TAG_LOGGERS = new ConcurrentHashMap<>();
 
-    private static final Logger runtimeFarmLogger = XLog.tag("FARM").printers(RUNTIME_FILE_PRINTER).build();
+    private static Logger runtimeLoggerOf(String tag) {
+        if (StringUtil.isEmpty(tag)) {
+            return runtimeLogger;
+        }
+        Logger logger = RUNTIME_TAG_LOGGERS.get(tag);
+        if (logger == null) {
+            logger = XLog.tag(tag).printers(RUNTIME_FILE_PRINTER).build();
+            RUNTIME_TAG_LOGGERS.put(tag, logger);
+        }
+        return logger;
+    }
 
-    private static final Logger runtimeOtherLogger = XLog.tag("OTHER").printers(RUNTIME_FILE_PRINTER).build();
+    /**
+     * 进入模块上下文：本线程后续的流程日志带上该模块 tag。
+     *
+     * @return 上一个 tag（可能为 null），收尾时原样传回 {@link #endModule} 以支持嵌套
+     */
+    public static String beginModule(String moduleTag) {
+        String prev = MODULE_TAG.get();
+        if (StringUtil.isEmpty(moduleTag)) {
+            MODULE_TAG.remove();
+        } else {
+            MODULE_TAG.set(moduleTag);
+        }
+        return prev;
+    }
+
+    /** 恢复模块上下文；{@code prev} 为 null 表示退出最外层（回落到 RUNTIME tag） */
+    public static void endModule(String prev) {
+        if (StringUtil.isEmpty(prev)) {
+            MODULE_TAG.remove();
+        } else {
+            MODULE_TAG.set(prev);
+        }
+    }
+
+    /**
+     * 写运行日志：受「查看运行日志」开关控制，tag 取当前模块（无则 RUNTIME）。
+     * <p>本地定制：正文同时带中文模块前缀（{@code [庄园] …}），供 {@code MiuixLogViewerActivity}
+     * 按正文做分组收口；上游的 tag 机制（{@code FOREST/FARM/…}）另存一份供 tag 过滤。
+     * 两者并存是刻意的 —— 丢掉任一都会让某一套查看方式失效。
+     */
+    private static void runtimeWrite(String s) {
+        if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
+            return;
+        }
+        runtimeLoggerOf(MODULE_TAG.get()).i(withModulePrefix(withUser(s)));
+    }
 
     private static final Logger debugLogger = XLog.tag("DEBUG").printers(
             new FilePrinter.Builder(FileUtil.LOG_DIRECTORY_FILE.getPath())
@@ -192,26 +244,19 @@ public class Log {
     }
 
     /**
-     * 模块日志双写（运行日志 + 分类文件）：只写开关打开的一侧，消息统一带 uid 前缀。
-     * <p>前缀顺序固定为「模块 → 账号」，即 {@code [庄园] [账号1] 投喂小鸡…}：
-     * 查看器把正文里**第一个非账号方括号**当成模块归属，所以模块必须排在最前，
-     * 账号标识随后追加（仍是脱敏的账号简称，不带 uid 与昵称）。
-     * <p>⚠️ 拼接顺序不可写成 {@code withUser(withModulePrefix(s))}：那样账号会跑到最前，
-     * 变成 {@code [账号1][庄园] …}，查看器会把「账号1」误判成模块名，
-     * 分组页（新村/农场/运动/会员）会因为这些日志归属不到任何模块而整页空白。
+     * 模块结果日志：只写各自的分类文件。
+     * <p>运行日志不再双写一份——它只承载流程（模块线程的流程日志由 {@link #beginModule} 决定 tag），
+     * 模块结果统一到分类页查看。
+     * <p>⚠️ 本地定制：正文仍带「模块 → 账号」中文前缀（如 {@code [庄园] [账号1] 投喂小鸡…}），
+     * 因为查看器 {@code MiuixLogViewerActivity} 按正文里第一个非账号方括号做**分组收口**；
+     * 拼接顺序不可写成 {@code withUser(withModulePrefix(s))}，那样「账号1」会被误判成模块名，
+     * 分组页（新村/农场/运动/会员）整页空白。
      */
-    private static void writeModuleLog(String s, boolean toRuntime, Logger runtimeTarget,
-                                       boolean toFile, Logger fileTarget) {
-        if (!toRuntime && !toFile) {
+    private static void writeModuleLog(String s, boolean toFile, Logger fileTarget) {
+        if (!toFile) {
             return;
         }
-        String msg = withModulePrefix(withUser(s));
-        if (toRuntime) {
-            runtimeTarget.i(msg);
-        }
-        if (toFile) {
-            fileTarget.i(msg);
-        }
+        fileTarget.i(withModulePrefix(withUser(s)));
     }
 
     /** 本线程在「代际作废」期间被静音的错误日志条数 */
@@ -253,18 +298,16 @@ public class Log {
         // 优先只写异常日志：原先「异常 + 运行」双写，同一条记录在两个文件里各存一份
         // （实测 error.<date>.log 里 99% 的行在 runtime.<date>.log 中重复）。
         // 仅当用户关掉「查看异常日志」时，才退回写运行日志，避免错误彻底不可见。
+        // ⚠️ 本地定制保留：上游 v1.2.8 改回无条件双写，会把上面这条优化倒退，故不采纳。
         if (toError) {
             errorLogger.i(msg);
         } else {
-            runtimeLogger.i(msg);
+            runtimeLoggerOf(MODULE_TAG.get()).i(msg);
         }
     }
 
     public static void i(String s) {
-        if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            return;
-        }
-        runtimeLogger.i(withModulePrefix(withUser(s)));
+        runtimeWrite(s);
     }
 
     public static void i(String tag, String s) {
@@ -303,9 +346,7 @@ public class Log {
     public static void record(String str) {
         countModuleLog();
         // 记录日志(record)已停用,只按「查看运行日志」开关写入运行日志
-        if (io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            runtimeLogger.i(withModulePrefix(withUser(str)));
-        }
+        runtimeWrite(str);
     }
 
     /**
@@ -314,22 +355,17 @@ public class Log {
      * 而且查看器里也没有对应的日志类目。仍受「查看运行日志」开关控制。
      */
     public static void system(String tag, String s) {
-        if (!io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog()) {
-            return;
-        }
-        runtimeLogger.i(withModulePrefix(withUser(tag + ", " + s)));
+        runtimeWrite(tag + ", " + s);
     }
 
     public static void forest(String s) {
         countModuleLog();
-        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeForestLogger,
-                io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog(), forestLogger);
+        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog(), forestLogger);
     }
 
     public static void goldenBeans(String s) {
         countModuleLog();
-        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeGoldenBeansLogger,
-                io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog(), goldenBeansLogger);
+        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableGoldenBeansLog(), goldenBeansLogger);
     }
 
     /**
@@ -376,14 +412,15 @@ public class Log {
 
     public static void farm(String s) {
         countModuleLog();
-        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeFarmLogger,
-                allowCategoryFile(getCurrentModule()), farmLogger);
+        // 本地定制：farm.log 同时收「庄园/新村/农场」三个分组，开关是按分组给的，
+        // 故写文件前先看当前模块属于哪个分组，再查它自己的开关（见 allowCategoryFile）。
+        writeModuleLog(s, allowCategoryFile(getCurrentModule()), farmLogger);
     }
 
     public static void other(String s) {
         countModuleLog();
-        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeOtherLogger,
-                allowCategoryFile(getCurrentModule()), otherLogger);
+        // 同上：other.log 收「运动/会员」等，按当前模块所属分组的开关决定是否落盘。
+        writeModuleLog(s, allowCategoryFile(getCurrentModule()), otherLogger);
     }
 
     public static void debug(String s) {
