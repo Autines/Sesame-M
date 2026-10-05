@@ -48,7 +48,12 @@ public class MessageUtil {
     private static final String TAG = MessageUtil.class.getSimpleName();
     private static final String UNKNOWN_TAG = "Unknown TAG";
 
-    /** 自动拉黑：模糊错误需连续命中的确认次数 */
+    /**
+     * 自动拉黑：模糊错误需连续命中的确认次数。
+     *
+     * <p>🔴 语义是「**连续 N 天**每天至少失败一次」，不是「累计失败 N 次」——
+     * 计数由 {@link #MarkTaskBlackListConfirm} 保证**每天最多 +1**。
+     */
     private static final int BLACKLIST_CONFIRM_HITS = 3;
     /** 自动拉黑：命中计数的有效期（天），超过该窗口未再命中则重新计数 */
     private static final int BLACKLIST_CONFIRM_WINDOW_DAYS = 3;
@@ -888,6 +893,12 @@ public class MessageUtil {
      * 自动拉黑（需连续命中确认）：用于错误文案模糊、可能只是临时状态的任务。
      * <p>连续命中 {@link #BLACKLIST_CONFIRM_HITS} 次才真正拉黑；未达标时只记录命中并打日志，
      * 避免一次性的临时故障（活动当天未配置等）被永久跳过。
+     *
+     * <h3>🔴 计数口径（2026-10-05 修）</h3>
+     * 命中次数指的是「**连续多少天**失败」，因此**同一天最多只记 1 次**。
+     * 曾经没有这道闸门：同一轮里同一任务被调用 3 次（实测同一秒内连调、间隔 151ms），
+     * {@code hits} 就从 0 累到 3 → **当场真拉黑**，等于把「连续 3 天」的设计意图架空成
+     * 「同一轮连续失败 3 次」，与「避免一次性临时故障被永久跳过」的初衷完全相反。
      */
     public static void MarkTaskBlackListConfirm(String ModelFieldsType, String listTitle, String TaskListName, String taskTitle) {
         MarkTaskBlackListConfirm(ModelFieldsType, listTitle, TaskListName, taskTitle, null);
@@ -910,6 +921,15 @@ public class MessageUtil {
             if ((record.title == null || record.title.isEmpty()) && displayName != null && !displayName.isEmpty()) {
                 record.title = displayName;
             }
+            // 🔴 同日去重：今天已经记过一次就直接返回，**不再累加**。
+            // 没有它，同一轮里的多次失败会在毫秒内凑满 BLACKLIST_CONFIRM_HITS → 秒拉黑。
+            // 这里**仍然要落盘一次**：上面可能刚补了 title（老记录只有 4 段），
+            // 不落盘这次补的名字就丢了，界面又会显示英文键。
+            if (record.hits > 0 && record.lastDay == today) {
+                AutoBlackListMap.put(key, record.format());
+                AutoBlackListMap.save();
+                return;
+            }
             if (record.hits + 1 < BLACKLIST_CONFIRM_HITS) {
                 record.hits = record.hits + 1;
                 record.lastDay = today;
@@ -917,7 +937,7 @@ public class MessageUtil {
                 AutoBlackListMap.put(key, record.format());
                 AutoBlackListMap.save();
                 Log.record("自动拉黑🕵️[" + TaskListName + "][" + taskTitle + "]可疑错误第"
-                        + record.hits + "/" + BLACKLIST_CONFIRM_HITS + "次命中，暂不拉黑");
+                        + record.hits + "/" + BLACKLIST_CONFIRM_HITS + "天命中，暂不拉黑");
                 return;
             }
             MarkTaskBlackList(ModelFieldsType, listTitle, TaskListName, taskTitle, displayName);
@@ -1509,6 +1529,14 @@ public class MessageUtil {
      * <p>{@code blackDay}：{@code >0} 已拉黑；{@code 0} 未拉黑（观察中或已解禁待重试）；{@link #PERMANENT} 永久拉黑。
      * <p>{@code title} 是**拉黑当时的中文标题**，只服务界面显示（黑名单页优先用它）。
      * 追加在末尾且**可缺省**：老记录（4 段）照旧可解析，新记录是 5 段。
+     *
+     * <h3>🔴 hits 的口径与钳制（2026-10-05）</h3>
+     * {@code hits} 表示「**连续多少天**失败」，由 {@link #MarkTaskBlackListConfirm} 保证每天最多 +1。
+     * 但在此之前没有这道闸门，历史记录里存在**同一天累加到 2 甚至 3** 的脏数据 ——
+     * 它们会让「连续 3 天」提前一天达成（旧值 2 明天再失败一次就拉黑）。
+     * 由于「同一天命中 2 次」在任何合法的新逻辑下都不可能产生，这里直接把
+     * {@code hits} 钳到 {@code [0, 1]}：既不误伤正常记录（新逻辑下 hits 恒为每天 1），
+     * 也一次性修掉全部历史脏数据，且**不需要额外的迁移标记**。
      */
     private static final class AutoBlackRecord {
         private static final long PERMANENT = -1L;
@@ -1529,9 +1557,12 @@ public class MessageUtil {
             }
             try {
                 AutoBlackRecord record = new AutoBlackRecord();
-                record.hits = Integer.parseInt(parts[0].trim());
+                // 观察期计数钳到 [0,1]：见类注释「hits 的口径与钳制」。
+                // ⚠️ 只钳观察期（blackDay == 0）；已拉黑/永久拉黑的记录 hits 不再被消费，原样保留。
+                int rawHits = Integer.parseInt(parts[0].trim());
                 record.lastDay = Long.parseLong(parts[1].trim());
                 record.blackDay = Long.parseLong(parts[2].trim());
+                record.hits = record.blackDay == 0L ? Math.max(0, Math.min(1, rawHits)) : rawHits;
                 record.retry = parts.length > 3 ? Integer.parseInt(parts[3].trim()) : 0;
                 record.title = parts.length > 4 ? parts[4].trim() : null;
                 return record;

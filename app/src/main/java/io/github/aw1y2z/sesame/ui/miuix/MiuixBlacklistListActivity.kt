@@ -194,7 +194,7 @@ private fun statusText(
     val gone = if (entry.inList == false) "（已不在黑名单列表）" else ""
     return when {
         entry.isPermanent -> "已永久拉黑（重试 $maxRetry 次仍失败）$gone"
-        entry.isWatching -> "观察中 ${entry.hits}/$confirmHits 次连续命中"
+        entry.isWatching -> "观察中 ${entry.hits}/$confirmHits 天连续命中"
         else -> {
             val remain = (retryDays - (today - entry.blackDay)).coerceAtLeast(0)
             val date = MessageUtil.formatBlackDay(entry.blackDay)
