@@ -987,6 +987,8 @@ public class Status {
             MessageUtil.sweepExpiredBlackList();
             // 跨天：释放原先预置拉黑的技术性不可自动化项，交给自动拉黑机制判定
             MessageUtil.sweepReleasedDefaults();
+            // 跨天：清理已废弃列表的历史残留（旧版本写过、现列表已不存在的数据）
+            MessageUtil.sweepObsoleteBlackLists();
             return true;
         }
         else {

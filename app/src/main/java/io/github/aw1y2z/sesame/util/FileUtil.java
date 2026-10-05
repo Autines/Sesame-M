@@ -576,11 +576,6 @@ public class FileUtil {
         return getFile(MAIN_DIRECTORY_FILE, "AntOrchardDrawTask.json");
     }
 
-    /** 农场抽抽乐（阿肥寻宝记）任务的 taskType → 中文标题（上游同功能实现，键名不同） */
-    public static File getOrchardChouChouLeTaskListMapFile() {
-        return getFile(MAIN_DIRECTORY_FILE, "OrchardChouChouLeTask.json");
-    }
-
     public static File getGoldenBeansTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "GoldenBeansTask.json");
     }

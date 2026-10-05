@@ -26,7 +26,6 @@ import io.github.aw1y2z.sesame.util.idMap.MemberBenefitIdMap;
 import io.github.aw1y2z.sesame.util.idMap.MemberCreditSesameTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.MonopolyTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.NewAncientTreeIdMap;
-import io.github.aw1y2z.sesame.util.idMap.OrchardChouChouLeTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.PathThemeMapListMap;
 import io.github.aw1y2z.sesame.util.idMap.PlantSceneIdMap;
 import io.github.aw1y2z.sesame.util.idMap.PromiseSimpleTemplateIdMap;
@@ -79,7 +78,6 @@ public final class ConfigPreload {
         if (AlipayAntOrchardDrawTaskList.seedDefaults()) {
             AntOrchardDrawTaskListMap.save();
         }
-        OrchardChouChouLeTaskListMap.load();
         AntStallTaskListMap.load();
         AntSportsTaskListMap.load();
         PathThemeMapListMap.load();

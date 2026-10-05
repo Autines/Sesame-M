@@ -105,6 +105,10 @@ android {
 
 androidComponents {
     onVariants(selector().withBuildType('release')) { variant ->
+        // 构建时间戳：产物名带上构建时刻，避免多次构建产出同名文件互相覆盖 / 分不清哪个最新。
+        // ⚠️ 必须在 onVariants 回调内取时间（每次构建都会执行），不能提到脚本顶层 ——
+        // 顶层求值会被 Gradle 配置缓存复用，时间戳会停留在首次配置的时刻。
+        String buildStamp = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date())
         variant.outputs.forEach { output ->
             // 按 ABI 区分产物名：arm64-v8a / armeabi-v7a；无 ABI filter 的为 universal 兜底包
             String abiTag = "-universal"
@@ -113,7 +117,7 @@ androidComponents {
                     abiTag = "-" + f.getIdentifier()
                 }
             }
-            output.outputFileName.set("Sesame-M-Normal${abiTag}-${project.appVersion}.apk")
+            output.outputFileName.set("Sesame-M-Normal${abiTag}-${project.appVersion}_${buildStamp}.apk")
         }
     }
 }

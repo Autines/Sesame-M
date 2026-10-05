@@ -11,6 +11,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -592,12 +593,84 @@ public class MessageUtil {
     }
 
     /**
+     * **已废弃的黑名单列表**：字段/开关/写入点都随上游改版一起删掉了，但设备上可能残留历史数据。
+     *
+     * <p>为什么单独列一张表、而不是给它们补个中文名挂在界面上：
+     * <ul>
+     *   <li>它们**没有对应的字段**了 —— {@code findTaskListField} 恒返回 null，
+     *       明细页按 fieldCode 过滤也点不进去（一级页会把它和同名列表并成一行，
+     *       点进去只显示另一个列表的任务，**行数与明细对不上**）；</li>
+     *   <li>残留记录只剩"观察期"垃圾（{@code blackDay=0}），没有任何状态语义可展示。</li>
+     * </ul>
+     * 所以正确做法是**在界面上直接不显示**（本表用于 {@code listAutoBlackEntries} 跳过），
+     * 并由 {@link #sweepObsoleteBlackLists()} 在跨天时把纯垃圾清掉。
+     *
+     * <p><b>来源（2026-10-05 查实）</b>：本地把「阿肥寻宝记」合并进了「金豆夺宝专场」
+     * （{@code AntOrchardDrawTaskList}），旧字段/开关整体移除；但上游旧版曾把**中文任务名**
+     * 当键写进这个列表，历史数据就留在了 {@code AutoBlackList.json} 里，
+     * 界面上就冒出一组英文的「OrchardChouChouLeTaskList」。
+     */
+    private static final Set<String> OBSOLETE_BLACKLIST_LISTS = new LinkedHashSet<>();
+
+    static {
+        // 阿肥寻宝记/农场抽抽乐 → 已并入「芭芭农场 · 金豆夺宝专场（抽抽乐）」
+        OBSOLETE_BLACKLIST_LISTS.add("OrchardChouChouLeTaskList");
+    }
+
+    /**
+     * 清理**已废弃列表的历史残留**（幂等，每次跨天跑一次）。
+     *
+     * <p>只清「模块自动拉的、仍停在观察期（{@code blackDay=0}、{@code retry=0}）」那种纯垃圾；
+     * 已被正式拉黑或已进入解禁重试周期的记录**一律保留** —— 它们有状态语义，
+     * 顺手删掉等于偷偷把任务放出来，那是改行为，不是清理。
+     *
+     * <p>顺带把**无法解析**的记录（{@code parse} 返回 null）也清掉：它们永远不会被消费，
+     * 却会让黑名单页多出一条读不出状态的行。
+     */
+    public static void sweepObsoleteBlackLists() {
+        try {
+            AutoBlackListMap.ensureLoaded();
+            if (AutoBlackListMap.getMap().isEmpty()) {
+                return;
+            }
+            boolean changed = false;
+            for (String key : new ArrayList<>(AutoBlackListMap.keys())) {
+                AutoBlackRecord record = AutoBlackRecord.parse(AutoBlackListMap.get(key));
+                String[] parts = key.split("\\|", 3);
+                String fieldCode = parts.length > 1 ? parts[1] : "";
+                // ① 解析不出来的记录：留着只会在界面上多一条无状态的行
+                if (record == null) {
+                    AutoBlackListMap.remove(key);
+                    changed = true;
+                    Log.record("黑名单治理🧹清理无法解析的拉黑记录[" + key + "]");
+                    continue;
+                }
+                // ② 废弃列表的观察期残留：列表本身已不存在，这条记录永远不会再被消费
+                if (OBSOLETE_BLACKLIST_LISTS.contains(fieldCode)
+                        && record.blackDay == 0L && record.retry == 0) {
+                    AutoBlackListMap.remove(key);
+                    changed = true;
+                    Log.record("黑名单治理🧹清理废弃列表残留[" + parts[parts.length - 1] + "]原列表["
+                            + fieldCode + "]已废弃");
+                }
+            }
+            if (changed) {
+                AutoBlackListMap.save();
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "sweepObsoleteBlackLists err:", t);
+        }
+    }
+
+    /**
      * 字段码 → 该字段的「任务键 → 中文名」映射文件。
      *
      * <p>给 {@link #resolveTaskName} 当**兜底数据源**：正规路径是拿字段的候选项列表
      * （{@code SelectModelField.getExpandValue()}），但那要求 {@code ConfigV2} 的字段表已经灌好 ——
      * 而字段表要等 {@code ConfigPreload.prepare()}，黑名单页从主界面直接进来时可能是空的。
      * 那种情况下，键本身就是英文稳定键的列表（金豆、金豆夺宝专场）会整片显示英文。
+     *
+     * <p>⚠️ 同上，**废弃列表也必须登记**：否则键退化成英文（见 {@link #OBSOLETE_BLACKLIST_LISTS}）。
      */
     private static final Map<String, Supplier<Map<String, String>>> BLACKLIST_NAME_MAPS = new LinkedHashMap<>();
 
@@ -882,6 +955,7 @@ public class MessageUtil {
                     if (record.retry == 0 && today - record.lastDay > BLACKLIST_CONFIRM_WINDOW_DAYS) {
                         AutoBlackListMap.remove(key);
                         changed = true;
+                        Log.record("黑名单治理🧹清理过期观察记录[" + key.split("\\|", 3)[2] + "]");
                     }
                     continue;
                 }
@@ -1262,6 +1336,12 @@ public class MessageUtil {
                 String module = parts.length > 0 ? parts[0] : "";
                 String fieldCode = parts.length > 1 ? parts[1] : "";
                 String taskValue = parts.length > 2 ? parts[2] : "";
+                // 已废弃的列表：字段都没了，界面既没法翻中文名、明细页也点不进去。
+                // 与其硬凑个名字挂上去（会跟同名列表并成一行、可点进去的却是另一个列表），
+                // 不如**索性不显示** —— 它们的记录由 sweepObsoleteBlackLists() 跨天清掉。
+                if (OBSOLETE_BLACKLIST_LISTS.contains(fieldCode)) {
+                    continue;
+                }
                 String[] target = BLACKLIST_LIST_TARGETS.get(fieldCode);
                 String sourceName = target == null || target.length < 2 ? fieldCode : target[1];
                 String groupName = BLACKLIST_GROUP_NAMES.getOrDefault(fieldCode, sourceName);
