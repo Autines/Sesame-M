@@ -206,8 +206,10 @@ public class Status {
 
     /** 任务本轮正常结束（无异常）：清零连续异常计数 */
     public static synchronized void resetTaskError(String taskName) {
-        if (!StringUtil.isEmpty(taskName)) {
-            INSTANCE.taskErrorStreak.remove(taskName);
+        if (!StringUtil.isEmpty(taskName) && INSTANCE.taskErrorStreak.remove(taskName) != null) {
+            // 真正清掉了非空值才落盘：保证磁盘不残留陈旧计数，
+            // 否则进程重启后 rollStreakIfNewDay() 会因"日期相同"而跳过清零，把旧计数错当今天的。
+            save();
         }
     }
 
@@ -279,8 +281,9 @@ public class Status {
 
     /** 任务本轮未超时：清零连续超时计数 */
     public static synchronized void resetTaskSlow(String taskName) {
-        if (!StringUtil.isEmpty(taskName)) {
-            INSTANCE.taskSlowStreak.remove(taskName);
+        if (!StringUtil.isEmpty(taskName) && INSTANCE.taskSlowStreak.remove(taskName) != null) {
+            // 同 resetTaskError：清掉非空值才落盘，避免磁盘残留旧计数被重启读回后误判
+            save();
         }
     }
     
@@ -922,6 +925,20 @@ public class Status {
         }
         if (INSTANCE.saveTime == 0) {
             INSTANCE.saveTime = System.currentTimeMillis();
+        }
+        // 加载后自检：streak 若不属于今天，一律清空。
+        // 兜住历史遗留数据（旧版 resetTask* 不落盘，磁盘上可能留着昨天的计数），
+        // 也等于把 rollStreakIfNewDay() 的跨天判据提前到加载时刻执行。
+        try {
+            if (!TimeUtil.getDateString().equals(INSTANCE.streakDate)
+                    && (!INSTANCE.taskErrorStreak.isEmpty() || !INSTANCE.taskSlowStreak.isEmpty())) {
+                Log.i(TAG, "清理非当日的停滞计数 " + INSTANCE.taskErrorStreak + " / " + INSTANCE.taskSlowStreak);
+                INSTANCE.taskErrorStreak.clear();
+                INSTANCE.taskSlowStreak.clear();
+            }
+            INSTANCE.streakDate = TimeUtil.getDateString();
+        } catch (Throwable t) {
+            Log.printStackTrace(TAG, t);
         }
         return INSTANCE;
     }
