@@ -355,7 +355,7 @@ public abstract class ModelTask extends Model {
             return false;
         }
         // P0 停滞护栏：单任务连续异常/超时达阈值，当日不再启动，防止死循环卡住线程池
-        if (Status.hasFlagToday("stall::" + getName())) {
+        if (Status.isStalledToday(getName())) {
             running.set(false);
             Log.record(getName() + "⏭当日停滞护栏已触发，本轮跳过");
             return false;

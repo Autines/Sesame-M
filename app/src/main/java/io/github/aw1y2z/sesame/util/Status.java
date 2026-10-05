@@ -69,6 +69,18 @@ public class Status {
     private final Map<String, Integer> taskErrorStreak = new HashMap<>();
     /** P0 停滞护栏：任务名 -> 连续软超时轮次 */
     private final Map<String, Integer> taskSlowStreak = new HashMap<>();
+    /**
+     * 上面两个 streak 归属的日期（yyyy-MM-dd）。
+     * <p>跨天后第一轮 note 时自动把 streak 清零重算，避免"昨天的连续计数"叠到今天的阈值上。
+     */
+    private String streakDate;
+    /**
+     * P0 停滞护栏：任务名 -> 触发停滞护栏的“日期”（yyyy-MM-dd）。
+     * <p>把日期随标记一起持久化，判定时只认“今天”写下的那条，跨天自然失效。
+     * <p>历史实现把未带日期的 stall 标记塞进 {@link #flagLogList}，清理完全依赖每日重置；
+     * 一旦重置链路任一环没落到该标记上（实测发生过），标记就会永久存活，任务被整天拦死且不再有任何告警。
+     */
+    private final Map<String, String> stallSince = new HashMap<>();
 
     // 爱心鸡结号(S2)：上一个已捐蛋的轮次号；持久化以避免进程重启后同一轮重复捐
     private String competitionDonatedRound;
@@ -184,18 +196,11 @@ public class Status {
         if (StringUtil.isEmpty(taskName)) {
             return;
         }
+        rollStreakIfNewDay();
         int n = INSTANCE.taskErrorStreak.getOrDefault(taskName, 0) + 1;
         INSTANCE.taskErrorStreak.put(taskName, n);
         if (n >= STALL_MAX_ERROR_ROUNDS) {
-            String flag = "stall::" + taskName;
-            if (!hasFlagToday(flag)) {
-                try {
-                    flagToday(flag);
-                } catch (Throwable t) {
-                    Log.err(TAG, "noteTaskError flagToday err:", t);
-                }
-                Log.system(TAG, "停滞护栏⚠️[" + taskName + "]连续 " + n + " 轮异常，今日暂停该任务");
-            }
+            markStalled(taskName, "⚠️", "连续 " + n + " 轮异常");
         }
     }
 
@@ -214,19 +219,62 @@ public class Status {
         if (StringUtil.isEmpty(taskName)) {
             return;
         }
+        rollStreakIfNewDay();
         int n = INSTANCE.taskSlowStreak.getOrDefault(taskName, 0) + 1;
         INSTANCE.taskSlowStreak.put(taskName, n);
         if (n >= STALL_MAX_SLOW_ROUNDS) {
-            String flag = "stall::" + taskName;
-            if (!hasFlagToday(flag)) {
-                try {
-                    flagToday(flag);
-                } catch (Throwable t) {
-                    Log.err(TAG, "noteTaskSlow flagToday err:", t);
-                }
-                Log.system(TAG, "停滞护栏⏱️[" + taskName + "]连续 " + n + " 轮执行超时，今日暂停该任务");
-            }
+            markStalled(taskName, "⏱️", "连续 " + n + " 轮执行超时");
         }
+    }
+
+    /**
+     * 若已跨天，把两个 streak 表清零并把归属日期更新为今天。
+     * <p>让"连续 N 轮"始终只在同一天内累计 —— 不依赖 {@code updateDay()} 的重置是否命中。
+     */
+    private static synchronized void rollStreakIfNewDay() {
+        String today = TimeUtil.getDateString();
+        if (!today.equals(INSTANCE.streakDate)) {
+            INSTANCE.taskErrorStreak.clear();
+            INSTANCE.taskSlowStreak.clear();
+            INSTANCE.streakDate = today;
+        }
+    }
+
+    /**
+     * 打上"当日停滞"标记（带日期持久化）。已存在今天的标记时只补一条可见日志，不重复打标。
+     * <p>⚠️ 与历史实现的关键差别：<b>告警不再被"标记已存在"吞掉</b>。
+     * 历史实现是 {@code if (!hasFlagToday(flag)) { flagToday(flag); Log.system(...); }}
+     * ——标记一旦跨天残留，就永远走不进告警分支，问题彻底静默（实测出现过整天无一条护栏日志）。
+     * 现在改成"没标记就打标记+告警；已有今天的标记则只提示一次"，任何一轮都能在日志里看见它被拦。
+     */
+    private static synchronized void markStalled(String taskName, String icon, String reason) {
+        String today = TimeUtil.getDateString();
+        String already = INSTANCE.stallSince.get(taskName);
+        if (today.equals(already)) {
+            // 今天的标记已生效：仍记一条"本轮因停滞护栏跳过"的事实，便于观测持续时长
+            Log.system(TAG, "停滞护栏" + icon + "[" + taskName + "]当日标记仍生效（于 " + already + " 触发），本轮跳过");
+            return;
+        }
+        INSTANCE.stallSince.put(taskName, today);
+        save();
+        Log.system(TAG, "停滞护栏" + icon + "[" + taskName + "]" + reason + "，今日暂停该任务");
+    }
+
+    /**
+     * 该任务今天是否已被停滞护栏拦下。
+     * <p>判据是"标记里的日期 == 今天"，跨天自动失效 —— 不再依赖 {@code flagLogList} 的每日重置是否成功命中。
+     */
+    public static synchronized boolean isStalledToday(String taskName) {
+        if (StringUtil.isEmpty(taskName)) {
+            return false;
+        }
+        String since = INSTANCE.stallSince.get(taskName);
+        if (since == null) {
+            // 兼容旧数据：历史上只写了 flagLogList，没有日期信息。无法判断是哪天打的，
+            // 一律视为"非今天"，避免把不可考证的残留标记继续当作今天的判决。
+            return false;
+        }
+        return since.equals(TimeUtil.getDateString());
     }
 
     /** 任务本轮未超时：清零连续超时计数 */
@@ -841,6 +889,9 @@ public class Status {
             if (statusFile.exists()) {
                 String json = FileUtil.readFromFile(statusFile);
                 JsonUtil.copyMapper().readerForUpdating(INSTANCE).readValue(json);
+                // 注：旧数据里 flagLogList 的 "stall::xxx"（无日期）不再参与停滞护栏判定（见 isStalledToday），
+                // 且 "stall::" 前缀在本项目里是多个功能的公共命名空间（新村也有 stall::shareP2PLimit 等业务标记），
+                // 因此这里不做批量清理，交给每日重置自然淘汰，避免误删他人标记。
                 String formatted = JsonUtil.toFormatJsonString(INSTANCE);
                 if (formatted != null && !formatted.equals(json)) {
                     // 回写只允许改格式、不许改数据

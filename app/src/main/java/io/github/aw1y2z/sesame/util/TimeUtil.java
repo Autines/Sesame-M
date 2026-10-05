@@ -172,6 +172,17 @@ public class TimeUtil {
         return DateFormat.getDateInstance().format(c.getTime());
     }
 
+    /**
+     * 固定 {@code yyyy-MM-dd} 格式的当天日期字符串。
+     * <p>与 {@link #getDateStr()} 的区别：后者用 {@code DateFormat.getDateInstance()}，格式随系统 Locale 变
+     * （中文环境是 {@code 2026/10/5}）。凡是"把日期作为持久化标记去比对"的场合都必须用本方法，
+     * 否则换语言/换机型后同一份数据会判不出"同一天"。
+     */
+    @SuppressLint("SimpleDateFormat")
+    public static String getDateString() {
+        return new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+    }
+
     public static Calendar getToday() {
         Calendar c = Calendar.getInstance();
         c.set(Calendar.HOUR_OF_DAY, 0);
