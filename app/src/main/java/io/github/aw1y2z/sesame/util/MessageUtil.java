@@ -676,26 +676,59 @@ public class MessageUtil {
      * 那种情况下，键本身就是英文稳定键的列表（金豆、金豆夺宝专场）会整片显示英文。
      *
      * <p>⚠️ 同上，**废弃列表也必须登记**：否则键退化成英文（见 {@link #OBSOLETE_BLACKLIST_LISTS}）。
+     *
+     * <h3>🔴 为什么要连 load 一起登记（2026-10-05）</h3>
+     * 这些 idMap 的 {@code getMap()} 只是**内存只读视图**，磁盘内容要靠各模块初始化时显式
+     * {@code load()} 才进来。黑名单页可以从主界面直接进 —— 那时模块还没跑过任何任务，
+     * 映射全是空的，于是**明明磁盘上的 {@code GoldenBeansTask.json} 有「眼力拼图通过1关」，
+     * 界面照样显示 {@code GOLDENBEAN_GAME_ZH_YLPT}**。只登记 getter 修不了这个洞，
+     * 必须在取值前先把 load 兜住，所以这里存的是「加载器 + 取值器」一对。
      */
     private static final Map<String, Supplier<Map<String, String>>> BLACKLIST_NAME_MAPS = new LinkedHashMap<>();
 
+    /** 同上，字段码 → 该映射的**加载器**（在 {@link #resolveTaskName} 取值前调用，幂等） */
+    private static final Map<String, Runnable> BLACKLIST_NAME_LOADERS = new LinkedHashMap<>();
+
+    /** 登记一个「字段码 → 中文名映射」：加载器与取值器必须成对登记 */
+    private static void registerNameMap(String fieldCode, Runnable loader,
+                                        Supplier<Map<String, String>> getter) {
+        BLACKLIST_NAME_LOADERS.put(fieldCode, loader);
+        BLACKLIST_NAME_MAPS.put(fieldCode, getter);
+    }
+
     static {
-        BLACKLIST_NAME_MAPS.put("AntForestVitalityTaskList", AntForestVitalityTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntForestHuntTaskList", AntForestHuntTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("MonopolyTaskList", MonopolyTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntOceanAntiepTaskList", AntOceanAntiepTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntOceanFishBlackList", AntOceanFishBlackListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntOrchardTaskList", AntOrchardTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntOrchardDrawTaskList", AntOrchardDrawTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntFarmDoFarmTaskList", AntFarmDoFarmTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntFarmDrawMachineTaskList", AntFarmDrawMachineTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("GoldenBeansTaskList", GoldenBeansTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntDodoTaskList", AntDodoTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntStallTaskList", AntStallTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntSportsTaskList", AntSportsTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("AntMemberTaskList", AntMemberTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("MemberCreditSesameTaskList", MemberCreditSesameTaskListMap::getMap);
-        BLACKLIST_NAME_MAPS.put("SesameAlchemyTaskList", SesameAlchemyTaskListMap::getMap);
+        registerNameMap("AntForestVitalityTaskList",
+                () -> AntForestVitalityTaskListMap.load(), AntForestVitalityTaskListMap::getMap);
+        registerNameMap("AntForestHuntTaskList",
+                () -> AntForestHuntTaskListMap.load(), AntForestHuntTaskListMap::getMap);
+        registerNameMap("MonopolyTaskList",
+                () -> MonopolyTaskListMap.load(), MonopolyTaskListMap::getMap);
+        registerNameMap("AntOceanAntiepTaskList",
+                () -> AntOceanAntiepTaskListMap.load(), AntOceanAntiepTaskListMap::getMap);
+        registerNameMap("AntOceanFishBlackList",
+                () -> AntOceanFishBlackListMap.load(), AntOceanFishBlackListMap::getMap);
+        registerNameMap("AntOrchardTaskList",
+                () -> AntOrchardTaskListMap.load(), AntOrchardTaskListMap::getMap);
+        registerNameMap("AntOrchardDrawTaskList",
+                () -> AntOrchardDrawTaskListMap.load(), AntOrchardDrawTaskListMap::getMap);
+        registerNameMap("AntFarmDoFarmTaskList",
+                () -> AntFarmDoFarmTaskListMap.load(), AntFarmDoFarmTaskListMap::getMap);
+        registerNameMap("AntFarmDrawMachineTaskList",
+                () -> AntFarmDrawMachineTaskListMap.load(), AntFarmDrawMachineTaskListMap::getMap);
+        registerNameMap("GoldenBeansTaskList",
+                () -> GoldenBeansTaskListMap.load(), GoldenBeansTaskListMap::getMap);
+        registerNameMap("AntDodoTaskList",
+                () -> AntDodoTaskListMap.load(), AntDodoTaskListMap::getMap);
+        registerNameMap("AntStallTaskList",
+                () -> AntStallTaskListMap.load(), AntStallTaskListMap::getMap);
+        registerNameMap("AntSportsTaskList",
+                () -> AntSportsTaskListMap.load(), AntSportsTaskListMap::getMap);
+        registerNameMap("AntMemberTaskList",
+                () -> AntMemberTaskListMap.load(), AntMemberTaskListMap::getMap);
+        registerNameMap("MemberCreditSesameTaskList",
+                () -> MemberCreditSesameTaskListMap.load(), MemberCreditSesameTaskListMap::getMap);
+        registerNameMap("SesameAlchemyTaskList",
+                () -> SesameAlchemyTaskListMap.load(), SesameAlchemyTaskListMap::getMap);
     }
 
     /**
@@ -1381,8 +1414,17 @@ public class MessageUtil {
                 // 名字优先级：记录里存的「拉黑当时的中文标题」 > 字段候选/名字映射 > 稳定键本身。
                 // 第一优先是为了**不依赖名字映射** —— 有些列表是按英文稳定键拉黑的，
                 // 那个键在映射里可能永远学不到，界面就只能显示英文。
-                String taskName = record.title != null && !record.title.isEmpty()
-                        ? record.title
+                //
+                // 🔴 但这里要防一手「英文占位标题」：早期调用方把 taskId 当 title 传了下来
+                // （金豆的 displayName 会回落成 taskId、抽抽乐领奖路径干脆不传），于是记录里
+                // 存的是英文键本身。它**恒等于 taskValue**，却因为排在最高优先级而把
+                // 「字段名字映射」那级整个挡住 —— 明明 GoldenBeansTask.json 里有中文名，
+                // 界面照样显示 GOLDENBEAN_GAME_ZH_YLPT（2026-10-05 实测 9 条）。
+                // 判据取「等于稳定键」而不是「是不是纯 ASCII」：中文标题恰好是英文的情况极罕见，
+                // 而 taskValue 一定是稳定键，这样判定最不容易误伤。
+                String recordTitle = record.title == null ? "" : record.title.trim();
+                String taskName = !recordTitle.isEmpty() && !recordTitle.equals(taskValue)
+                        ? recordTitle
                         : resolveTaskName(field, fieldCode, taskValue);
                 entries.add(new AutoBlackTaskEntry(key, module, fieldCode, taskValue, sourceName,
                         groupName, listName, taskName, record.hits, record.blackDay,
@@ -1507,6 +1549,16 @@ public class MessageUtil {
             }
         }
         // 2) 兜底：直接查该字段的映射文件 —— 字段表没灌进内存时（从主界面直接进黑名单页）也能出中文
+        //    ⚠️ 必须先 load：这些 idMap 的 getMap() 只是内存视图，磁盘内容要显式 load 才进来。
+        //    漏了这一步就会出现"磁盘映射里明明有中文名、界面却显示英文键"（2026-10-05 实测 9 条）。
+        Runnable loader = BLACKLIST_NAME_LOADERS.get(fieldCode);
+        if (loader != null) {
+            try {
+                loader.run();
+            } catch (Throwable t) {
+                Log.printStackTrace(TAG, t);
+            }
+        }
         Supplier<Map<String, String>> supplier = BLACKLIST_NAME_MAPS.get(fieldCode);
         if (supplier != null) {
             try {

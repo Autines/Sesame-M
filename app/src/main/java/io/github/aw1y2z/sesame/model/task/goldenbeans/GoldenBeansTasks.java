@@ -12,6 +12,7 @@ import io.github.aw1y2z.sesame.data.ConfigV2;
 import io.github.aw1y2z.sesame.data.ModelFields;
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField;
 import io.github.aw1y2z.sesame.model.base.TaskAlternative;
+import io.github.aw1y2z.sesame.model.task.antGame.MiniProgramGameTask;
 import io.github.aw1y2z.sesame.util.Log;
 import io.github.aw1y2z.sesame.util.MessageUtil;
 import io.github.aw1y2z.sesame.util.idMap.GoldenBeansTaskListMap;
@@ -257,7 +258,7 @@ public final class GoldenBeansTasks {
                     if (STATUS_FINISHED.equals(taskStatus) || STATUS_TO_RECEIVE.equals(taskStatus)) {
                         GoldenBeansSupport.pause(interval);
                         // 领奖失败要计入未完成，下轮还会重试（与下面非黑名单分支保持一致）
-                        if (claimAward(entry, taskId, taskName)) {
+                        if (claimAward(entry, task, taskId, taskName)) {
                             changed = true;
                         } else {
                             unresolved = true;
@@ -275,7 +276,7 @@ public final class GoldenBeansTasks {
 
                 if (STATUS_FINISHED.equals(taskStatus) || STATUS_TO_RECEIVE.equals(taskStatus)) {
                     GoldenBeansSupport.pause(interval);
-                    if (claimAward(entry, taskId, taskName)) {
+                    if (claimAward(entry, task, taskId, taskName)) {
                         handled++;
                         changed = true;
                     } else {
@@ -295,7 +296,7 @@ public final class GoldenBeansTasks {
                         continue;
                     }
                     GoldenBeansSupport.pause(interval);
-                    if (finishTask(entry, taskId, taskName)) {
+                    if (finishTask(entry, task, taskId, taskName)) {
                         handled++;
                         changed = true;
                     } else {
@@ -366,6 +367,32 @@ public final class GoldenBeansTasks {
         return title;
     }
 
+    /**
+     * 只给「写进黑名单记录的中文标题」用：拿不到中文名时返回**空串**，而**不是回落成英文 taskId**。
+     *
+     * <h3>🔴 为什么不复用 {@link #displayName}</h3>
+     * {@code displayName} 会回落到 {@code taskId}，这对**日志**是对的（总得有个东西能认出是哪条），
+     * 但它同时被当成"中文标题"传给了拉黑记录 —— 而黑名单页的取名优先级是
+     * 「记录里的 title」&gt;「字段名字映射」&gt;「稳定键本身」。
+     * 一旦把英文 taskId 写进 title，就把后两级兜底**整个挡住了**：
+     * 明明 {@code GoldenBeansTask.json / AntOrchardDrawTask.json} 里
+     * 已经有 {@code GOLDENBEAN_GAME_ZH_YLPT → 眼力拼图通过1关} 这种齐全映射，
+     * 界面却还是显示英文（2026-10-05 实测 12 条中 9 条如此）。
+     * 存空串则让映射正常生效；映射也没有时，界面照旧回落显示稳定键，不会比现在更差。
+     *
+     * <p>⚠️ 调用方要把它与 {@code displayName} 分开用：**日志用 displayName，存盘用本方法**。
+     */
+    private String displayNameForRecord(JSONObject task) {
+        String title = task.optString("title", "").trim();
+        if (title.isEmpty()) {
+            JSONObject displayConfig = task.optJSONObject("taskDisplayConfig");
+            if (displayConfig != null) {
+                title = displayConfig.optString("title", "").trim();
+            }
+        }
+        return title;
+    }
+
     /** 支付类任务需要用户真实付款，无法自动完成 */
     private boolean isPayTask(String taskId) {
         if (taskId == null || taskId.isEmpty()) {
@@ -375,7 +402,7 @@ public final class GoldenBeansTasks {
         return upper.contains("ZHIFU") || upper.contains("_PAY");
     }
 
-    private boolean finishTask(GoldenBeansEntry entry, String taskId, String taskName) {
+    private boolean finishTask(GoldenBeansEntry entry, JSONObject task, String taskId, String taskName) {
         if (taskId == null || taskId.isEmpty()) {
             Log.i("金豆[" + entry.alias + "]任务⚠️[" + taskName + "]缺少taskId#跳过");
             return false;
@@ -394,10 +421,21 @@ public final class GoldenBeansTasks {
                         goldenbeansRpcCall.VERSION, "金豆[" + entry.alias + "]任务", msg -> Log.goldenBeans(msg));
                 return false;
             }
+            // 🔴 游戏任务**不计入拉黑**：与芝麻果园（AntOrchard）保持同一口径，见 IGameTask 接口注释
+            // （"匹配失败或执行失败都不应导致拉黑 —— 游戏任务本身成功率就低，拉黑等于以后连试都不试"）。
+            // 判据用服务端分类字段 categorizationSecondLevel == "Game"，
+            // **不能**按 taskId 前缀猜：CHOUCHOULE_GAME_ZJD1500/3000/5000/8000 看着像游戏，
+            // 实为攒豆阶梯任务（Function_Related），拉黑了是对的。
+            if (MiniProgramGameTask.isGameTask(task)) {
+                Log.goldenBeans("金豆[" + entry.alias + "]任务🎮[" + taskName + "]是游戏任务#失败不拉黑#"
+                        + "下轮仍会尝试[" + failMessage + "]");
+                return false;
+            }
             // 其它错误码（支付/配置类）= 真做不了，仍计入自动拉黑。
-            // 第 3 个参数传 taskName（中文标题）作为展示名：黑名单里存的是英文 taskId，
-            // 不把标题一起记下来的话，黑名单页只能显示 GOLDENBEAN_xxx 这种稳定键。
-            MessageUtil.checkResultCodeAndMarkTaskBlackList("GoldenBeansTaskList", taskId, taskName, jo);
+            // 展示名传**可能为空的中文名**（不是英文 taskId）：黑名单里存的是英文 taskId，
+            // 传英文会把界面「字段名字映射」那级兜底整个挡住，见 displayNameForRecord 的注释。
+            MessageUtil.checkResultCodeAndMarkTaskBlackList("GoldenBeansTaskList", taskId,
+                    displayNameForRecord(task), jo);
             Log.goldenBeans("金豆[" + entry.alias + "]任务⚠️[" + taskName + "]完成失败[" + failMessage + "]");
         } catch (Throwable th) {
             Log.i(GoldenBeansSupport.TAG, "finishTask err:");
@@ -444,7 +482,7 @@ public final class GoldenBeansTasks {
         });
     }
 
-    private boolean claimAward(GoldenBeansEntry entry, String taskId, String taskName) {
+    private boolean claimAward(GoldenBeansEntry entry, JSONObject task, String taskId, String taskName) {
         if (taskId == null || taskId.isEmpty()) {
             Log.i("金豆[" + entry.alias + "]任务⚠️[" + taskName + "]缺少taskId#跳过领奖");
             return false;
@@ -457,8 +495,17 @@ public final class GoldenBeansTasks {
                         + GoldenBeansSupport.awardText(jo));
                 return true;
             }
-            // 领奖失败同样按不可重试错误自动拉黑，避免每轮重复请求
-            MessageUtil.checkResultCodeAndMarkTaskBlackList("GoldenBeansTaskList", taskId, jo);
+            // 🔴 游戏任务领奖失败同样**不拉黑**，与 finishTask 一侧口径一致（见 IGameTask 注释）。
+            // 领不了奖是游戏通道自身的问题，拉黑了下一轮连试都不试，只会更糟。
+            if (MiniProgramGameTask.isGameTask(task)) {
+                Log.goldenBeans("金豆[" + entry.alias + "]任务🎮[" + taskName + "]是游戏任务#领奖失败不拉黑#["
+                        + GoldenBeansSupport.describe(jo) + "]");
+                return false;
+            }
+            // 领奖失败同样按不可重试错误自动拉黑，避免每轮重复请求。
+            // 展示名同 finishTask：传中文名（可能为空），别把英文 taskId 写进去挡掉映射兜底。
+            MessageUtil.checkResultCodeAndMarkTaskBlackList("GoldenBeansTaskList", taskId,
+                    displayNameForRecord(task), jo);
             Log.goldenBeans("金豆[" + entry.alias + "]任务⚠️领取[" + taskName + "]失败["
                     + GoldenBeansSupport.describe(jo) + "]");
         } catch (Throwable th) {

@@ -332,7 +332,9 @@ public class AntOrchard extends ModelTask {
                             received++;
                             Log.farm("抽抽乐🎖️领取[" + title + "]奖励[" + awardCountForReceive + "]");
                         } else {
-                            MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, aw);
+                            // 与下面完成失败那处一致：把 title 作为展示名传下去，
+                            // 否则记录里只有英文 taskType，黑名单页会显示 CHOUCHOULE_GAME_xxx
+                            MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, title, aw);
                         }
                     } else {
                         received++;
