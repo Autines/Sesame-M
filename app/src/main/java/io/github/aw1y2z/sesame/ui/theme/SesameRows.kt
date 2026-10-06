@@ -466,7 +466,17 @@ internal fun SesameSelectMenu(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
-                            ) { onSelect(index) }
+                            ) {
+                                // 🔴 先收起菜单再回传选择（2026-10-05）：
+                                // 只调 onSelect 的话，Popup 会一直留在屏幕上，
+                                // 得点菜单外的区域才消失 —— 而"选中了就该关"是这类
+                                // 单值选择菜单的默认预期（对照系统设置里的同类控件）。
+                                //
+                                // ⚠️ 顺序不能反：onSelect 里可能有 activity.recreate()
+                                // 这类会重建整棵树的动作，先关能保证菜单状态被清干净。
+                                onDismiss()
+                                onSelect(index)
+                            }
                             .padding(horizontal = 8.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
