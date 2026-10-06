@@ -58,8 +58,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.Dp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.BackdropEffectScope
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
@@ -296,6 +298,23 @@ private fun CompactNavBar(
  * @param offsetY 滚动驱动的纵向收放；收起时传一个大于 dock 高度的值让它完全出屏。
  * @param alpha 与 [offsetY] 配套的淡出（只改 offset 会有"半截露在屏外"的观感）。
  * @param content dock 里的内容，通常就是 [SesameNavBar]。
+ *
+ * <h3>🔴 明暗两套配方（2026-10-05 深色优化）</h3>
+ * 玻璃的"托底纱"与"高光边"必须按明暗分档，**不能一套配到底**：
+ *
+ * - **浅色**：背后是亮色内容 → 需要**提亮**（叠白纱）才能压出玻璃的"乳白感"，
+ *   文字用深色，对比度天然成立；
+ * - **深色**：背后是暗色内容 → 再叠白纱只会把整条 dock **抬成中灰**，与暗色页面脱节，
+ *   看着像"打了个脏补丁"；正确的做法是**轻微压暗**让玻璃融进暗背景，
+ *   同时把 `vibrancy()` 的饱和度增强拿掉（它会把暗部过度提亮，是发灰的帮凶），
+ *   高光边也要降强度 —— 全强度白描边在暗色下非常扎眼。
+ *
+ *   ⚠️ 但深色真正的难点**不是"太亮"也不是"太暗"，而是"玻璃与背景的亮度差"**：
+ *   实测过三个量级（0.42 / 0.20 / 0.30，见 `scrim` 处的注释）——
+ *   压过头会退化成不透明黑板，压不够则玻璃比背景亮、看着像贴上去的一块灰板。
+ *   目标是让玻璃**融进**背景（亮度接近），悬浮感靠模糊与折射的边缘扭曲去体现。
+ *
+ * 判定统一走 [sesameIsDark]（跟随系统时实时生效，切主题立刻重算配方）。
  */
 @Composable
 fun SesameGlassDock(
@@ -305,6 +324,70 @@ fun SesameGlassDock(
     alpha: Float = 1f,
     content: @Composable () -> Unit
 ) {
+    val dark = sesameIsDark()
+    // ⚠️ 这两行必须在 drawBackdrop 的 lambda **外面**求值：
+    // 每次重组重建 ColorFilter/Highlight 会让 node 判定为参数变化而重置内部状态，
+    // 滚动时表现为玻璃"闪一下"。用 remember(dark) 把配方整体缓存成常量。
+    val effects: BackdropEffectScope.() -> Unit = remember(dark) {
+        if (dark) {
+            // 深色：不叠 vibrancy（它是固定的饱和度增强，会把暗部过度提亮、是"发灰"的帮凶）。
+            // ⚠️ 这里**不要再叠负 brightness**：托底纱本身已是一层黑，再压亮度就是"两层压暗"，
+            // 玻璃会黑成一块不透明的板（2026-10-05 第一版踩过）。
+            //
+            // 🔴 深色的真正麻烦是**玻璃比背景"亮"**（2026-10-05 截图实测）：
+            // 页面底 RGB(25,28,33)=亮度 27.7，玻璃面 RGB(39,42,47)=亮度 41.7，**高出 14 点**。
+            // 玻璃一旦比背景亮，看着就像**贴在深黑页面上的一块灰板** ——
+            // 视线全被它吸走，反倒把周围衬得更黑（老板反馈的"背景有点黑"就是这个观感）。
+            // 提亮的来源不是托底纱（那是黑的），而是 **lens 的折射/色散与表面高光**。
+            // 所以深色下要**收着用折射**：量级降一档，让玻璃的存在感退回去。
+            {
+                colorControls(brightness = 0f, contrast = 1.0f, saturation = 0.9f)
+                blur(12.dp.toPx())
+                lens(
+                    // 深色下折射量比浅色**减半**：浅色的玻璃靠折射"跳"出来是对的，
+                    // 深色下同样的量会把玻璃提亮成一块灰板，与背景脱节。
+                    refractionHeight = 10.dp.toPx(),
+                    refractionAmount = 16.dp.toPx(),
+                    depthEffect = true,
+                    chromaticAberration = true
+                )
+            }
+        } else {
+            // 浅色：保持原有配方（实测观感已达标，不动）
+            {
+                vibrancy()
+                blur(10.dp.toPx())
+                lens(
+                    refractionHeight = 14.dp.toPx(),
+                    refractionAmount = 28.dp.toPx(),
+                    depthEffect = true,
+                    chromaticAberration = true
+                )
+            }
+        }
+    }
+    val highlight = remember(dark) {
+        if (dark) {
+            // 深色下把高光降到 45% 强度、边缘再柔一点：全强度白边在暗底上像"描了道白线"
+            Highlight(width = 1.dp, blurRadius = 1.2.dp, alpha = 0.45f)
+        } else {
+            Highlight(width = 1.dp, blurRadius = 0.5.dp)
+        }
+    }
+    // 托底纱：浅色叠白（提亮），深色叠黑（压暗）。
+    //
+    // 🔴 深色的量级（2026-10-05 三版实测，每版都上真机量过色值）：
+    // - 0.42 → 压过头，玻璃变成一块不透明黑板，模糊折射全被盖住；
+    // - 0.20 → 折射把玻璃整体提亮，实测 **41.7 比页面底 27.7 高 14 点**，
+    //   玻璃像贴在深黑页面上的一块灰板，反而把周围衬得更黑；
+    // - 0.30 → 现值。在收了折射量（见上方 effects）之后，再靠这层纱把玻璃
+    //   拉到贴近页面的亮度区间，让它"融"进背景而不是"浮"在上面。
+    //
+    // ⚠️ 关键认知：**深色玻璃的目标不是"更暗"，而是"和背景一样暗"**。
+    // 玻璃与背景的亮度差越小，悬浮感越靠模糊/折射的边缘扭曲来体现（而不是靠色差）——
+    // 这正是 iOS 深色液态玻璃的做法：你能看见它，但说不出它是什么颜色。
+    val scrim = if (dark) Color.Black.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.30f)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -323,27 +406,18 @@ fun SesameGlassDock(
                     backdrop = backdrop,
                     // 全圆角胶囊：紧凑、不通栏，只包住图标组
                     shape = { CircleShape },
-                    // effects 的书写顺序即叠加顺序：先增艳 → 再模糊 → 最后折射
-                    effects = {
-                        vibrancy()
-                        blur(10.dp.toPx())
-                        lens(
-                            refractionHeight = 14.dp.toPx(),
-                            refractionAmount = 28.dp.toPx(),
-                            depthEffect = true,
-                            chromaticAberration = true
-                        )
-                    },
+                    // effects 的书写顺序即叠加顺序（明暗各自一套，见上方 KDoc）
+                    effects = effects,
                     // 亮边：库自带的描边 + 斜向高光着色器（iOS 26 的"高光边"），
                     // 比自己画一圈均匀白描边更贴近参考观感。
                     // ⚠️ 不要再额外叠 Modifier.border，否则会双描边。
-                    highlight = { Highlight(width = 1.dp, blurRadius = 0.5.dp) },
+                    highlight = { highlight },
                     // ⚠️ 必须传 null：阴影画在玻璃**正后方**，会被 backdrop 一起采样进来，
                     // 把整条 dock 染灰（白底页面上尤其明显，早期用别的库时踩过）。
                     shadow = null,
-                    // 真实模糊已经挡住了背后内容，这层白只需托一点文字可读性；
+                    // 真实模糊已经挡住了背后内容，这层纱只需托一点文字可读性；
                     // 不像"模糊失效"时期那样要靠 0.78 的高不透明度硬盖。
-                    onDrawSurface = { drawRect(Color.White.copy(alpha = 0.30f)) }
+                    onDrawSurface = { drawRect(scrim) }
                 )
                 // 玻璃面比导航栏内容再外扩一圈，胶囊才有呼吸感
                 .padding(horizontal = 10.dp, vertical = 4.dp)
