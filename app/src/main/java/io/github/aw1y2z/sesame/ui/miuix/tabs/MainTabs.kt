@@ -352,7 +352,11 @@ fun openLog(activity: MiuixMainActivity, logType: LogType) {
 @Composable
 fun ConfigTab(activity: MiuixMainActivity) {
     val context = LocalContext.current
-    val items = remember {
+    // 🔴 key 不能省：这段要实时反映 config 目录里真实存在的账号，
+    // 用「无 key 的 remember」会被缓存死 —— 删掉某个账号后回到本页，那一行仍在，
+    // 必须切到别的 Tab 再切回来（Composable 重新组合）才消失。
+    // 版本号由 MiuixMainActivity.onResume 自增，从设置页返回即触发重扫。
+    val items = remember(activity.configAccountsVersion) {
         // (userId, 标题, 副标题)：标题固定为「账号N」保证单行不换行，昵称/账号放副标题
         val list = ArrayList<Triple<String?, String, String?>>()
         list.add(Triple(null, "默认", null))

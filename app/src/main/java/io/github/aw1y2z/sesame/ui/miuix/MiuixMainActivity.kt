@@ -89,6 +89,13 @@ class MiuixMainActivity : MiuixBaseActivity() {
     /** 统计版本号：load / 广播刷新后自增,首页 StatisticsTable 订阅它来触发重组 */
     var statisticsVersion by mutableStateOf(0)
 
+    /**
+     * 账号列表版本号：onResume 时自增，配置页的账号列表订阅它重新扫描 config 目录。
+     * <p>不这样做的话，那个列表会被 `remember` 缓存死 —— 删掉某个账号后回到配置页，
+     * 那一行仍然在，必须切到别的 Tab 再切回来（Composable 重新组合）才消失。
+     */
+    var configAccountsVersion by mutableStateOf(0)
+
     private val handler = Handler(Looper.getMainLooper())
     private var isClick = false
     // 标记是否已通过系统设置页请求过权限，用于 onResume 中检测用户是否已授权
@@ -204,6 +211,9 @@ class MiuixMainActivity : MiuixBaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 回到前台就重扫账号列表：删掉/新增账号后，从设置页返回能立刻看到变化，
+        // 不必再切到别的 Tab 再切回来（详见 configAccountsVersion 的说明）
+        configAccountsVersion++
         // 激活状态探测独立于存储权限：防止 titleRunner 重复累积，先清空再启动
         if (RunType.DISABLE == ViewAppInfo.getRunType()) {
             handler.removeCallbacks(titleRunner)
