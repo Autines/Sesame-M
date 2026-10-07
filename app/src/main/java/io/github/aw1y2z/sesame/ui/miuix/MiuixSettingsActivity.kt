@@ -242,8 +242,9 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
     SesameDetailScaffold(
         title = "配置设置",
         onBack = { activity.saveAndFinish() },
-        onImport = { importLauncher.launch("*/*") },
-        onExport = { exportBackupLauncher.launch(fullBackupFileName()) },
+        // 顶栏刻意**不放**导入/导出：它们与下方「备份与恢复」是同一动作的两个入口
+        // （导出=完整备份、导入=zip 恢复），属于历史遗留的重复。已统一收敛到下方
+        // 那套带文字说明的入口，顶栏只留「删除」。（2026-10-07 定）
         onClear = { showDeleteDialog = true }
     ) { padding: PaddingValues ->
         Column(
@@ -310,6 +311,14 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                     onClick = {
                         exportConfigLauncher.launch("[" + (userId ?: "默认") + "]-config_v2.json")
                     }
+                )
+                // 顶栏移除导入后，单账号 .json 的导入入口收在这里，与上面的「导出」成对。
+                // 只接受 config_v2 结构（顶层含 modelFieldsMap），导入前会自动备份现有配置。
+                SesameClickRow(
+                    title = "导入当前账号配置",
+                    summary = "选择 .json，覆盖当前账号的模块配置",
+                    icon = Icons.Outlined.Restore,
+                    onClick = { importLauncher.launch("*/*") }
                 )
             }
             // 末尾留白：把底栏（bottomBar）的高度补上，让最后一行能贴到屏幕底。
