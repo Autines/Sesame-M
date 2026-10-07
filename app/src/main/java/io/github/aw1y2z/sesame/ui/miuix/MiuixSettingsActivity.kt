@@ -350,14 +350,26 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
             }
 
             if (showDeleteDialog) {
+                // 删的是不是「当前登录账号」？决定了这次删除是真删、还是等于"重置"
+                val isCurrent = !userId.isNullOrEmpty() && userId == ConfigPreload.currentUserId()
                 SesameConfirmDialog(
                     title = "警告",
-                    text = "确认删除该配置？",
+                    text = if (isCurrent) {
+                        "这是「当前正在使用」的账号。\n\n" +
+                            "删除后模块会立刻为它重建一份默认配置（等于只做了重置），" +
+                            "要彻底删掉，请先在支付宝里切换到其它账号再删。\n\n仍要继续吗？"
+                    } else {
+                        "确认彻底删除该账号？\n\n" +
+                            "将删除：整个账号配置目录、该账号的全部滚动备份、账号序号登记。\n" +
+                            "其它账号不受影响。"
+                    },
                     destructive = true,
                     onConfirm = {
                         showDeleteDialog = false
-                        if (ConfigPreload.getConfigFile(userId).let { FileUtil.deleteFile(it) }) {
-                            ToastUtil.show(context, "配置删除成功")
+                        if (ConfigPreload.purgeAccount(userId)) {
+                            ToastUtil.show(context, "该账号配置已彻底删除")
+                        } else {
+                            ToastUtil.show(context, "该账号配置本就不存在")
                         }
                         activity.finish()
                     },

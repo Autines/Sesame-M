@@ -129,6 +129,25 @@ public class UserIdMap {
     }
 
     /**
+     * 移除账号序号登记（供「彻底删除账号」使用）。
+     * <p>只从映射里摘掉这一个 uid 并落盘，**绝不动其它账号**。
+     * 该 uid 之后再出现时会重新分配一个序号 —— 这正是「删掉后像新账号一样」的预期行为。
+     */
+    public static synchronized void removeAccount(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return;
+        }
+        ensureAccountIndexLoaded();
+        if (accountIndexMap.remove(userId) != null) {
+            try {
+                FileUtil.write2File(JsonUtil.toJsonString(accountIndexMap), FileUtil.getAccountIndexFile());
+            } catch (Exception e) {
+                Log.printStackTrace(e);
+            }
+        }
+    }
+
+    /**
      * 日志与界面统一使用的账号简称，如「账号2」；uid 为空或分配失败时返回 null。
      * <p>已分配过的走无锁快路径（一次 map 查询），适合每条日志调用。
      */

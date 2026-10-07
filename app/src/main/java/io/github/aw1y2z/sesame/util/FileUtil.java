@@ -346,6 +346,48 @@ public class FileUtil {
     public static boolean setConfigV2File(String userId, String json) {
         return write2File(json, new File(CONFIG_DIRECTORY_FILE + "/" + userId, "config_v2.json"));
     }
+
+    /**
+     * 某账号的配置目录：{@code config/<userId>}。
+     * <p>🔴 {@code userId} 为空时返回 {@code null} —— 空 userId 代表「默认账号」，
+     * 它的配置是**根目录**下的 {@code config_v2.json}，根本不存在"账号目录"这回事。
+     * 调用方必须先判空，绝不能用它去概括性删除，否则会误伤默认配置。
+     */
+    public static File getAccountConfigDir(String userId) {
+        if (StringUtil.isEmpty(userId)) {
+            return null;
+        }
+        return new File(CONFIG_DIRECTORY_FILE, userId);
+    }
+
+    /**
+     * 删除某账号的全部滚动备份（{@code bak/config_v2_<userId>_*.json}）。
+     * <p>按「{@code _<userId>_}」精确匹配文件名，因此**只会命中该账号自己的备份**，
+     * 不会碰到其它账号（userId 是一串唯一数字，不会与别人的交叉）。
+     *
+     * @return 实际删除的文件个数（目录不存在或无匹配时返回 0）
+     */
+    public static int deleteAccountBackups(String userId) {
+        if (StringUtil.isEmpty(userId)) {
+            return 0;
+        }
+        File bakDir = getBackupDirectoryFile();
+        if (bakDir == null || !bakDir.isDirectory()) {
+            return 0;
+        }
+        File[] files = bakDir.listFiles();
+        if (files == null) {
+            return 0;
+        }
+        String token = "_" + userId + "_";
+        int count = 0;
+        for (File f : files) {
+            if (f != null && f.isFile() && f.getName().contains(token) && deleteFile(f)) {
+                count++;
+            }
+        }
+        return count;
+    }
     
     public static File getTokenConfigFile() {
         return new File(MAIN_DIRECTORY_FILE, "token_config.json");

@@ -1,6 +1,7 @@
 package io.github.aw1y2z.sesame.data;
 
 import io.github.aw1y2z.sesame.util.FileUtil;
+import io.github.aw1y2z.sesame.util.Log;
 import io.github.aw1y2z.sesame.util.StringUtil;
 import io.github.aw1y2z.sesame.util.idMap.AnimalIdMap;
 import io.github.aw1y2z.sesame.util.idMap.AntDodoTaskListMap;
@@ -117,5 +118,49 @@ public final class ConfigPreload {
             return FileUtil.getDefaultConfigV2File();
         }
         return FileUtil.getConfigV2File(userId);
+    }
+
+    /** 供 Kotlin 层取「当前登录账号」：拿不到时返回空串（Kotlin 侧好判空，别返回 null） */
+    public static String currentUserId() {
+        String uid = UserIdMap.resolveCurrentUid();
+        return uid == null ? "" : uid;
+    }
+
+    /**
+     * 彻底删除某账号的配置：**账号目录 + 该账号的滚动备份 + 账号序号登记**。
+     *
+     * <p>为什么要一次清三处：旧实现只删 {@code config/<uid>/config_v2.json} 一个文件，
+     * 于是①目录下 friend/status/self 等文件残留、②accountIndex 里仍登记着该账号、
+     * ③{@link ConfigV2#load} 发现文件不存在会**立刻从默认账号复制一份重建** ——
+     * 三者叠加，用户看到的就是「删了又回来」。
+     *
+     * <p>🔴 两条硬保护（确保绝不误删别的账号）：
+     * <ol>
+     *   <li>{@code userId} 为空直接返回 —— 空值代表「默认账号」，其配置是**根目录**下的
+     *       {@code config_v2.json}，根本不存在"账号目录"，绝不能按目录删；</li>
+     *   <li>删除路径**全部由 {@code userId} 拼出**（{@code config/<uid>}、
+     *       {@code bak/config_v2_<uid>_*}），不会命中其它账号的文件。</li>
+     * </ol>
+     *
+     * <p>⚠️ 若该账号**仍是当前登录账号**，模块下次加载时会重新为它建一份默认配置
+     * （{@code ConfigV2.load} 的 else 分支），要真正删干净需先切换到其它账号。
+     *
+     * @return 是否删掉了配置目录（目录本就不存在时返回 false）
+     */
+    public static boolean purgeAccount(String userId) {
+        if (StringUtil.isEmpty(userId)) {
+            Log.record("彻底删除账号：userId 为空（默认账号），已忽略");
+            return false;
+        }
+        // 先取名再删 —— 删完配置后就取不到显示名了
+        String label = UserIdMap.getShowName(userId);
+        java.io.File dir = FileUtil.getAccountConfigDir(userId);
+        boolean removedConfig = dir != null && dir.exists() && FileUtil.deleteFile(dir);
+        int backups = FileUtil.deleteAccountBackups(userId);
+        UserIdMap.removeAccount(userId);
+        Log.record("彻底删除账号🈳" + label
+                + "#配置目录=" + (removedConfig ? "已删" : "本就不存在")
+                + "#滚动备份=" + backups + "个#序号登记=已清");
+        return removedConfig;
     }
 }
