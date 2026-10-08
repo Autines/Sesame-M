@@ -36,6 +36,10 @@
 # ---------- 5. Jackson 持久化状态：类名同样决定泛型签名能否保留（ConfigV2 的
 #            Map<String,ModelFields> 降级后 Jackson 只能造出 LinkedHashMap），
 #            属性名即 JSON 键，故类名 + 构造器 + 访问器都要保留 ----------
+#            ⚠️ 2026-10-08 补：漏了 data.task.ChildTaskArchive —— 它用
+#            @JsonCreator + @JsonProperty 构造器反序列化 childTasks.json，
+#            构造器被裁后报 "Cannot construct instance of `lp` (no Creators, ...)"，
+#            子任务存档整份读不回来（实测 18 次/天，含跨进程重启丢排程）。
 -keep class io.github.aw1y2z.sesame.util.Status,
            io.github.aw1y2z.sesame.util.Status$*,
            io.github.aw1y2z.sesame.util.Statistics,
@@ -45,6 +49,7 @@
            io.github.aw1y2z.sesame.data.AppConfig,
            io.github.aw1y2z.sesame.data.TokenConfig,
            io.github.aw1y2z.sesame.data.ModelFields,
+           io.github.aw1y2z.sesame.data.task.ChildTaskArchive,
            io.github.aw1y2z.sesame.entity.**,
            io.github.aw1y2z.sesame.hook.RpcRequest,
            io.github.aw1y2z.sesame.hook.ServerCommon {
