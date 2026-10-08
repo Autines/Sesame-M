@@ -22,6 +22,8 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField;
 import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField;
 import io.github.aw1y2z.sesame.data.modelFieldExt.SelectModelField;
 import io.github.aw1y2z.sesame.data.task.ModelTask;
+import io.github.aw1y2z.sesame.data.task.TaskAttemptPolicy;
+import io.github.aw1y2z.sesame.data.task.TaskAttemptPolicy.Outcome;
 import io.github.aw1y2z.sesame.entity.AlipayAntSportsTaskList;
 import io.github.aw1y2z.sesame.entity.WalkPathThemeMapList;
 import io.github.aw1y2z.sesame.entity.AlipayUser;
@@ -61,6 +63,7 @@ public class AntSports extends ModelTask {
     private IntegerModelField earliestSyncStepTime;
     private IntegerModelField latestExchangeTime;
     private IntegerModelField syncStepCount;
+    private IntegerModelField walkPaceMs;
     private BooleanModelField tiyubiz;
     private BooleanModelField club;
     private ChoiceModelField clubTrainItemType;
@@ -113,6 +116,9 @@ public class AntSports extends ModelTask {
         WalkPathThemeMapList.getList();
         modelFields.addField(PathThemeMapList = new ChoiceModelField("PathThemeMapList", "行走路线 | 路线主题", 0, WalkPathThemeMapList.nickNames).setDependsOn("walk"));
         modelFields.addField(walkMinimumCompleteCount = new BooleanModelField("walkMinimumCompleteCount", "全主题路线(选最少完成数) | 开启", false).setDependsOn("walk"));
+        modelFields.addField(walkPaceMs = new IntegerModelField("walkPaceMs", "行走路线 | 每步间隔(毫秒)", 50, 50, 2000)
+                .setDependsOn("walk")
+                .setDescription("每上报 1 步等待的毫秒数：默认 50ms≈20 步/秒（22000 步约 18 分钟），调大更保守；不限速的步频会被风控 1009 拦截，1009 后连只读查询都不可用"));
         //modelFields.addField(walkCustomPathIdList = new SelectModelField("walkCustomPathIdList", "行走路线 | 自定义路线列表", new LinkedHashSet<>(), WalkPath::getThemeListFromRpc, "请选择要行走的路线，选择多条则随机走其中一条"));
         modelFields.addField(sportsTasks = new BooleanModelField("sportsTasks", "运动任务", false));
         modelFields.addField(AutoAntSportsTaskList = new BooleanModelField("AutoAntSportsTaskList", "运动任务 | 自动黑名单", true).setDependsOn("sportsTasks"));
@@ -507,6 +513,15 @@ public class AntSports extends ModelTask {
     }
 
     private Boolean completeTask(String taskAction, String taskId, String taskName, String sceneCode) {
+        // 做不了的当天只试一次、临时故障留待下一轮（见 TaskAttemptPolicy）
+        Outcome outcome = TaskAttemptPolicy.handle("sports::" + taskId, taskName, null,
+                () -> attemptCompleteTask(taskAction, taskId, taskName, sceneCode), Log::other,
+                new TaskAttemptPolicy.Site("AntSportsTaskList", "运动任务", taskId, sceneCode));
+        return outcome == Outcome.DONE || outcome == Outcome.TRIGGERED;
+    }
+
+    /** 运动任务完成上报：不写任务黑名单；运动历史上从未出现 400000040，TaskAlternative 属休眠兜底 */
+    private Outcome attemptCompleteTask(String taskAction, String taskId, String taskName, String sceneCode) {
         try {
             JSONObject jo = new JSONObject(AntSportsRpcCall.completeTask(taskAction, taskId));
             //检查并标记黑名单任务
@@ -514,16 +529,20 @@ public class AntSports extends ModelTask {
             if (MessageUtil.checkSuccess(TAG, jo)) {
                 Log.other("运动任务🧾完成[得运动币:" + taskName + "]");
                 TimeUtil.sleep(1000);
-                return true;
+                return Outcome.DONE;
             }
-            // 另一种实现方案（见 TaskAlternative）；运动历史上从未出现 400000040，属休眠兜底
+            if (MessageUtil.isRetryable(jo) || MessageUtil.isServerBusy(jo)) {
+                return Outcome.RETRY;
+            }
+            // 不支持rpc调用（400000040）→ 由 TaskAttemptPolicy 代为伪申报
             if (TaskAlternative.hit(jo, sceneCode)) {
-                TaskAlternative.trigger(null, taskId, taskName, taskId, sceneCode, "运动任务", msg -> Log.other(msg));
+                return Outcome.UNSUPPORTED;
             }
+            return Outcome.UNABLE;
         } catch (Throwable t) {
             Log.err(TAG, "completeTask err:", t);
         }
-        return false;
+        return Outcome.RETRY;
     }
 
     private void signInCoinTask() {
@@ -683,6 +702,21 @@ public class AntSports extends ModelTask {
         return minPathId;
     }
 
+    /**
+     * 行走限速：每上报 1 步等待 {@code walkPaceMs} 毫秒，把步频摊到"像人/像跑步"的量级。
+     * <p>分片等待（每片最长 5s）以便任务作废时能及时退出（{@link TimeUtil#sleep} 在作废时抛 TaskCancelledException）。
+     * <p>默认 50ms/步 ≈ 20 步/秒；不限速时单次上报数百到上千步、间隔仅 1 秒，这种步频会被风控 1009 拦截，
+     * 而 1009 之后连只读查询也不可用，代价远超一天的步数收益。
+     */
+    private void paceWalk(int useStepCount) {
+        long wait = (long) walkPaceMs.getValue() * Math.max(useStepCount, 0);
+        while (wait > 0) {
+            long slice = Math.min(wait, 5000L);
+            TimeUtil.sleep(slice);
+            wait -= slice;
+        }
+    }
+
     private void walk(int syncStepCount) {
         String goingPathId = queryGoingPathId();
         do {
@@ -816,6 +850,8 @@ public class AntSports extends ModelTask {
             if (MessageUtil.checkSuccess(TAG, jo)) {
                 result = true;
                 Log.i("行走路线🚶🏻‍♂️行走[" + pathName + "]#前进了" + useStepCount + "步");
+                // 按上报步数限速：不限速时上层 walk() 循环只 sleep(1000)，该步频会被风控 1009 拦截
+                paceWalk(useStepCount);
                 jo = jo.getJSONObject("data");
                 if (jo.has("completeInfo")) {
                     Log.other("行走路线🚶🏻‍♂️完成[" + pathName + "]");
@@ -2310,8 +2346,17 @@ public class AntSports extends ModelTask {
 
             for (int i = 0; i < tasks.length(); i++) {
                 JSONObject task = tasks.getJSONObject(i);
-                TimeUtil.sleep(TimeUnit.SECONDS.toMillis(task.getInt("viewSec")));
-                if (receiveBrowseReward(task)) {
+                String taskName = task.optString("title", "浏览商品15s得健康能量");
+                long viewMillis = TimeUnit.SECONDS.toMillis(task.getInt("viewSec"));
+                // 行为伪造：真人要"看够 viewSec 秒"，这里按服务端给的时长等待后领奖（服务端只认客户端等待）。
+                // 交给 TaskAttemptPolicy 管：同一天同一任务只伪造一次，失败不再每轮白等 15 秒
+                Outcome outcome = TaskAttemptPolicy.handle("sports::browse::" + taskName, taskName, null,
+                        () -> {
+                            TimeUtil.sleep(viewMillis);
+                            return receiveBrowseReward(task) ? Outcome.DONE : Outcome.UNABLE;
+                        },
+                        Log::other, new TaskAttemptPolicy.Site("AntSportsTaskList", "运动任务", taskName, ""));
+                if (outcome == Outcome.DONE) {
                     hasNewTask = true;
                 }
             }

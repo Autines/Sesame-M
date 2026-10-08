@@ -68,6 +68,10 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 
 class MiuixSettingsActivity : MiuixBaseActivity() {
@@ -262,7 +266,8 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             // ============ 配置分组目录 ============
-            SesameSectionTitle(text = "配置分组")
+            // 上游 18bd889c：这个小节标题与页面标题「配置设置」重复，去掉；
+            // 容器仍用本地的 SesameCardGroup（本地组件集，不退回上游的 CardColumn）
             SesameCardGroup {
                 ModelGroup.values().forEach { g ->
                     if (Model.getGroupModelConfig(g).isNotEmpty()) {

@@ -529,6 +529,9 @@ public class MessageUtil {
         BLACKLIST_LIST_TARGETS.put("AntOceanFishBlackList", new String[]{"AntOcean", "神奇海洋去摸鱼任务"});
         BLACKLIST_LIST_TARGETS.put("AntOrchardTaskList", new String[]{"AntOrchard", "农场肥料任务"});
         BLACKLIST_LIST_TARGETS.put("AntOrchardDrawTaskList", new String[]{"AntOrchard", "抽抽乐任务"});
+        // 上游新增：网商银行福利金任务
+        // （本地的 OrchardChouChouLeTaskList 已废弃、类已删除，不再登记）
+        BLACKLIST_LIST_TARGETS.put("WelfareFundTaskList", new String[]{"AntMember", "福利金任务"});
         BLACKLIST_LIST_TARGETS.put("GoldenBeansTaskList", new String[]{"goldenbeans", "金豆夺宝任务"});
         BLACKLIST_LIST_TARGETS.put("AntStallTaskList", new String[]{"AntStall", "新村任务"});
         BLACKLIST_LIST_TARGETS.put("AntSportsTaskList", new String[]{"AntSports", "运动任务"});
@@ -732,6 +735,14 @@ public class MessageUtil {
     }
 
     /**
+     * 按列表字段名反查拉黑目标 {模块名, 列表中文名}；未登记的列表返回 null。
+     * <p>供模块外的通用逻辑（如 {@code TaskAttemptPolicy}）在判定"该任务做不了"时按规则记账。
+     */
+    public static String[] autoBlackListTarget(String listField) {
+        return BLACKLIST_LIST_TARGETS.get(listField);
+    }
+
+    /**
      * 各任务列表的白名单：键为 listTitle（字段名，与 {@link #BLACKLIST_LIST_TARGETS} 一致），
      * 值为不应被「自动拉黑」机制添加的任务标题集合。
      * <p>只用于拦截自动拉黑入口（{@link #MarkTaskBlackList}），<b>绝不删除用户手动加入黑名单的条目</b>。
@@ -836,6 +847,13 @@ public class MessageUtil {
                             || anyFieldContains(jo, "不是有效的入参")
                             || anyFieldContains(jo, "promiseActivityExtCheck");
                     break;
+                // 福利金任务：事件规则任务被 10000005「不允许完成事件规则任务」拒绝，文案里没有
+                // 「不支持rpc调用」关键字，须按错误码单独接入连续确认，不能靠 strongHit
+                case "WelfareFundTaskList":
+                    needConfirm = weakHit
+                            || "10000005".equals(jo.optString("errorCode", "").trim())
+                            || anyFieldContains(jo, "不允许完成事件规则任务");
+                    break;
 
                 // 金豆夺宝任务：错误码/文案（code 或 resultCode 或 errorCode + desc/resultDesc/memo）
                 // 明确不可恢复时可直接拉黑（可重试错误已在入口统一拦截）
@@ -899,6 +917,11 @@ public class MessageUtil {
                                          String taskTitle, String displayName) {
         ConfigV2 config = ConfigV2.INSTANCE;
         ModelFields TaskModelFields = config.getModelFieldsMap().get(ModelFieldsType);
+        if (TaskModelFields == null) {
+            // BLACKLIST_LIST_TARGETS 的第一项必须是模型类名，写错时这里要能看到原因而不是 NPE
+            Log.record("添加" + TaskListName + "黑名单失败：" + taskTitle + "#未找到模块[" + ModelFieldsType + "]");
+            return;
+        }
         SelectModelField TaskSelectModelField = (SelectModelField) TaskModelFields.get(listTitle);
         if (TaskSelectModelField == null) {
             Log.record("添加" + TaskListName + "黑名单失败：" + taskTitle);

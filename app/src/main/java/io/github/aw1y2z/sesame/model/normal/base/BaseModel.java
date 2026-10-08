@@ -127,12 +127,16 @@ public class BaseModel extends Model {
             AntOceanFishBlackListMap.clear();
             AntOrchardTaskListMap.clear();
             AntOrchardDrawTaskListMap.clear();
+            // 上游新增：网商银行福利金任务列表（本地已废弃的 OrchardChouChouLeTaskListMap
+            // 类已删除，不能保留上游那一行，否则编译不过）
+            WelfareFundTaskListMap.clear();
             AntStallTaskListMap.clear();
             AntSportsTaskListMap.clear();
             AntMemberTaskListMap.clear();
             // 这两个列表原先漏了 clear，切换账号后候选项会残留上一个账号的任务
             MonopolyTaskListMap.clear();
             GoldenBeansTaskListMap.clear();
+            GoldenBeansMallItemMap.clear();
             PathThemeMapListMap.clear();
         }
         catch (Exception e) {
