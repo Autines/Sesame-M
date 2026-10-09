@@ -9,6 +9,8 @@ import io.github.aw1y2z.sesame.entity.AlipayUser;
 import io.github.aw1y2z.sesame.data.ModelFields;
 import io.github.aw1y2z.sesame.data.ModelGroup;
 import io.github.aw1y2z.sesame.data.task.ModelTask;
+import io.github.aw1y2z.sesame.data.task.TaskAttemptPolicy;
+import io.github.aw1y2z.sesame.data.task.TaskAward;
 import io.github.aw1y2z.sesame.hook.ApplicationHook;
 import io.github.aw1y2z.sesame.hook.Toast;
 import io.github.aw1y2z.sesame.model.base.TaskCommon;
@@ -56,27 +58,6 @@ public class AntOrchard extends ModelTask {
     private static final ModelGroup GROUP = ModelGroup.ORCHARD;
     private String[] wuaList;
     private String userId;
-
-    // 任务黑名单：某些广告/外跳类任务后端不支持 finishTask 或需要前端行为配合
-    //groupId或者title
-    private static final Set<String> ORCHARD_TASK_BLACKLIST = new HashSet<>();
-
-    static {
-        ORCHARD_TASK_BLACKLIST.add("ORCHARD_NORMAL_KUAISHOU_MAX");  // 逛一逛快手
-        ORCHARD_TASK_BLACKLIST.add("ORCHARD_NORMAL_DIAOYU1");       // 钓鱼1次
-        ORCHARD_TASK_BLACKLIST.add("ZHUFANG3IN1");                  // 添加农场小组件并访问
-        ORCHARD_TASK_BLACKLIST.add("逛助农好货得肥料");                        // 逛助农好货得肥料
-        ORCHARD_TASK_BLACKLIST.add("12173");                        // 买好货
-        ORCHARD_TASK_BLACKLIST.add("70000");                        // 逛好物最高得1500肥料（XLIGHT）
-        ORCHARD_TASK_BLACKLIST.add("TOUTIAO");                      // 逛一逛今日头条
-        ORCHARD_TASK_BLACKLIST.add("ORCHARD_NORMAL_ZADAN10_3000");  // 农场对对碰
-        ORCHARD_TASK_BLACKLIST.add("TAOBAO2");                      // 逛一逛闲鱼
-        ORCHARD_TASK_BLACKLIST.add("ORCHARD_NORMAL_JIUYIHUISHOU_VISIT");  // 旧衣服回收
-        ORCHARD_TASK_BLACKLIST.add("ORCHARD_NORMAL_SHOUJISHUMAHUISHOU");  // 数码回收
-        ORCHARD_TASK_BLACKLIST.add("ORCHARD_NORMAL_AQ_XIAZAI");           // 下载AQ
-        ORCHARD_TASK_BLACKLIST.add("ORCHARD_NORMAL_WAIMAIMIANDAN");      // 逛一逛闪购外卖
-        ORCHARD_TASK_BLACKLIST.add("逛一逛签到领现金");      // 逛一逛签到领现金
-    }
 
     // 模型字段定义
     private IntegerModelField executeInterval;
@@ -234,6 +215,43 @@ public class AntOrchard extends ModelTask {
         }
     }
 
+    /** 列表状态探针：重拉农场抽抽乐任务列表，按 sceneCode+taskType 匹配该任务当前状态。 */
+    private static TaskAttemptPolicy.ProbeResult probeOrchardChouChouLeStatus(String activitySceneCode,
+                                                                             String taskSceneCode, String taskType) {
+        try {
+            JSONObject jo = new JSONObject(
+                    AntOrchardRpcCall.listTaskantorchard(activitySceneCode + "_TASK", "antorchard"));
+            if (!MessageUtil.checkSuccess(TAG, jo)) {
+                return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+            }
+            JSONArray taskInfoList = jo.optJSONArray("taskInfoList");
+            if (taskInfoList == null) {
+                return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+            }
+            for (int i = 0; i < taskInfoList.length(); i++) {
+                JSONObject taskInfo = taskInfoList.optJSONObject(i);
+                JSONObject taskBaseInfo = taskInfo == null ? null : taskInfo.optJSONObject("taskBaseInfo");
+                if (taskBaseInfo == null || !taskSceneCode.equals(taskBaseInfo.optString("sceneCode"))
+                        || !taskType.equals(taskBaseInfo.optString("taskType"))) {
+                    continue;
+                }
+                String status = taskBaseInfo.optString("taskStatus");
+                if ("FINISHED".equals(status)) {
+                    return TaskAttemptPolicy.ProbeResult.FINISHED;
+                }
+                if ("RECEIVED".equals(status)) {
+                    return TaskAttemptPolicy.ProbeResult.RECEIVED;
+                }
+                return TaskAttemptPolicy.ProbeResult.TODO;
+            }
+            // 任务已从列表消失：视为已完成且已领
+            return TaskAttemptPolicy.ProbeResult.GONE;
+        } catch (Throwable t) {
+            Log.err(TAG, "probeOrchardChouChouLeStatus err:", t);
+            return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+        }
+    }
+
     /**
      * 进入抽抽乐并同步抽奖次数（**不消耗**机会，只刷新余额）。
      *
@@ -334,9 +352,18 @@ public class AntOrchard extends ModelTask {
                             received++;
                             Log.farm("抽抽乐🎖️领取[" + title + "]奖励[" + awardCountForReceive + "]");
                         } else {
-                            // 与下面完成失败那处一致：把 title 作为展示名传下去，
-                            // 否则记录里只有英文 taskType，黑名单页会显示 CHOUCHOULE_GAME_xxx
-                            MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, title, aw);
+                            // 领奖收口：先按任务列表复核"已领到"，未确认才交自动拉黑（顺序由 TaskAward 固定）
+                            // ⚠️ 本地定制三处：① 列表名用 AntOrchardDrawTaskList（本地已把废弃的
+                            //    OrchardChouChouLeTaskList 并入它，后者连类都删了）；② key 用 taskType
+                            //    与探针口径一致；③ 带展示名 title —— 否则黑名单页只显示英文 taskType。
+                            // ⚠️ 探针传 null：上游的 probeOrchardChouChouLeStatus 需要「专场 sceneCode +
+                            //    任务 sceneCode,而本地已把拉列表重构成「直接拉全量、不按专场遍历」
+                            //    （见 enterAndSyncOrchardDraw），这两个值在此作用域不可得。
+                            //    传 null 时 TaskAward 会跳过复核、直接走拉黑 —— 与本地原有行为一致，不引入误判。
+                            TaskAward.confirmReceivedOrBlackList("农场抽抽乐🎖️",
+                                    null, taskType, title,
+                                    () -> MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, title, aw),
+                                    msg -> Log.farm(msg));
                         }
                     } else {
                         received++;
@@ -709,14 +736,10 @@ public class AntOrchard extends ModelTask {
             //初始化AntOrchardTaskListMap
             AntOrchardTaskListMap.load();
             // 1. 定义黑名单（需要添加的任务）和白名单（需要移除的任务）
-            // 注：浏览/外跳类不再预置拉黑，交由自动拉黑机制判定；
-            // 需真实完成或存在风险的（旧衣回收、数码回收、下载APP、快手、签到领现金）保留
-            Set<String> blackList = new HashSet<>();
-            blackList.add("完成1笔旧衣回收");
-            blackList.add("下载蚂蚁阿福看健康攻略");
-            blackList.add("完成1单手机数码回收");
-            blackList.add("逛一逛快手");
-            blackList.add("逛一逛签到领现金");
+            // 注：浏览/外跳类、下载APP类不再预置拉黑，交由自动拉黑机制判定；
+            // 需真实完成或存在风险的（旧衣回收、数码回收）保留
+            // 预置黑名单登记在 MessageUtil（单一真相，配置页据此标注"默认"）
+            Set<String> blackList = MessageUtil.presetBlackList("AntOrchard", "AntOrchardTaskList");
             // 可继续添加更多黑名单任务
 
             Set<String> whiteList = new HashSet<>();// 从黑名单中移除该任务
@@ -758,6 +781,10 @@ public class AntOrchard extends ModelTask {
                     MessageUtil.syncTaskBlackList("芭芭农场肥料任务", "AntOrchardTaskList", blackList, whiteList, AntOrchardTaskList);
                 }
             }
+            // 农场抽抽乐的黑名单初始化由本地的 orchardDrawTask() 流程承担
+            // （AntOrchardDrawTaskListMap.load + 逐条 add，见该方法注释）。
+            // 上游此处仍引用已在本地废弃的 OrchardChouChouLeTaskListMap —— 该类文件已删除，
+            // 保留会编译不过，故整段不采纳，取本地侧。
         } catch (Throwable t) {
             Log.err(TAG, "initAntOrchardTaskListMap err:", t);
         }
@@ -1238,6 +1265,16 @@ public class AntOrchard extends ModelTask {
                 }
 
                 if (TaskStatus.TODO.name().equals(taskStatus)) {
+                    // 底线：交易/支付类任务一律不申报、一次即**永久**拉黑。
+                    // taskId 与 groupId 都查（服务端两处键名不统一，实测 ORCHARD_NORMAL_CHONGZHI9 /
+                    // ORCHARD_NCLY_CHARGE1_XDDQ 这类"充值"任务正是靠这两个键识别的）。
+                    if (TaskAlternative.isTransactionTask(jo.optString("taskId"))
+                            || TaskAlternative.isTransactionTask(groupId)) {
+                        MessageUtil.MarkTaskBlackListPermanent("AntOrchard", "AntOrchardTaskList",
+                                "农场肥料任务", title);
+                        Log.farm("肥料任务⏭️交易/履约类[" + title + "]#不申报，已永久拉黑");
+                        continue;
+                    }
                     if (!finishOrchardTask(jo)) {
                         continue;
                     }
