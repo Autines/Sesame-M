@@ -632,10 +632,6 @@ public class AntForestV2 extends ModelTask {
 
                 waterFriendEnergy();
 
-                if (pkEnergy.getValue()) {
-                    collectPKEnergy();
-                }
-
                 //初始任务列表
                 if (!Status.hasFlagToday("BlackList::initAntForest")) {
                     initAntForestTaskListMap(AutoAntForestVitalityTaskList.getValue(), AutoAntForestHuntTaskList.getValue(), receiveForestTaskAward.getValue(), ForestHunt.getValue());
@@ -743,6 +739,15 @@ public class AntForestV2 extends ModelTask {
                 }
                 ForestEnergyInfo();
 
+            }
+
+            // PK 榜收取：本质也是「收能量」，不应被上面的「只收能量时间」跳过。
+            // 原先它写在那个 !IS_ENERGY_TIME 块内部，导致每天 07:00-07:31（能量成熟窗口）
+            // 完全不去收 PK 榜能量，要等到非能量时间才收 —— 很容易错过成熟期被偷。
+            // 它自己会查 PK 排行榜、不依赖块内变量（selfHomeObject 等），移出来是安全的。
+            // （2026-10-09 修）
+            if (pkEnergy.getValue()) {
+                collectPKEnergy();
             }
         } catch (Throwable t) {
             Log.err(TAG, "AntForestV2.run err:", t);
