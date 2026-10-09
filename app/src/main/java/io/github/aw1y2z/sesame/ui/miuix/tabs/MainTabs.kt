@@ -190,7 +190,8 @@ fun StatisticsTable(activity: MiuixMainActivity) {
 
 @Composable
 fun LogsTab(activity: MiuixMainActivity) {
-    // ── 分类记录：每个配置分组一个条目（森林/庄园/新村/农场/金豆/运动/会员/其他） ──
+    // ── 分类记录：每个配置分组一个条目
+    //    （森林/保护/物种/海洋/庄园/新村/农场/金豆/运动/会员/经营/AI答/其他） ──
     // 全部**平级**展示，每行都有自己的写入开关。
     // 其中 4 个分组（新村/农场 → farm.log，运动/会员 → other.log）与森林/庄园等
     // **共用日志文件**，但开关是按分组给的（见 AppConfig.isEnableStallLog 等，
@@ -250,10 +251,13 @@ fun LogsTab(activity: MiuixMainActivity) {
 }
 
 /**
- * 「分类记录」里的一行：分组名 + 该分组自己的**写入开关**（8 个分组平级，全都有开关）。
+ * 「分类记录」里的一行：分组名 + 该分组自己的**写入开关**（各分组平级）。
  *
  * `showArrow = false`：开关本身就是行尾控件（MD3 的常规），不再并排一个箭头 ——
  * 两者并存会让行尾显得拥挤；点整行仍是进日志查看页。
+ *
+ * 少数分组**没有独立开关**（如「AI答」：日志只有 Log.record、落在运行日志里），
+ * 这些行走 [SesameClickRow] 只保留查看入口 —— 原因见函数体注释。
  *
  * ⚠️ 关闭开关**只停写新的**，不删已有历史日志：同一个文件里还混着兄弟分组的日志
  * （farm.log 里同时有庄园/新村/农场），按文件清空会误伤邻家。
@@ -261,7 +265,20 @@ fun LogsTab(activity: MiuixMainActivity) {
  */
 @Composable
 private fun CategoryRow(activity: MiuixMainActivity, entry: LogType) {
-    val toggle = categoryToggleOf(entry) ?: return
+    val toggle = categoryToggleOf(entry)
+    if (toggle == null) {
+        // 没有分类文件、也就没有独立写入开关的分组（目前只有「AI答」：它只调 Log.record，
+        // 日志落在运行日志里）。这里刻意**不放开关** —— 它唯一能配的是「查看运行日志」，
+        // 而那一个开关管着所有模块的 record 日志，摆在这一行会让用户以为"只关 AI答"、
+        // 实际把整条运行日志停了。写入控制交给「系统记录 → 查看运行日志」。
+        SesameClickRow(
+            title = entry.displayName,
+            summary = "日志随「运行日志」写入",
+            icon = groupIconOf(entry.groupCode.orEmpty()),
+            onClick = { openLog(activity, entry) }
+        )
+        return
+    }
     var enabled by remember { mutableStateOf(toggle.getValue()) }
     SesameSwitchRow(
         title = entry.displayName,
@@ -283,7 +300,7 @@ private fun CategoryRow(activity: MiuixMainActivity, entry: LogType) {
 /**
  * 分类记录的开关描述子：读写 `AppConfig` 里对应分组的日志开关。
  *
- * 8 个分组各有一个，互不影响；写入侧由 `Log.allowCategoryFile` 按模块名路由到同一个字段。
+ * 每个分组各有一个，互不影响；写入侧由 `Log.allowCategoryFile` 按模块名路由到同一个字段。
  */
 private class CategoryToggle(
     private val getter: () -> Boolean,
@@ -334,6 +351,28 @@ private fun categoryToggleOf(logType: LogType): CategoryToggle? = when (logType)
         { AppConfig.INSTANCE.enableOtherLog ?: true },
         { AppConfig.INSTANCE.enableOtherLog = it }
     )
+    // ── 2026-10-09：上游 e811eb0f 拆出的 5 个新分组 ──
+    // ⚠️ 这几行必须与写入侧 Log.allowCategoryFile 的 case 一一对应，
+    //    否则会出现「拨了开关日志照写 / 关了还写」的分裂（见该方法的注释）。
+    LogType.PROTECT -> CategoryToggle(
+        { AppConfig.INSTANCE.isEnableProtectLog },
+        { AppConfig.INSTANCE.setEnableProtectLog(it) }
+    )
+    LogType.SPECIES -> CategoryToggle(
+        { AppConfig.INSTANCE.isEnableSpeciesLog },
+        { AppConfig.INSTANCE.setEnableSpeciesLog(it) }
+    )
+    LogType.OCEAN -> CategoryToggle(
+        { AppConfig.INSTANCE.isEnableOceanLog },
+        { AppConfig.INSTANCE.setEnableOceanLog(it) }
+    )
+    LogType.GREEN_FINANCE -> CategoryToggle(
+        { AppConfig.INSTANCE.isEnableGreenFinanceLog },
+        { AppConfig.INSTANCE.setEnableGreenFinanceLog(it) }
+    )
+    // 「AI答」故意不在这里：它的日志只有 Log.record（写运行日志），没有自己的分类文件，
+    // 也就没有独立开关可配。复用「运行日志」开关会误导（一拨就停掉整条运行日志），
+    // 故这一行在 CategoryRow 里走「无开关的纯入口」，写入控制交给「系统记录 → 查看运行日志」。
     else -> null
 }
 

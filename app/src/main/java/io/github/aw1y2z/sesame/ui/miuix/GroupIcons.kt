@@ -9,6 +9,11 @@ import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Forest
 import androidx.compose.material.icons.outlined.MonetizationOn
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Park
+import androidx.compose.material.icons.outlined.Pets
+import androidx.compose.material.icons.outlined.Quiz
+import androidx.compose.material.icons.outlined.Savings
+import androidx.compose.material.icons.outlined.Waves
 import androidx.compose.material.icons.outlined.Yard
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.aw1y2z.sesame.data.ModelGroup
@@ -31,5 +36,11 @@ internal fun groupIconOf(code: String): ImageVector = when (code) {
     ModelGroup.SPORTS.code -> Icons.Outlined.DirectionsRun
     ModelGroup.MEMBER.code -> Icons.Outlined.CardMembership
     ModelGroup.OTHER.code -> Icons.Outlined.MoreHoriz
+    // 2026-10-09：上游 e811eb0f 拆出的 5 个新分组
+    ModelGroup.PROTECT.code -> Icons.Outlined.Park
+    ModelGroup.SPECIES.code -> Icons.Outlined.Pets
+    ModelGroup.OCEAN.code -> Icons.Outlined.Waves
+    ModelGroup.GREEN_FINANCE.code -> Icons.Outlined.Savings
+    ModelGroup.ANSWER_AI.code -> Icons.Outlined.Quiz
     else -> Icons.Filled.Tune
 }

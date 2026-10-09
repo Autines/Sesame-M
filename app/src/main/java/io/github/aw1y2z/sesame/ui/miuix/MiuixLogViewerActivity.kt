@@ -86,7 +86,21 @@ enum class LogType(val displayName: String) {
     STALL("新村记录"),
     ORCHARD("农场记录"),
     SPORTS("运动记录"),
-    MEMBER("会员记录");
+    MEMBER("会员记录"),
+
+    // ── 2026-10-09 补：上游 e811eb0f 把 6 个模块从「森林」组拆到 5 个新分组 ——
+    //    神奇动物→物种、蚂蚁海洋→海洋、古树/保护生态→保护、绿色经营→经营、答题有奖→AI答。
+    //
+    // ⚠️ 为什么当初会漏：设置页的分组清单用 `ModelGroup.values()` **动态生成**、自动跟上；
+    //    而本页是**手写清单**，且这个文件是**本地专属**（上游根本没有 MiuixLogViewerActivity），
+    //    合并时既不冲突也不报错 → 静默漏掉。后果是这些模块的日志按模块名收口后
+    //    被森林/其他页过滤掉、又没有新入口页可去 → **在日志页里彻底看不到**。
+    //    以后再遇上游调整分组，必须同步这里（见 android-upstream-sync-merge 技能）。
+    PROTECT("保护记录"),
+    SPECIES("物种记录"),
+    OCEAN("海洋记录"),
+    GREEN_FINANCE("经营记录"),
+    ANSWER_AI("AI答记录");
 
     /** 每次访问都重新取当日文件,避免跨天后路径过期 */
     val file: File
@@ -138,6 +152,11 @@ enum class LogType(val displayName: String) {
             ORCHARD -> ModelGroup.ORCHARD.code
             SPORTS -> ModelGroup.SPORTS.code
             MEMBER -> ModelGroup.MEMBER.code
+            PROTECT -> ModelGroup.PROTECT.code
+            SPECIES -> ModelGroup.SPECIES.code
+            OCEAN -> ModelGroup.OCEAN.code
+            GREEN_FINANCE -> ModelGroup.GREEN_FINANCE.code
+            ANSWER_AI -> ModelGroup.ANSWER_AI.code
             else -> null
         }
 
@@ -165,7 +184,10 @@ enum class LogType(val displayName: String) {
          * 「共用文件」不再意味着「共用一个开关」，子项因此全部提为一级、与自己平级展示。
          */
         val displayOrder: List<LogType>
-            get() = listOf(FOREST, FARM, STALL, ORCHARD, GOLDENBEANS, SPORTS, MEMBER, OTHER)
+            get() = listOf(
+                FOREST, PROTECT, SPECIES, OCEAN, FARM, STALL, ORCHARD,
+                GOLDENBEANS, SPORTS, MEMBER, GREEN_FINANCE, ANSWER_AI, OTHER
+            )
 
         /**
          * 该分组对应的分类日志标签，用于**兜底归属**：

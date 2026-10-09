@@ -56,6 +56,23 @@ public class AppConfig {
     private Boolean enableOrchardLog = true;
     private Boolean enableSportsLog = true;
     private Boolean enableMemberLog = true;
+    /**
+     * 2026-10-09 补：上游 e811eb0f 把 6 个模块从「森林」组拆到 保护/物种/海洋/经营/AI答 五个新分组，
+     * 日志页的入口必须跟着拆（见 MiuixLogViewerActivity 的 LogType），开关也必须各自独立。
+     *
+     * <p>为什么不共用父项的开关：物种/古树/保护生态走 {@code Log.forest()}、海洋/绿色经营走
+     * {@code Log.other()}，若不拆开关，日志页上「物种记录」与「森林记录」两行就是同一个字段 ——
+     * 拨一个另一个跟着变（UI 状态还会不一致），且误关一次会连带停掉一整片日志。
+     *
+     * <p>「AI答」不在此列：它的日志只有 {@code Log.record}（写运行日志），
+     * 开关即 {@code enableViewRuntimeLog}。
+     *
+     * <p>null（旧配置里没有这些键）按 true 处理，见各自的 getter —— 否则升级瞬间这 4 个分组的日志会停写。
+     */
+    private Boolean enableProtectLog = true;
+    private Boolean enableSpeciesLog = true;
+    private Boolean enableOceanLog = true;
+    private Boolean enableGreenFinanceLog = true;
     private Boolean enableDebugLog = false;
     private Boolean enableViewErrorLog = true;
     private Boolean enableViewRuntimeLog = true;
@@ -176,6 +193,19 @@ public class AppConfig {
 
     public boolean isEnableMemberLog() { return enableMemberLog == null || enableMemberLog; }
     public void setEnableMemberLog(Boolean value) { enableMemberLog = value; }
+
+    // 2026-10-09：上游拆出的 4 个新分组的独立日志开关（null 回落 true，同上一批）
+    public boolean isEnableProtectLog() { return enableProtectLog == null || enableProtectLog; }
+    public void setEnableProtectLog(Boolean value) { enableProtectLog = value; }
+
+    public boolean isEnableSpeciesLog() { return enableSpeciesLog == null || enableSpeciesLog; }
+    public void setEnableSpeciesLog(Boolean value) { enableSpeciesLog = value; }
+
+    public boolean isEnableOceanLog() { return enableOceanLog == null || enableOceanLog; }
+    public void setEnableOceanLog(Boolean value) { enableOceanLog = value; }
+
+    public boolean isEnableGreenFinanceLog() { return enableGreenFinanceLog == null || enableGreenFinanceLog; }
+    public void setEnableGreenFinanceLog(Boolean value) { enableGreenFinanceLog = value; }
 
     public Boolean getEnableDebugLog() { return enableDebugLog; }
     public void setEnableDebugLog(Boolean value) { enableDebugLog = value; }

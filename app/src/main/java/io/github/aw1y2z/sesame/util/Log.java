@@ -360,7 +360,17 @@ public class Log {
 
     public static void forest(String s) {
         countModuleLog();
-        writeModuleLog(s, io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog(), forestLogger);
+        // 本地定制：forest.log 与 farm/other 一样，现在同时收多个分组
+        // （上游 e811eb0f 拆组后 = 森林 + 保护[古树/保护生态] + 物种[神奇动物]），
+        // 开关是按分组给的，故先查当前模块属于哪个分组再决定是否落盘（见 allowCategoryFile）。
+        //
+        // ⚠️ 无模块上下文时不能直接交给 allowCategoryFile —— 它的 null 分支返回 true（放行），
+        //    那会让这类日志绕过「森林日志」开关（旧行为是受它管的）。这里显式回落旧行为。
+        String module = getCurrentModule();
+        boolean allow = (module == null || module.isEmpty())
+                ? io.github.aw1y2z.sesame.data.AppConfig.INSTANCE.getEnableForestLog()
+                : allowCategoryFile(module);
+        writeModuleLog(s, allow, forestLogger);
     }
 
     public static void goldenBeans(String s) {
@@ -405,6 +415,19 @@ public class Log {
                 return config.getEnableForestLog();
             case "金豆夺宝":
                 return config.getEnableGoldenBeansLog();
+            // ── 2026-10-09：上游 e811eb0f 拆出的新分组，各用自己的开关 ──
+            // 不列在这里的话它们会落到 default，与「其他」共用一个开关（拨一个动两行）。
+            // 「古树」「保护生态」同属保护组，共用一个开关；「AI答」不在此列 ——
+            // 它的日志只有 Log.record（写运行日志），开关即 enableViewRuntimeLog。
+            case "古树":
+            case "保护":
+                return config.isEnableProtectLog();
+            case "物种":
+                return config.isEnableSpeciesLog();
+            case "海洋":
+                return config.isEnableOceanLog();
+            case "经营":
+                return config.isEnableGreenFinanceLog();
             default:
                 return config.getEnableOtherLog();
         }
