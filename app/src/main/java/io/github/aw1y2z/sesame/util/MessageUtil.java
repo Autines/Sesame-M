@@ -1827,13 +1827,20 @@ public class MessageUtil {
      * <p>{@code title} 是**拉黑当时的中文标题**，只服务界面显示（黑名单页优先用它）。
      * 追加在末尾且**可缺省**：老记录（4 段）照旧可解析，新记录是 5 段。
      *
-     * <h3>🔴 hits 的口径与钳制（2026-10-05）</h3>
+     * <h3>🔴 hits 的口径与钳制（2026-10-05 引入，2026-10-11 修正上界）</h3>
      * {@code hits} 表示「**连续多少天**失败」，由 {@link #MarkTaskBlackListConfirm} 保证每天最多 +1。
      * 但在此之前没有这道闸门，历史记录里存在**同一天累加到 2 甚至 3** 的脏数据 ——
      * 它们会让「连续 3 天」提前一天达成（旧值 2 明天再失败一次就拉黑）。
-     * 由于「同一天命中 2 次」在任何合法的新逻辑下都不可能产生，这里直接把
-     * {@code hits} 钳到 {@code [0, 1]}：既不误伤正常记录（新逻辑下 hits 恒为每天 1），
-     * 也一次性修掉全部历史脏数据，且**不需要额外的迁移标记**。
+     * 故读回时把 {@code hits} 钳到 {@code [0, BLACKLIST_CONFIRM_HITS - 1]}（= [0, 2]）：
+     * 把脏数据（≥3）压回 2，同时**保留正常累计**（1、2 必须原样保留）。
+     * <p>⚠️🔴 **2026-10-11 修正**：原实现钳到 {@code [0, 1]}，与判定
+     * {@code if (record.hits + 1 < BLACKLIST_CONFIRM_HITS)} **直接冲突** ——
+     * hits 恒 ≤ 1 ⇒ 该条件**恒成立** ⇒ 永远走"暂不拉黑"分支 ⇒
+     * **整条「连续确认」路径彻底失效**（实测：抽抽乐任务反复停在"第2/3天"、
+     * {@code AutoBlackList.json} 里 hits=2 堆积却永无 hits=3）。上界改为
+     * {@code BLACKLIST_CONFIRM_HITS - 1} 即修复。
+     * （"同一天重复命中"另有专门闸门拦 —— 见 {@link #MarkTaskBlackListConfirm} 里的同日去重，
+     * 不依赖这道钳制；两者叠加才导致钳到 1 之后再也涨不上去。）
      */
     private static final class AutoBlackRecord {
         private static final long PERMANENT = -1L;
@@ -1854,12 +1861,16 @@ public class MessageUtil {
             }
             try {
                 AutoBlackRecord record = new AutoBlackRecord();
-                // 观察期计数钳到 [0,1]：见类注释「hits 的口径与钳制」。
+                // 观察期计数上界 = BLACKLIST_CONFIRM_HITS - 1（见类注释「hits 的口径与钳制」）。
+                // ⚠️ 上界**不能是 1**：判定是 `hits + 1 < BLACKLIST_CONFIRM_HITS`，
+                // 钳到 1 会让该条件恒成立 → 永远"暂不拉黑" → 连续确认路径彻底失效（2026-10-11 修复）。
                 // ⚠️ 只钳观察期（blackDay == 0）；已拉黑/永久拉黑的记录 hits 不再被消费，原样保留。
                 int rawHits = Integer.parseInt(parts[0].trim());
                 record.lastDay = Long.parseLong(parts[1].trim());
                 record.blackDay = Long.parseLong(parts[2].trim());
-                record.hits = record.blackDay == 0L ? Math.max(0, Math.min(1, rawHits)) : rawHits;
+                record.hits = record.blackDay == 0L
+                        ? Math.max(0, Math.min(BLACKLIST_CONFIRM_HITS - 1, rawHits))
+                        : rawHits;
                 record.retry = parts.length > 3 ? Integer.parseInt(parts[3].trim()) : 0;
                 record.title = parts.length > 4 ? parts[4].trim() : null;
                 return record;
