@@ -277,10 +277,16 @@ public class MessageUtil {
      *   <li>业务级「不支持」：同一 tag 累计满 {@link #BIZ_UNSUPPORTED_LOG_LIMIT} 次后静默（本地定制）。</li>
      * </ol>
      * <p>本地定制：失败应答交由 {@link #recordFailure} 按模块 tag 归档到分类文件（上游 v1.2.8 引入）。
+     * <p>另：**400000040「不支持rpc调用」**只写运行日志、不记模块错误——它不代表任务做不了
+     * （调用方会转另一种实现方案）。
      */
     public static void printErrorMessage(String tag, JSONObject jo, String errorMessageField) {
         try {
             String memo = jo.getString(errorMessageField);
+            if (isUnsupportedRpc(jo)) {
+                Log.i(tag, jo.toString());
+                return;
+            }
             if (isServerBusy(jo)) {
                 if (!shouldLogServerBusy(tag)) {
                     return;

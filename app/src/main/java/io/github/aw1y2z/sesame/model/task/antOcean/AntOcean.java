@@ -1005,7 +1005,7 @@ public class AntOcean extends ModelTask {
                     Log.other("海洋任务🧾完成[" + taskTitle + "]#帮好友清理垃圾");
                     return true;
                 }
-                Log.other("海洋任务⚠️未完成[" + taskTitle + "]#taskType=" + taskType + "，本次没找到可清理的好友");
+                Log.other("海洋任务⚠️未完成[" + taskTitle + "]，本次没找到可清理的好友");
                 return false;
             }
             // 限时任务不自动完成（自动完成易触发风控），显式记录而不是静默跳过
@@ -1045,7 +1045,7 @@ public class AntOcean extends ModelTask {
             if (TaskAlternative.hit(jo, sceneCode)) {
                 return Outcome.UNSUPPORTED;
             }
-            Log.other("海洋任务⚠️未完成[" + taskTitle + "]#taskType=" + taskType + "，需在支付宝内手动完成");
+            Log.other("海洋任务⚠️未完成[" + taskTitle + "]，需在支付宝内手动完成");
             return Outcome.UNABLE;
         } catch (Throwable t) {
             Log.err(TAG, "finishOceanTask err:", t);
@@ -1338,7 +1338,6 @@ public class AntOcean extends ModelTask {
                 if("DEFAULT_AI_FISH".equals(fishStatus)){
                     drawFish();
                 }
-                //Log.record("海洋摸鱼🐟状态[" + fishStatus + "]等级" + level);
                 return true;
             }
         } catch (Throwable t) {
@@ -1379,7 +1378,6 @@ public class AntOcean extends ModelTask {
 
                 // 获取能量
                 long energy = jo.optLong("energy", 0);
-                //Log.record("海洋摸鱼🐟当前能量" + energy);
 
                 // 获取项目信息
                 JSONObject project = jo.optJSONObject("project");
@@ -1509,7 +1507,6 @@ public class AntOcean extends ModelTask {
                 return;
             }
 
-            //Log.other("海洋摸鱼🐟发现 " + taskInfoList.length() + " 个任务");
 
             for (int i = 0; i < taskInfoList.length(); i++) {
                 JSONObject taskInfo = taskInfoList.optJSONObject(i);
@@ -1675,10 +1672,8 @@ public class AntOcean extends ModelTask {
 
             int remainTouchChance = interactVO.optInt("remainTouchChance", 0);
 
-            //Log.other("海洋摸鱼🐟剩余摸鱼次数" + remainTouchChance);
 
             if (remainTouchChance <= 0) {
-                //Log.other("海洋摸鱼🐟今日摸鱼次数已用完");
                 return;
             }
 

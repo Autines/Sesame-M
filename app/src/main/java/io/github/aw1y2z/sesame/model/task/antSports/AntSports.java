@@ -248,10 +248,6 @@ public class AntSports extends ModelTask {
                 Status.flagToday("WalkPathTheme::init");
             }
 
-            //if (donateCharityCoinType.getValue() != DonateCharityCoinType.ZERO) {
-            //    queryProjectList();
-            //}
-
             //if (coinExchangeDoubleCard.getValue()) {
             //    coinExchangeItem("AMS2024032927086104");
            // }
@@ -266,7 +262,6 @@ public class AntSports extends ModelTask {
                 userTaskRightsReceive();
                 pathFeatureQuery();
                 //{"error":3000,"errorMessage":"系统出错，正在排查","errorNo":3,"errorTip":"3000"}
-                //participate();
             }
 
             if (club.getValue()) {
@@ -622,7 +617,6 @@ public class AntSports extends ModelTask {
                     subscribeConfig = data.getJSONObject("subscribeConfig");
                     Log.other("运动任务🧾[做任务得运动币:签到" + subscribeConfig.getString("subscribeExpireDays") + "天]奖励" + data.getString("toast") + "运动币");
                 } else {
-                    //                        Log.record("没有签到");
                 }
             } else {
                 // 服务端回读确认「今日已签到」：落当日标记，后续运行不再调签到接口
@@ -706,7 +700,6 @@ public class AntSports extends ModelTask {
                         JSONObject theme = themeList.optJSONObject(i);
                         String themeId = theme.optString("themeId");
                         String themeName = theme.optString("themeName");
-                        //Log.other("  " + themeName + "(" + themeId + ")");
                         JSONObject queryWorldMapJo = new JSONObject(AntSportsRpcCall.queryWorldMap(themeId));
                         if (MessageUtil.checkSuccess(TAG, queryWorldMapJo)) {
                             JSONObject queryWorldMapData = queryWorldMapJo.getJSONObject("data");
@@ -721,7 +714,6 @@ public class AntSports extends ModelTask {
                                 } else {
                                     name = null;
                                 }
-                                //Log.other("      " + name + "(" + cityId + ")");
                                 if (cityId.equals("000000") || cityId.equals("232700") || cityId.equals("620900") || cityId.equals("653100") || cityId.equals("710100")) {
                                     continue;
                                 }
@@ -743,16 +735,13 @@ public class AntSports extends ModelTask {
                                             MinCityPathName = queryCityPathName;
                                             minPathId = pathId;
                                             inited = true;
-                                            //Log.other("暂定走第一个主题[" + themeName + "]城市[" + name + "]线路[" + queryCityPathName + "](" + pathId + ")行走" + minCompleteCount + "次");
                                         }
-                                        //Log.other("        " + queryCityPathName + "(" + pathId + ")" + completeCount);
                                         if (completeCount < minCompleteCount && !locked) {
                                             minCompleteCount = completeCount;
                                             minThemeName = themeName;
                                             MinName = name;
                                             MinCityPathName = queryCityPathName;
                                             minPathId = pathId;
-                                            //Log.other("目前查询到主题[" + themeName + "]城市[" + name + "]线路[" + queryCityPathName + "](" + pathId + ")行走" + minCompleteCount + "次");
                                         }
                                     }
                                 }
@@ -2365,7 +2354,6 @@ public class AntSports extends ModelTask {
                             JSONObject logExtMap = task.getJSONObject("logExtMap");
                             //if (TaskHelper.checkTaskCompleted(logExtMap.getString("taskType"), logExtMap.getString("bizId"))) {
                             //
-                            //    TimeUtil.sleep(1000);
                             //    needRetry = true;
                             //}
                         }
