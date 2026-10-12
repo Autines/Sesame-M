@@ -75,6 +75,8 @@ public abstract class ModelTask extends Model {
             // 各模块跑在各自的线程池线程上，ThreadLocal 天然隔离，并发交错也不会串味。
             Log.setCurrentModule(task.getName());
             boolean threw = false;
+            // 上游 29cd63d3：本轮开始前先清「未解决任务」标记，收尾汇总据此给状态
+            Log.resetUnresolved();
             try {
                 task.run();
             } catch (TaskCancelledException e) {
@@ -106,10 +108,10 @@ public abstract class ModelTask extends Model {
                 RunGeneration.restore(prevGen);
                 // 清空本线程模块上下文，避免线程池复用把上一轮的 [模块名] 前缀串到后续日志
                 Log.setCurrentModule(null);
-                // 本轮模块未产生任何动作时，在运行日志中给出提示
-                if (Log.stopModuleLogCount() == 0) {
-                    Log.record(task.getName() + "✅本轮无操作");
-                }
+                // 上游 29cd63d3：模块收尾汇总 —— 按「是否还有未处理任务」与「本轮是否有动作」给状态
+                Log.moduleSummary(task.getName()
+                        + (Log.isUnresolved() ? "⏳仍有待完成或待领取任务"
+                        : (Log.stopModuleLogCount() == 0 ? "✅本轮无操作" : "✅本轮完成")));
                 Log.record("执行结束-" + task.getName());
                 Log.endModule(prevModule);
                 // 身份化移除：只删本线程登记的那条，避免旧代收尾误删新一代条目

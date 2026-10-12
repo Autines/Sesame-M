@@ -10,6 +10,7 @@ import io.github.aw1y2z.sesame.data.ModelFields;
 import io.github.aw1y2z.sesame.data.ModelGroup;
 import io.github.aw1y2z.sesame.data.task.ModelTask;
 import io.github.aw1y2z.sesame.data.task.TaskAttemptPolicy;
+import io.github.aw1y2z.sesame.data.task.TaskAttemptPolicy.Outcome;
 import io.github.aw1y2z.sesame.data.task.TaskAward;
 import io.github.aw1y2z.sesame.hook.ApplicationHook;
 import io.github.aw1y2z.sesame.hook.Toast;
@@ -225,38 +226,20 @@ public class AntOrchard extends ModelTask {
     /** 列表状态探针：重拉农场抽抽乐任务列表，按 sceneCode+taskType 匹配该任务当前状态。 */
     private static TaskAttemptPolicy.ProbeResult probeOrchardChouChouLeStatus(String activitySceneCode,
                                                                              String taskSceneCode, String taskType) {
-        try {
-            JSONObject jo = new JSONObject(
-                    AntOrchardRpcCall.listTaskantorchard(activitySceneCode + "_TASK", "antorchard"));
-            if (!MessageUtil.checkSuccess(TAG, jo)) {
-                return TaskAttemptPolicy.ProbeResult.UNKNOWN;
-            }
-            JSONArray taskInfoList = jo.optJSONArray("taskInfoList");
-            if (taskInfoList == null) {
-                return TaskAttemptPolicy.ProbeResult.UNKNOWN;
-            }
-            for (int i = 0; i < taskInfoList.length(); i++) {
-                JSONObject taskInfo = taskInfoList.optJSONObject(i);
-                JSONObject taskBaseInfo = taskInfo == null ? null : taskInfo.optJSONObject("taskBaseInfo");
-                if (taskBaseInfo == null || !taskSceneCode.equals(taskBaseInfo.optString("sceneCode"))
-                        || !taskType.equals(taskBaseInfo.optString("taskType"))) {
-                    continue;
-                }
-                String status = taskBaseInfo.optString("taskStatus");
-                if ("FINISHED".equals(status)) {
-                    return TaskAttemptPolicy.ProbeResult.FINISHED;
-                }
-                if ("RECEIVED".equals(status)) {
-                    return TaskAttemptPolicy.ProbeResult.RECEIVED;
-                }
-                return TaskAttemptPolicy.ProbeResult.TODO;
-            }
-            // 任务已从列表消失：视为已完成且已领
-            return TaskAttemptPolicy.ProbeResult.GONE;
-        } catch (Throwable t) {
-            Log.err(TAG, "probeOrchardChouChouLeStatus err:", t);
-            return TaskAttemptPolicy.ProbeResult.UNKNOWN;
-        }
+        // 状态在 taskBaseInfo 子对象内
+        return TaskAttemptPolicy.probeByList(TAG,
+                () -> AntOrchardRpcCall.listTaskantorchard(activitySceneCode + "_TASK", "antorchard"),
+                "taskInfoList",
+                jo -> MessageUtil.checkSuccess(TAG, jo),
+                taskInfo -> {
+                    JSONObject taskBaseInfo = taskInfo.optJSONObject("taskBaseInfo");
+                    if (taskBaseInfo == null
+                            || !taskSceneCode.equals(taskBaseInfo.optString("sceneCode"))
+                            || !taskType.equals(taskBaseInfo.optString("taskType"))) {
+                        return null;
+                    }
+                    return taskBaseInfo.optString("taskStatus");
+                });
     }
 
     /**
@@ -699,45 +682,305 @@ public class AntOrchard extends ModelTask {
     //乐园限定活动
     private void queryOptionalPlay() {
         try {
-            JSONObject jo = new JSONObject(AntOrchardRpcCall.queryOptionalPlay());
-            if (!MessageUtil.checkSuccess(TAG, jo)) {
-                return;
-            }
-            if (!jo.has("taskTriggerPlayInfo")) {
-                return;
-            }
-            JSONObject taskTriggerPlayInfo = jo.optJSONObject("taskTriggerPlayInfo");
-            if (!taskTriggerPlayInfo.has("taskList")) {
-                return;
-            }
-            JSONArray taskList = taskTriggerPlayInfo.getJSONArray("taskList");
-            for (int j = 0; j < taskList.length(); j++) {
-                JSONObject task = taskList.getJSONObject(j);
-                String taskType = task.getString("taskType");
-                String taskStatus = task.getString("taskStatus");
-                String sceneCode = task.getString("sceneCode");
-                int alreadyReceiveAwardCount = task.optInt("alreadyReceiveAwardCount");
-                int awardCount = task.optInt("awardCount");
-                int awardCountForReceive = awardCount - alreadyReceiveAwardCount;
-                JSONObject bizInfo = task.getJSONObject("bizInfo");
-                String title = bizInfo.getString("title");
-                if (taskStatus.equals("FINISHED")) {
-                    if (awardCountForReceive > 0) {
-                        JSONObject joReceived = new JSONObject(AntOrchardRpcCall.receiveTaskAwardantorchard(awardCountForReceive, sceneCode, taskType));
-                        if (MessageUtil.checkSuccess(TAG, joReceived)) {
-                            int incAwardCount = joReceived.optInt("incAwardCount");
-                            JSONObject taskConfigResultVO = joReceived.optJSONObject("taskConfigResultVO");
-                            String awardType = taskConfigResultVO.getString("awardType");
-                            Log.farm("农场乐园🎖️领取[" + title + "]奖励[" + awardType + "*" + incAwardCount + "]");
+            // 每个任务的每个阶段（taskType#rightsTimes）每轮最多动作一次：
+            // 同一阶段重复动作会白跑，但阶段推进（领取后 rightsTimes 递增）要允许再做，故去重键带序号与轮次
+            Set<String> attempted = new HashSet<>();
+            int round = 0;
+            while (round++ < MAX_OPTIONAL_PLAY_ROUNDS) {
+                JSONObject jo = new JSONObject(AntOrchardRpcCall.queryOptionalPlay());
+                if (!MessageUtil.checkSuccess(TAG, jo)) {
+                    return;
+                }
+                if (!jo.has("taskTriggerPlayInfo")) {
+                    return;
+                }
+                JSONObject taskTriggerPlayInfo = jo.optJSONObject("taskTriggerPlayInfo");
+                if (taskTriggerPlayInfo == null || !taskTriggerPlayInfo.has("taskList")) {
+                    return;
+                }
+                JSONArray taskList = taskTriggerPlayInfo.getJSONArray("taskList");
+                // 本轮是否还有新的动作，没有就收工
+                boolean progressed = false;
+
+                for (int j = 0; j < taskList.length(); j++) {
+                    JSONObject task = taskList.getJSONObject(j);
+                    String taskType = task.optString("taskType");
+                    String taskStatus = task.optString("taskStatus");
+                    String sceneCode = task.optString("sceneCode");
+                    String groupId = task.optString("groupId");
+                    int alreadyReceiveAwardCount = task.optInt("alreadyReceiveAwardCount");
+                    int awardCount = task.optInt("awardCount");
+                    int awardCountForReceive = awardCount - alreadyReceiveAwardCount;
+                    int rightsTimesLimit = task.optInt("rightsTimesLimit");
+                    int rightsTimes = task.optInt("rightsTimes");
+                    JSONObject bizInfo = task.optJSONObject("bizInfo");
+                    if (bizInfo == null) {
+                        continue;
+                    }
+                    String title = bizInfo.optString("title");
+                    // 去重键带轮次与阶段序号：同一轮内同阶段只动作一次（防重复请求），
+                    // 但下一轮可再试——服务端状态推进有延迟，跨轮仍可能落到新阶段
+                    String attemptKey = taskType + "#" + rightsTimes + "@" + round;
+
+                    // 黑名单任务跳过
+                    if (AntOrchardTaskList.getValue().contains(title)) {
+                        continue;
+                    }
+                    // 底线：交易/支付/充值类一律不申报、一次即永久拉黑，绝不伪造
+                    if (TaskAlternative.isTransactionTask(taskType)
+                            || TaskAlternative.isTransactionTask(groupId)
+                            || TaskAlternative.isTransactionTask(sceneCode)) {
+                        MessageUtil.MarkTaskBlackListPermanent("AntOrchard", "AntOrchardTaskList",
+                                "农场乐园限定任务", title);
+                        Log.farm("农场乐园⏭️交易/履约类[" + title + "]#不申报，已永久拉黑");
+                        continue;
+                    }
+
+                    // 已完成待领：领奖。已领满（awardCountForReceive<=0）不再重复请求
+                    if (TaskStatus.FINISHED.name().equals(taskStatus)) {
+                        if (awardCountForReceive > 0 && attempted.add(attemptKey + "-award")) {
+                            progressed = true;
+                            JSONObject joReceived = new JSONObject(AntOrchardRpcCall.receiveTaskAwardantorchard(
+                                    awardCountForReceive, sceneCode, taskType));
+                            if (MessageUtil.checkSuccess(TAG, joReceived)) {
+                                int incAwardCount = joReceived.optInt("incAwardCount");
+                                JSONObject taskConfigResultVO = joReceived.optJSONObject("taskConfigResultVO");
+                                String awardType = taskConfigResultVO == null
+                                        ? "能量" : taskConfigResultVO.optString("awardType", "能量");
+                                Log.farm("农场乐园🎖️领取[" + title + "]奖励[" + awardType + "*" + incAwardCount + "]");
+                            } else {
+                                // 领奖收口：先按任务列表复核"已领到"，未确认才交自动拉黑
+                                TaskAward.confirmReceivedOrBlackList("农场乐园🎖️",
+                                        k -> probeOrchardOptionalPlayStatus(sceneCode, taskType), taskType, title,
+                                        () -> MessageUtil.checkResultCodeAndMarkTaskBlackList(
+                                                "AntOrchardTaskList", title, joReceived),
+                                        msg -> Log.farm(msg));
+                            }
+                        }
+                        continue;
+                    }
+
+                    // 待完成 / 多阶段未满：上报完成
+                    if (TaskStatus.TODO.name().equals(taskStatus) || rightsTimes < rightsTimesLimit) {
+                        if (!attempted.add(attemptKey)) {
+                            continue;
+                        }
+                        String label = rightsTimesLimit > 1
+                                ? title + "(" + (rightsTimes + 1) + "/" + rightsTimesLimit + ")" : title;
+                        // 走统一策略：400000040 时由 TaskAttemptPolicy 代为 doFarmTask 伪申报，
+                        // 裸调 finishTask 会把 UNSUPPORTED 吞成 false，兜底永不触发
+                        Outcome outcome = TaskAttemptPolicy.handle(
+                                "orchard::optionalplay::" + sceneCode + "/" + taskType, label, null,
+                                () -> attemptFinishOptionalPlayTask(sceneCode, taskType, label), Log::farm,
+                                new TaskAttemptPolicy.Site("AntOrchardTaskList", "农场乐园限定任务",
+                                        taskType, sceneCode, TaskAlternative.DEFAULT_VERSION, null,
+                                        (k) -> probeOrchardOptionalPlayStatus(sceneCode, taskType),
+                                        (k) -> probeOrchardOptionalPlayExhausted(sceneCode, taskType)));
+                        // 被当日标记挡下（已试过）不算推进，否则每轮都白转一遍
+                        if (outcome != Outcome.TRIED_TODAY && outcome != Outcome.SKIPPED) {
+                            progressed = true;
                         }
                     }
                 }
+
+                // 一整轮里既无可领也无可做：可重复任务已打满次数，收工
+                if (!progressed) {
+                    break;
+                }
+                // 服务端状态推进有延迟，留出落态时间再重拉
+                TimeUtil.sleep(1500);
             }
         } catch (Throwable th) {
             Log.err(TAG, "queryOptionalPlay err:", th);
         }
     }
 
+    /**
+     * 乐园限定任务单轮最大重拉次数：正常由「本轮无任何可执行/可领取动作」提前收工，
+     * 此上限只防服务端恒回 TODO 时死循环。
+     */
+    private static final int MAX_OPTIONAL_PLAY_ROUNDS = 12;
+
+    /** 乐园限定任务完成上报：{@code com.alipay.antieptask.finishTaskantorchard}。 */
+    private Outcome attemptFinishOptionalPlayTask(String sceneCode, String taskType, String label) {
+        try {
+            JSONObject jo = new JSONObject(AntOrchardRpcCall.finishTaskantorchard(taskType, sceneCode));
+            MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardTaskList", label, jo);
+            TimeUtil.sleep(500);
+            if (MessageUtil.checkSuccess(TAG, jo)) {
+                Log.farm("农场乐园🧾️完成[" + label + "]");
+                return Outcome.DONE;
+            }
+            if (MessageUtil.isRetryable(jo) || MessageUtil.isServerBusy(jo)) {
+                return Outcome.RETRY;
+            }
+            // 400000040 不支持 rpc 调用 → 交回统一策略代为伪申报
+            if (TaskAlternative.hit(jo, sceneCode)) {
+                return Outcome.UNSUPPORTED;
+            }
+            return Outcome.UNABLE;
+        } catch (Throwable t) {
+            Log.err(TAG, "attemptFinishOptionalPlayTask err:", t);
+        }
+        return Outcome.RETRY;
+    }
+
+    /** 丰收礼包探针：重拉 {@code orchardIndex}，读 {@code spreadManureActivity.spreadManureStage.status}。 */
+    private TaskAttemptPolicy.ProbeResult probeSpreadManureStageStatus() {
+        try {
+            JSONObject jo = new JSONObject(AntOrchardRpcCall.orchardIndex());
+            if (!MessageUtil.checkResultCode(TAG, jo)) {
+                return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+            }
+            JSONObject activity = jo.optJSONObject("spreadManureActivity");
+            JSONObject stage = activity == null ? null : activity.optJSONObject("spreadManureStage");
+            if (stage == null) {
+                return TaskAttemptPolicy.ProbeResult.GONE;
+            }
+            // 仍为 FINISHED = 未领到；离开 FINISHED = 已领
+            return "FINISHED".equals(stage.optString("status"))
+                    ? TaskAttemptPolicy.ProbeResult.FINISHED : TaskAttemptPolicy.ProbeResult.RECEIVED;
+        } catch (Throwable t) {
+            Log.err(TAG, "probeSpreadManureStageStatus err:", t);
+            return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+        }
+    }
+
+    /** 肥料任务领奖探针：重拉 {@code orchardListTask}，按 taskId 找该任务状态。 */
+    private TaskAttemptPolicy.ProbeResult probeOrchardTaskAwardStatus(String taskId) {
+        return TaskAttemptPolicy.probeByList(TAG, AntOrchardRpcCall::orchardListTask, "taskList",
+                jo -> MessageUtil.checkResultCode(TAG, jo),
+                task -> taskId.equals(task.optString("taskId")) ? task.optString("taskStatus") : null);
+    }
+
+    /** 限时挑战广告子任务完成上报：{@code com.alipay.antiep.finishTask}。 */
+    private Outcome attemptLimitedTimeVisit(String sceneCode, String childTaskId) {
+        try {
+            JSONObject jo = new JSONObject(AntOrchardRpcCall.finishTask(sceneCode, childTaskId));
+            if (MessageUtil.checkSuccess(TAG, jo)) {
+                Log.farm("农场限时挑战🧾[完成广告任务]");
+                return Outcome.DONE;
+            }
+            if (MessageUtil.isRetryable(jo) || MessageUtil.isServerBusy(jo)) {
+                return Outcome.RETRY;
+            }
+            // 400000040 不支持 rpc 调用 → 交回统一策略代为伪申报
+            if (TaskAlternative.hit(jo, sceneCode)) {
+                return Outcome.UNSUPPORTED;
+            }
+            return Outcome.UNABLE;
+        } catch (Throwable t) {
+            Log.err(TAG, "attemptLimitedTimeVisit err:", t);
+        }
+        return Outcome.RETRY;
+    }
+
+    /** 限时挑战子任务探针：重拉 {@code orchardSyncIndex}，按 taskId 找该子任务状态。 */
+    private TaskAttemptPolicy.ProbeResult probeLimitedTimeChildStatus(String childTaskId) {
+        try {
+            JSONObject root = new JSONObject(AntOrchardRpcCall.orchardSyncIndex());
+            if (!MessageUtil.checkResultCode(TAG, root)) {
+                return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+            }
+            JSONObject challenge = root.optJSONObject("limitedTimeChallenge");
+            JSONArray taskArray = challenge == null ? null : challenge.optJSONArray("limitedTimeChallengeTasks");
+            if (taskArray == null) {
+                return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+            }
+            for (int i = 0; i < taskArray.length(); i++) {
+                JSONObject roundTask = taskArray.optJSONObject(i);
+                JSONArray childTasks = roundTask == null ? null : roundTask.optJSONArray("childTaskList");
+                for (int j = 0; childTasks != null && j < childTasks.length(); j++) {
+                    JSONObject child = childTasks.optJSONObject(j);
+                    if (child == null || !childTaskId.equals(child.optString("taskId"))) {
+                        continue;
+                    }
+                    String status = child.optString("taskStatus");
+                    if ("FINISHED".equals(status)) {
+                        return TaskAttemptPolicy.ProbeResult.FINISHED;
+                    }
+                    if ("RECEIVED".equals(status)) {
+                        return TaskAttemptPolicy.ProbeResult.RECEIVED;
+                    }
+                    return TaskAttemptPolicy.ProbeResult.TODO;
+                }
+            }
+            return TaskAttemptPolicy.ProbeResult.GONE;
+        } catch (Throwable t) {
+            Log.err(TAG, "probeLimitedTimeChildStatus err:", t);
+            return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+        }
+    }
+
+    /** 农场抽抽乐完成上报：两条腿互备（{@code finishTaskantorchard} → {@code finishTaskantorchardV2}）。 */
+    private Outcome attemptChouChouLeFinish(String taskSceneCode, String taskType, String taskName) {
+        try {
+            JSONObject jo = new JSONObject(AntOrchardRpcCall.finishTaskantorchard(taskType, taskSceneCode));
+            if (MessageUtil.checkSuccess(TAG, jo)) {
+                Log.farm("农场抽抽乐🧾完成[" + taskName + "]");
+                return Outcome.DONE;
+            }
+            // 互备腿：首选接口对本场景常回 400000040，换另一种调用格式再试
+            JSONObject alt = new JSONObject(AntOrchardRpcCall.finishTaskantorchardV2(
+                    taskType, taskSceneCode, UserIdMap.getCurrentUid()));
+            if (MessageUtil.checkSuccess(TAG, alt)) {
+                Log.farm("农场抽抽乐🧾完成[" + taskName + "]");
+                return Outcome.DONE;
+            }
+            MessageUtil.checkResultCodeAndMarkTaskBlackList("OrchardChouChouLeTaskList", taskName, alt);
+            if (MessageUtil.isRetryable(alt) || MessageUtil.isServerBusy(alt)) {
+                return Outcome.RETRY;
+            }
+            // 400000040 不支持 rpc 调用 → 交回统一策略代为伪申报
+            if (TaskAlternative.hit(alt, taskSceneCode)) {
+                return Outcome.UNSUPPORTED;
+            }
+            return Outcome.UNABLE;
+        } catch (Throwable t) {
+            Log.err(TAG, "attemptChouChouLeFinish err:", t);
+        }
+        return Outcome.RETRY;
+    }
+
+    /** 打满判据：重拉乐园限定任务列表，读该任务的已做次数是否达上限。 */
+    private boolean probeOrchardOptionalPlayExhausted(String sceneCode, String taskType) {
+        try {
+            JSONObject jo = new JSONObject(AntOrchardRpcCall.queryOptionalPlay());
+            if (!MessageUtil.checkSuccess(TAG, jo) || !jo.has("taskTriggerPlayInfo")) {
+                return false;
+            }
+            JSONObject playInfo = jo.optJSONObject("taskTriggerPlayInfo");
+            JSONArray taskList = playInfo == null ? null : playInfo.optJSONArray("taskList");
+            for (int i = 0; taskList != null && i < taskList.length(); i++) {
+                JSONObject task = taskList.optJSONObject(i);
+                if (task == null || !taskType.equals(task.optString("taskType"))
+                        || !sceneCode.equals(task.optString("sceneCode"))) {
+                    continue;
+                }
+                int limit = task.optInt("rightsTimesLimit", 0);
+                return limit > 0 && task.optInt("rightsTimes", 0) >= limit;
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "probeOrchardOptionalPlayExhausted err:", t);
+        }
+        return false;
+    }
+
+    /** 列表状态探针：重拉乐园限定任务列表，按 sceneCode+taskType 匹配该任务当前状态。 */
+    private TaskAttemptPolicy.ProbeResult probeOrchardOptionalPlayStatus(String sceneCode, String taskType) {
+        // 任务数组嵌在 taskTriggerPlayInfo 内层
+        return TaskAttemptPolicy.probeByNestedList(TAG, AntOrchardRpcCall::queryOptionalPlay,
+                jo -> MessageUtil.checkSuccess(TAG, jo),
+                jo -> {
+                    JSONObject playInfo = jo.optJSONObject("taskTriggerPlayInfo");
+                    return playInfo == null ? null : playInfo.optJSONArray("taskList");
+                },
+                task -> taskType.equals(task.optString("taskType")) && sceneCode.equals(task.optString("sceneCode"))
+                        ? task.optString("taskStatus") : null);
+    }
+
+    // ⚠️ 本地定制：签名保持 2 参数 —— 农场抽抽乐的黑名单初始化已由本地 orchardDrawTask() 承担；
+    // 上游多出的 orchardChouChouLe / AutoOrchardChouChouLeTaskList 在本地已无对应设置项。
     public static void initAntOrchardTaskListMap(boolean AutoAntOrchardTaskList, boolean orchardListTask) {
         try {
             //初始化AntOrchardTaskListMap
@@ -1196,11 +1439,20 @@ public class AntOrchard extends ModelTask {
                 JSONObject activity = jo.getJSONObject("spreadManureActivity");
                 JSONObject stage = activity.getJSONObject("spreadManureStage");
                 if ("FINISHED".equals(stage.getString("status"))) {
-                    String result = AntOrchardRpcCall.receiveTaskAward(stage.getString("sceneCode"), stage.getString("taskType"));
+                    String sceneCode = stage.getString("sceneCode");
+                    String taskType = stage.getString("taskType");
+                    String result = AntOrchardRpcCall.receiveTaskAward(sceneCode, taskType);
                     JSONObject awardJo = new JSONObject(result);
                     if (MessageUtil.checkResultCode(TAG, awardJo)) {
                         int awardCount = awardJo.getInt("incAwardCount");
                         Log.farm("芭芭农场🎁丰收礼包#获得[" + awardCount + "g肥料]");
+                    } else {
+                        // 领奖收口：先按列表复核"已领到"，未确认才交自动拉黑
+                        TaskAward.confirmReceivedOrBlackList("芭芭农场🎁丰收礼包",
+                                k -> probeSpreadManureStageStatus(), taskType, "丰收礼包",
+                                () -> MessageUtil.checkResultCodeAndMarkTaskBlackList(
+                                        "AntOrchardTaskList", "丰收礼包", awardJo),
+                                msg -> Log.farm(msg));
                     }
                 }
             }
@@ -1301,6 +1553,15 @@ public class AntOrchard extends ModelTask {
                         Log.farm("肥料任务⏭️交易/履约类[" + title + "]#不申报，已永久拉黑");
                         continue;
                     }
+                    // 本日已按列表核对通过：不再重复上报（省一轮全量重做）。
+                    // 但**多次任务**（rightsTimes < rightsTimesLimit）还有剩余次数时不能跳过——
+                    // 否则当天只做成第一次就卡住，永远推不满。
+                    int rightsTimes = jo.optInt("rightsTimes", 0);
+                    int rightsTimesLimit = jo.optInt("rightsTimesLimit", 0);
+                    boolean exhausted = rightsTimesLimit > 0 && rightsTimes >= rightsTimesLimit;
+                    if (exhausted && TaskAlternative.verifiedToday(jo.optString("taskId"))) {
+                        continue;
+                    }
                     if (!finishOrchardTask(jo)) {
                         continue;
                     }
@@ -1309,6 +1570,8 @@ public class AntOrchard extends ModelTask {
 
                 // 处理已完成的任务奖励（已在triggerTbTask中统一处理）
             }
+            // 本日已完成的不再重复上报：静默（每轮恒定的状态，模块汇总行已交代本轮跑过）。
+            // 首轮做成时的「肥料任务🧾完成[…]第N次」由 finishTaskTwice 打，那才是结果，照常保留。
             // 核对本轮 doFarmTask 的结果（响应不可信，以任务列表为准）
             verifyPendingTasksByList();
         } catch (Throwable t) {
@@ -1397,7 +1660,7 @@ public class AntOrchard extends ModelTask {
 
     /** 同轮核对配置（见 TaskAlternative.verify） */
     private static final TaskAlternative.VerifyConfig VERIFY_CFG = new TaskAlternative.VerifyConfig(
-            "AntOrchard", "AntOrchardTaskList", "农场肥料任务", "肥料任务", "🧾完成", true, msg -> Log.farm(msg));
+            "AntOrchard", "AntOrchardTaskList", "农场肥料任务", "肥料任务", true, msg -> Log.farm(msg));
 
     /**
      * 完成任务（两条腿）：先 {@code finishTask}，不成功再用 {@code taskId} 当 bizKey 走 doFarmTask
@@ -1413,10 +1676,14 @@ public class AntOrchard extends ModelTask {
             String finishCode = finishResponse.optString("code", "").trim();
             boolean expectedFail = MessageUtil.isUnsupportedRpc(finishResponse) || "400000001".equals(finishCode);
             if (!expectedFail && MessageUtil.checkSuccess(TAG, finishResponse)) {
+                // 首选直接成功：打当日标记，后续轮次不再重复上报（本轮连发在循环内照常进行）
+                TaskAlternative.markVerifiedToday(taskId);
                 return "finishTask";
             }
             JSONObject doFarmResponse = new JSONObject(AntOrchardRpcCall.doFarmTask(taskId, sceneCode));
             if (MessageUtil.checkSuccess(TAG, doFarmResponse)) {
+                // 兜底直接成功：同样打当日标记
+                TaskAlternative.markVerifiedToday(taskId);
                 return "doFarmTask";
             }
             // 400000040 可能已被另一种实现方案做成，不拉黑、记 pending 交给列表核对；其它错误码=真做不了，照常拉黑
@@ -1499,7 +1766,13 @@ public class AntOrchard extends ModelTask {
                     MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardTaskList", title, triggerJo);
                     if (MessageUtil.checkResultCode(TAG, triggerJo)) {
                         Log.farm("肥料领取🎖️任务[" + title + "]奖励#获得[" + awardCount + "g]");
+                        // 已领到：打当日标记，后续轮次不再逐个核对
+                        Status.flagToday("orchard::tbAward::" + taskId, userId);
                     } else {
+                        // 领奖收口：先按列表复核"已领到"，未确认才交自动拉黑
+                        TaskAward.confirmReceivedOrBlackList("肥料领取🎖️",
+                                k -> probeOrchardTaskAwardStatus(taskId), taskId, title, null,
+                                msg -> Log.farm(msg));
                     }
                 }
             } else {
@@ -1860,7 +2133,7 @@ public class AntOrchard extends ModelTask {
             boolean canCollect = jo.optBoolean("canCollect", false);
             boolean needManualReceive = jo.optBoolean("needManualReceive", false);
             if (manureCount > 0) {
-                Log.farm("回访奖励🎖️领取肥料*" + manureCount);
+                Log.farm("回访奖励🎖️[领取肥料*" + manureCount + "]");
             } else if (canCollect || needManualReceive) {
                 Log.i("回访奖励🎖️有待领奖励[canCollect=" + canCollect + "#需手动领取=" + needManualReceive + "]");
             }
@@ -1980,7 +2253,7 @@ public class AntOrchard extends ModelTask {
                                     return;
                                 }
                             }
-                            Log.farm("施肥任务成功完成 " + need + " 次");
+                            Log.farm("施肥任务🧾[完成]#" + need + "次");
                         }
                         break;
 
@@ -1988,9 +2261,9 @@ public class AntOrchard extends ModelTask {
                         String r = AntOrchardRpcCall.noticeGame("2021004165643274");
                         JSONObject jr = new JSONObject(r);
                         if (MessageUtil.checkResultCode(TAG, jr)) {
-                            Log.farm("游戏任务触发成功 → 子任务应当自动完成");
+                            Log.farm("游戏任务🧾[触发]#成功，子任务应当自动完成");
                         } else {
-                            Log.farm("游戏任务触发失败，返回: " + r);
+                            Log.farm("游戏任务⚠️[触发]#失败:" + r);
                         }
                         break;
 
@@ -2002,15 +2275,15 @@ public class AntOrchard extends ModelTask {
                             continue;
                         }
 
-                        // 对于VISIT类型的任务，尝试直接调用finishTask
-                        // 注意：这里childTaskId作为taskType参数传递
-                        String finishResult = AntOrchardRpcCall.finishTask(sceneCode, childTaskId);
-                        JSONObject finishJo = new JSONObject(finishResult);
-                        if (MessageUtil.checkResultCode(TAG, finishJo)) {
-                            Log.farm("广告任务触发成功");
-                        } else {
-                            Log.farm("广告任务触发失败: " + finishResult);
-                        }
+                        // 走统一策略：完成后按列表核对；400000040 时由策略代为伪申报
+                        // 注意：这里 childTaskId 作为 taskType 参数传递
+                        TaskAttemptPolicy.handle(
+                                "orchard::limitedtime::" + sceneCode + "/" + childTaskId,
+                                "农场限时挑战广告任务", null,
+                                () -> attemptLimitedTimeVisit(sceneCode, childTaskId), Log::farm,
+                                new TaskAttemptPolicy.Site("AntOrchardTaskList", "农场限时挑战",
+                                        childTaskId, sceneCode,
+                                        (k) -> probeLimitedTimeChildStatus(childTaskId)));
                         break;
 
                     default:
