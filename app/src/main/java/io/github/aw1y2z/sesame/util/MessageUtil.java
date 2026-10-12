@@ -750,8 +750,11 @@ public class MessageUtil {
     static {
         PRESET_BLACKLIST.put("AntFarm|AntFarmDoFarmTaskList", setOf(
                 "线上支付", "用花呗完成一笔支付"));
+        // 2026-10-12：「消耗饲料换机会」不再预置拉黑。它只是消耗饲料换抽奖机会，
+        // 属可自动化的兑换类（走 AntFarm 的 EXCHANGE 分支，见 doFarmDrawTask），
+        // 上游原先按「需消耗资源」一刀切拉黑，导致用户手动取消后每日 init 又被补回。
         PRESET_BLACKLIST.put("AntFarm|AntFarmDrawMachineTaskList", setOf(
-                "伸出援手，点亮希望", "消耗饲料换机会"));
+                "伸出援手，点亮希望"));
         PRESET_BLACKLIST.put("AntOrchard|AntOrchardTaskList", setOf(
                 "完成1笔旧衣回收", "完成1单手机数码回收"));
         // 芝麻粒：仍预置拉黑的只剩真实交易/履约类（下单/租赁/订酒店/回收/雇佣/付钱/查车）
@@ -1230,7 +1233,9 @@ public class MessageUtil {
                 "【限时】玩游戏得2次机会", "去乐园开宝箱得机会"});
         RELEASED_DEFAULTS.put("AntFarm|AntFarmDrawMachineTaskList", new String[]{
                 "【限时】玩游戏得新机会", "【限时】玩游戏得3次机会", "限时玩游戏得新机会",
-                "【限时】开宝箱得2次机会", "【限时】开宝箱得3次机会"});
+                "【限时】开宝箱得2次机会", "【限时】开宝箱得3次机会",
+                // 2026-10-12：从预置黑名单释放（存量设备上那条靠本次 sweep 摘掉）
+                "消耗饲料换机会"});
         RELEASED_DEFAULTS.put("AntOrchard|AntOrchardTaskList", new String[]{
                 "逛助农好货得肥料", "钓鱼1次", "逛一逛闪购外卖", "逛好物最高得1500肥料"});
         // 芝麻粒游戏/浏览/签到类：服务端对 taskFeedback 不校验是否真参与过，未报名任务一发即 success

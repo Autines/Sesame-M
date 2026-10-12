@@ -557,7 +557,9 @@ public class AntFarm extends ModelTask {
             //初始化AntFarmDrawMachineTaskListMap
             AntFarmDrawMachineTaskListMap.load();
             // 注：游戏/开宝箱类不再预置拉黑，交由自动拉黑机制判定；
-            // "伸出援手，点亮希望"（需真实捐赠）与"消耗饲料换机会"（需消耗资源）保留
+            // "伸出援手，点亮希望"（需真实捐赠）保留。
+            // 2026-10-12："消耗饲料换机会"已移出预置 —— 它只是消耗饲料换抽奖机会，
+            // 属可自动化的兑换类（EXCHANGE 分支），改由自动拉黑机制判定（首跑尝试，做不了才拉黑）。
             blackList = MessageUtil.presetBlackList("AntFarm", "AntFarmDrawMachineTaskList");
 
             whiteList = new HashSet<>();// 从黑名单中移除该任务
