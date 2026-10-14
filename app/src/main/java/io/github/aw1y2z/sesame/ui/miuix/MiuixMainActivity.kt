@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.R
 import io.github.aw1y2z.sesame.data.AppConfig
@@ -64,6 +65,7 @@ import io.github.aw1y2z.sesame.util.Log
 import io.github.aw1y2z.sesame.util.PermissionUtil
 import io.github.aw1y2z.sesame.util.Statistics
 import io.github.aw1y2z.sesame.util.ToastUtil
+import io.github.aw1y2z.sesame.util.idMap.UserIdMap
 import kotlinx.coroutines.flow.collect
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
@@ -83,8 +85,10 @@ class MiuixMainActivity : MiuixBaseActivity() {
 
     /** 可观察的激活状态：HomeTab 等页面订阅它，onServiceBind/广播更新时自动重组刷新 */
     var uiRunType by mutableStateOf<RunType>(RunType.DISABLE)
-    var statisticsText by mutableStateOf("")
     var hasPermission by mutableStateOf(false)
+
+    /** 统计分页：首项是「全部账号合计」，其后按账号；由 refreshStatistics() 重新读取 */
+    var statisticsPages by mutableStateOf<List<StatisticsPage>>(emptyList())
 
     /** 统计版本号：load / 广播刷新后自增,首页 StatisticsTable 订阅它来触发重组 */
     var statisticsVersion by mutableStateOf(0)
@@ -150,7 +154,9 @@ class MiuixMainActivity : MiuixBaseActivity() {
                 if (!market.isNullOrBlank()) {
                     return market
                 }
-            } catch (_: Throwable) {
+            } catch (e: Throwable) {
+                // 取不到市场名就退回内部型号：显示会退化（小米/红米尤其明显），异常要留痕
+                Log.debug("getDeviceDisplayName: " + e)
             }
             return Build.MODEL ?: Build.DEVICE ?: ""
         }
@@ -284,8 +290,13 @@ class MiuixMainActivity : MiuixBaseActivity() {
     fun refreshStatistics() {
         if (!hasPermission) return
         try {
-            Statistics.load()
-            Statistics.updateDay(Calendar.getInstance())
+            // 统计按账号分文件，界面一次读全部账号：首项是合计（默认显示），其后是各账号。
+            // 不再读单例：界面进程没有「当前账号」的概念，读单例只会拿到没有归属的那一份。
+            val perAccount = FileUtil.listAccountStatisticsUids().map { uid ->
+                StatisticsPage(uid, UserIdMap.getAccountLabel(uid) ?: uid, Statistics.readFrom(uid))
+            }
+            val total = Statistics.aggregate(perAccount.map { it.statistics })
+            statisticsPages = listOf(StatisticsPage(null, "全部账号合计", total)) + perAccount
             statisticsVersion++
         } catch (e: Exception) {
             Log.printStackTrace(e)
@@ -378,19 +389,6 @@ class MiuixMainActivity : MiuixBaseActivity() {
         packageManager.setComponentEnabledSetting(alias, newState, PackageManager.DONT_KILL_APP)
     }
 
-    fun exportStatistics(): Uri? {
-        return FileUtil.getExportedStatisticsFile()?.let { Uri.fromFile(it) }
-    }
-
-    fun importStatistics(): Boolean {
-        val src = FileUtil.getExportedStatisticsFile()
-        if (src != null && FileUtil.copyTo(src, FileUtil.getStatisticsFile())) {
-            statisticsText = Statistics.getText(this)
-            return true
-        }
-        return false
-    }
-
     override fun onPause() {
         super.onPause()
         // 离开前台即停止状态轮询，避免后台无谓广播与泄漏
@@ -402,7 +400,9 @@ class MiuixMainActivity : MiuixBaseActivity() {
         handler.removeCallbacks(titleRunner)
         try {
             unregisterReceiver(broadcastReceiver)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // 未注册成功时注销会抛，属正常路径，留痕即可
+            Log.debug("unregisterReceiver: " + e)
         }
     }
 }
@@ -654,6 +654,12 @@ fun MainScreen(activity: MiuixMainActivity) {
         }
     }
 }
+
+/**
+ * 首页统计分页的一项：`userId == null` 表示「全部账号合计」。
+ * <p>上游 6aad0eb9 起统计按账号隔离（`Statistics.readFrom(uid)`），首页按账号循环分页展示。
+ */
+data class StatisticsPage(val userId: String?, val label: String, val statistics: Statistics)
 
 /**
  * 二级页沿用的分组容器（Miuix 实现）。

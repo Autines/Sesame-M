@@ -23,8 +23,9 @@ public class UserIdMap {
     
     private static final Map<String, UserEntity> readOnlyUserMap = Collections.unmodifiableMap(userMap);
     
+    /** 当前账号；volatile：切号在别的线程发生，读方必须能看到最新值 */
     @Getter
-    private static String currentUid = null;
+    private static volatile String currentUid = null;
     
     /**
      * 解析「当前账号」；拿不到时回退到设备上配置目录里**唯一的/最近写过的**那个账号。

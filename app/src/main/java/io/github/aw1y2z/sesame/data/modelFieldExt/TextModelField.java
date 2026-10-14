@@ -1,6 +1,11 @@
 package io.github.aw1y2z.sesame.data.modelFieldExt;
 
 
+import android.content.Context;
+import android.view.View;
+
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.github.aw1y2z.sesame.data.ModelField;
 
 public class TextModelField extends ModelField<String> {

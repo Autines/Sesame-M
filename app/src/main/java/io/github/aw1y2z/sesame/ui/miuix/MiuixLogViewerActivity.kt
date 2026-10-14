@@ -287,7 +287,7 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
             .collect { browsingHistory = listState.canScrollBackward }
     }
 
-    // 定时刷新:文件无变化时只做一次轻量的 length/lastModified 比较,不读盘也不重组
+    // 定时刷新:只读新增的字节并增量解析;有新条目才更新列表与滚动标记
     LaunchedEffect(logType) {
         var stamp = logFilesStamp(sources)
         while (true) {

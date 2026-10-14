@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,9 @@ import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
 import io.github.aw1y2z.sesame.ui.theme.SesameListCard
 import io.github.aw1y2z.sesame.ui.theme.SesameText
+import io.github.aw1y2z.sesame.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
@@ -50,13 +54,25 @@ class MiuixFriendStatsActivity : MiuixBaseActivity() {
 
 @Composable
 fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
-    val friends = remember { FriendWatch.getList() }
+    // 好友表可能有几百条：读盘 + 逐条解析不能压在组合期的主线程上，否则首帧要等整份解析完
+    // 才出来（好友多时白屏 1s+）。null 表示还没读完，列表区据此显示"加载中"。
+    var friends by remember { mutableStateOf<List<FriendWatch>?>(null) }
     var query by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        friends = withContext(Dispatchers.IO) {
+            try {
+                FriendWatch.getList()
+            } catch (e: Throwable) {
+                // getList() 内部只兜了解析异常，读盘异常会穿透到这里；
+                // 不接住就会永远停在「加载中…」，比报错更难察觉
+                Log.printStackTrace(e)
+                emptyList()
+            }
+        }
+    }
 
-    val filtered = if (query.isBlank()) {
-        friends
-    } else {
-        friends.filter { it.name.contains(query, ignoreCase = true) }
+    val filtered = friends?.let { all ->
+        if (query.isBlank()) all else all.filter { it.name.contains(query, ignoreCase = true) }
     }
 
     SesameDetailScaffold(
@@ -99,7 +115,7 @@ fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
                 )
             }
 
-            if (filtered.isEmpty()) {
+            if (filtered == null || filtered.isEmpty()) {
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -107,8 +123,16 @@ fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
                     contentAlignment = Alignment.Center
                 ) {
                     SesameEmptyState(
-                        text = if (query.isNotEmpty()) "(无匹配好友)" else "(空)",
-                        hint = if (query.isNotEmpty()) "换个关键字试试" else "还没有记录到单向好友数据"
+                        text = when {
+                            filtered == null -> "加载中…"
+                            query.isNotEmpty() -> "(无匹配好友)"
+                            else -> "(空)"
+                        },
+                        hint = when {
+                            filtered == null -> "正在读取好友数据"
+                            query.isNotEmpty() -> "换个关键字试试"
+                            else -> "还没有记录到单向好友数据"
+                        }
                     )
                 }
             } else {

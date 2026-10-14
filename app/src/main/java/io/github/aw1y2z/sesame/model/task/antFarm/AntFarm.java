@@ -5,7 +5,6 @@ import android.os.Build;
 import io.github.aw1y2z.sesame.entity.AlipayAntFarmDoFarmTaskList;
 import io.github.aw1y2z.sesame.entity.AlipayAntFarmDrawMachineTaskList;
 import io.github.aw1y2z.sesame.entity.GameCenterMallItem;
-import io.github.aw1y2z.sesame.model.task.antForest.AntForestRpcCall;
 import io.github.aw1y2z.sesame.model.task.antGame.GameTask;
 import io.github.aw1y2z.sesame.util.idMap.AntFarmDoFarmTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.AntFarmDrawMachineTaskListMap;
@@ -73,10 +72,22 @@ public class AntFarm extends ModelTask {
     private static final String FLAG_COMPETITION_DONATE_TRIED = "antFarm::competitionDonateTried";
 
     /**
-     * 小鸡乐园「刷任务」当日跳过标记：上报后服务端未刷新出新的宝箱次数时当天不再刷，
-     * 避免每轮运行都重发一次任务上报。持久化 key，**不能改名**。
+     * 小鸡乐园「刷任务」当日已试次数（整型计数，取代原先的整日跳过标记）。
+     * <p>上报成功后支付宝侧是**异步**入账的，而回读只做一次且紧跟上报，很容易把已入账的
+     * 读成旧值；原先凭这一眼就打「今日不再刷」，当天剩下的宝箱额度就全丢了。
+     * <p>改为按次计数：用尽才当日不再试，次日标记随 status.json 跨天清空即恢复。
      */
-    private static final String FLAG_GAME_DRAW_TASK_SKIP = "antFarm::gameDrawTaskSkip";
+    private static final String FLAG_GAME_DRAW_TASK_TRY = "antFarm::gameDrawTaskTry";
+
+    /** 刷任务当日最多试几次：既容服务端异步落态，也避免每轮都重发一遍任务上报 */
+    private static final int MAX_GAME_DRAW_TASK_TRY = 5;
+
+    /**
+     * 小鸡乐园开箱+刷任务的同轮连做上限：上报拿到的新额度要当场开掉，
+     * 免得白等下一轮任务运行。正常由「当日额度已满」或「上报未推进」提前收手，
+     * 此上限只防服务端恒回可开时停不下来。
+     */
+    private static final int MAX_GAME_DRAW_ROUND = 6;
 
     /** 投喂被服务端拒绝的「饲料槽已满」结果码（按码判据，不认文案） */
     private static final String CODE_FEED_TROUGH_FULL = "331";
@@ -2822,6 +2833,9 @@ public class AntFarm extends ModelTask {
                         continue;
                     }
                     String title = bizInfo.optString("title");
+                    // 开箱类任务的完成条件是**服务端的开箱计数**，申报完成不会让计数推进
+                    // （申报只会被拒，伪申报被拒后又会被判"兜底未生效"拉黑），只能真去开箱
+                    String actionType = bizInfo.optString("actionType", "");
                     // 去重键带轮次与阶段序号：同一轮内同阶段只动作一次（防重复请求），
                     // 但下一轮可再试——服务端状态推进有延迟，跨轮仍可能落到新阶段
                     String attemptKey = taskType + "#" + rightsTimes + "@" + round;
@@ -2875,14 +2889,20 @@ public class AntFarm extends ModelTask {
                         // 当日标记把后续档位全挡下、任务停在第一档。单次任务保持原 key，语义不变。
                         String policyKey = "farm::optionalplay::" + sceneCode + "/" + taskType
                                 + (rightsTimesLimit > 1 ? "#" + rightsTimes : "");
-                        // 走统一策略：完成后按列表核对，400000040 时由策略代为伪申报
+                        // 走统一策略：完成后按列表核对，400000040 时由策略代为伪申报；
+                        // 开箱类任务的尝试动作 = 真去开箱（申报完成对它是无效动作）
+                        final boolean unwrapTask = isUnwrapAction(actionType);
+                        final String taskTitleForLog = title;
                         Outcome outcome = TaskAttemptPolicy.handle(
                                 policyKey, label, null,
-                                () -> attemptOptionalPlayTask(sceneCode, taskType, label), Log::farm,
+                                () -> unwrapTask
+                                        ? openFarmLeyuanBoxes(taskTitleForLog)
+                                        : attemptOptionalPlayTask(sceneCode, taskType, label), Log::farm,
                                 new TaskAttemptPolicy.Site("AntFarmDrawMachineTaskList", "庄园乐园限定任务",
                                         taskType, sceneCode, TaskAlternative.DEFAULT_VERSION, null,
                                         (k) -> probeOptionalPlayStatus(sceneCode, taskType),
-                                        (k) -> probeOptionalPlayExhausted(sceneCode, taskType)));
+                                        (k) -> probeOptionalPlayExhausted(sceneCode, taskType),
+                                        unwrapTask));
                         // 被当日标记挡下（已试过）不算推进，否则每轮都白转一遍
                         if (outcome != Outcome.TRIED_TODAY && outcome != Outcome.SKIPPED) {
                             progressed = true;
@@ -2900,6 +2920,50 @@ public class AntFarm extends ModelTask {
         } catch (Throwable th) {
             Log.err(TAG, "queryOptionalPlay err:", th);
         }
+    }
+
+    /** 开箱类动作（累计开箱 N 个）：完成条件在服务端的开箱计数上，只能真开箱，申报无效 */
+    private static boolean isUnwrapAction(String actionType) {
+        return "ACC_UNWRAP".equals(actionType) || "UNWRAP".equals(actionType);
+    }
+
+    /**
+     * 开箱类乐园任务的尝试动作：把当前可开宝箱逐个开掉（庄园侧接口一次开一个）。
+     * <p>没有可开的箱子时返回 UNABLE——任务没完成是"箱子不够"，不是接口不行，不能退到伪申报。
+     */
+    private Outcome openFarmLeyuanBoxes(String taskTitle) {
+        try {
+            JSONObject jo = new JSONObject(AntFarmRpcCall.queryGameList());
+            if (!jo.optBoolean("success")) {
+                return Outcome.RETRY;
+            }
+            JSONObject drawRights = jo.optJSONObject("gameCenterDrawRights");
+            if (drawRights == null) {
+                return Outcome.RETRY;
+            }
+            int quotaCanUse = drawRights.optInt("quotaCanUse");
+            if (quotaCanUse <= 0) {
+                Log.farm("小鸡乐园🎁[开宝箱]暂无可开宝箱#待攒够箱子");
+                return Outcome.UNABLE;
+            }
+            int opened = 0;
+            // 上限防服务端不扣额度时死循环；正常由 quotaCanUse 归零退出
+            for (int i = 0; i < MAX_GAME_DRAW_ROUND && quotaCanUse > 0; i++) {
+                JSONObject drawRes = new JSONObject(AntFarmRpcCall.drawGameCenterAward(1));
+                if (!drawRes.optBoolean("success")) {
+                    break;
+                }
+                JSONObject nextRights = drawRes.optJSONObject("gameCenterDrawRights");
+                quotaCanUse = nextRights != null ? nextRights.optInt("quotaCanUse") : (quotaCanUse - 1);
+                opened++;
+                TimeUtil.sleep(3000);
+            }
+            Log.farm("小鸡乐园🎁开宝箱×" + opened + "#用于[" + taskTitle + "]");
+            return opened > 0 ? Outcome.DONE : Outcome.UNABLE;
+        } catch (Throwable t) {
+            Log.err(TAG, "openFarmLeyuanBoxes err:", t);
+        }
+        return Outcome.RETRY;
     }
 
     /** 乐园限定任务完成上报：{@code com.alipay.antiep.finishTask}。 */
@@ -3680,84 +3744,103 @@ public class AntFarm extends ModelTask {
 
     private void drawGameCenterAward() {
         try {
-            JSONObject jo = new JSONObject(AntFarmRpcCall.queryGameList());
-            if (jo.optBoolean("success")) {
+            // 同轮内连做：上报新拿到的额度当场开掉，不必等下一轮任务运行
+            for (int round = 0; round < MAX_GAME_DRAW_ROUND; round++) {
+                JSONObject jo = new JSONObject(AntFarmRpcCall.queryGameList());
+                if (!jo.optBoolean("success")) {
+                    return;
+                }
                 // 2. 获取宝箱领取权限数据
                 JSONObject drawRights = jo.optJSONObject("gameCenterDrawRights");
-                if (drawRights != null) {
-                    // 3. 处理当前可开启的宝箱
-                    int quotaCanUse = drawRights.optInt("quotaCanUse"); // 当前可开宝箱数
-                    if (quotaCanUse > 0) {
-                        Log.record("当前有 " + quotaCanUse + " 个宝箱待开启...");
+                if (drawRights == null) {
+                    return;
+                }
+                // 3. 处理当前可开启的宝箱
+                int quotaCanUse = drawRights.optInt("quotaCanUse"); // 当前可开宝箱数
+                boolean openFailed = false;
+                if (quotaCanUse > 0) {
+                    Log.record("当前有 " + quotaCanUse + " 个宝箱待开启...");
 
-                        while (quotaCanUse > 0) {
-                            // 调用开启宝箱接口
-                            String drawResStr = AntFarmRpcCall.drawGameCenterAward(1);
-                            JSONObject drawRes = new JSONObject(drawResStr);
+                    while (quotaCanUse > 0) {
+                        // 调用开启宝箱接口
+                        String drawResStr = AntFarmRpcCall.drawGameCenterAward(1);
+                        JSONObject drawRes = new JSONObject(drawResStr);
 
-                            if (drawRes.optBoolean("success")) {
-                                // 更新剩余可开启次数
-                                JSONObject nextRights = drawRes.optJSONObject("gameCenterDrawRights");
-                                quotaCanUse = (nextRights != null) ? nextRights.optInt("quotaCanUse") : (quotaCanUse - 1);
+                        if (drawRes.optBoolean("success")) {
+                            // 更新剩余可开启次数
+                            JSONObject nextRights = drawRes.optJSONObject("gameCenterDrawRights");
+                            quotaCanUse = (nextRights != null) ? nextRights.optInt("quotaCanUse") : (quotaCanUse - 1);
 
-                                // 解析奖励列表并拼接日志
-                                JSONArray awardList = drawRes.optJSONArray("gameCenterDrawAwardList");
-                                List<String> awardStrings = new ArrayList<>();
-                                if (awardList != null) {
-                                    for (int i = 0; i < awardList.length(); i++) {
-                                        JSONObject item = awardList.getJSONObject(i);
-                                        String awardName = item.optString("awardName");
-                                        int awardCount = item.optInt("awardCount");
-                                        awardStrings.add(awardName + "*" + awardCount);
-                                    }
-                                }
-                                String awardLog = String.join(",", awardStrings);
-                                Log.farm("小鸡乐园🎁开宝箱得[" + awardLog + "]");
-                                TimeUtil.sleep(3000);
-                            } else {
-                                Log.farm("小鸡乐园开启宝箱失败: " + drawRes.optString("desc"));
-                                break; // 开启失败则退出循环
-                            }
-                        }
-                    }
-
-                    // 4. 处理剩余任务（判断是否需要刷任务）
-                    int limit = drawRights.optInt("quotaLimit"); // 每日上限
-                    int used = drawRights.optInt("usedQuota");   // 今日已开数量
-                    int remainToTask = limit - used;
-                    // 已开数量 < 上限 且 无可用次数 → 触发任务刷取
-                    if (remainToTask > 0 && quotaCanUse == 0) {
-                        if (!Status.hasFlagToday(FLAG_GAME_DRAW_TASK_SKIP)) {
-                            // 本地 quotaCanUse/used 已被本次开箱流程改过，不能当基线，先回读一次真实值
-                            JSONObject beforeJo = new JSONObject(AntFarmRpcCall.queryGameList());
-                            JSONObject beforeRights = beforeJo.optJSONObject("gameCenterDrawRights");
-                            int beforeUsed = beforeRights != null ? beforeRights.optInt("usedQuota", used) : used;
-                            int beforeQuota = beforeRights != null ? beforeRights.optInt("quotaCanUse", quotaCanUse) : quotaCanUse;
-                            // report 是异步线程，上报完立刻回读会读到旧状态，这里用同步版
-                            int successes = GameTask.Farm_ddply.reportSync("庄园", remainToTask);
-                            if (successes > 0) {
-                                JSONObject afterJo = new JSONObject(AntFarmRpcCall.queryGameList());
-                                JSONObject afterRights = afterJo.optJSONObject("gameCenterDrawRights");
-                                int afterQuota = afterRights != null ? afterRights.optInt("quotaCanUse", beforeQuota) : beforeQuota;
-                                int afterUsed = afterRights != null ? afterRights.optInt("usedQuota", beforeUsed) : beforeUsed;
-                                if (afterQuota > beforeQuota || afterUsed > beforeUsed) {
-                                    Log.record("小鸡乐园🎁刷任务生效#可用次数[" + beforeQuota + "→" + afterQuota + "]");
-                                } else {
-                                    Status.flagToday(FLAG_GAME_DRAW_TASK_SKIP);
-                                    Log.record("小鸡乐园🎁刷任务未推进#今日不再刷任务");
+                            // 解析奖励列表并拼接日志
+                            JSONArray awardList = drawRes.optJSONArray("gameCenterDrawAwardList");
+                            List<String> awardStrings = new ArrayList<>();
+                            if (awardList != null) {
+                                for (int i = 0; i < awardList.length(); i++) {
+                                    JSONObject item = awardList.getJSONObject(i);
+                                    String awardName = item.optString("awardName");
+                                    int awardCount = item.optInt("awardCount");
+                                    awardStrings.add(awardName + "*" + awardCount);
                                 }
                             }
+                            String awardLog = String.join(",", awardStrings);
+                            Log.farm("小鸡乐园🎁开宝箱得[" + awardLog + "]");
+                            TimeUtil.sleep(3000);
+                        } else {
+                            Log.farm("小鸡乐园开启宝箱失败: " + drawRes.optString("desc"));
+                            openFailed = true;
+                            break; // 开启失败则退出循环
                         }
-                    } else if (remainToTask <= 0) {
-                        Log.record("今日 " + limit + " 个金蛋任务已全部满额");
                     }
                 }
+                if (openFailed) {
+                    return;
+                }
 
-                // 异步任务完成
+                // 4. 处理剩余任务（判断是否需要刷任务）
+                int limit = drawRights.optInt("quotaLimit"); // 每日上限
+                int used = drawRights.optInt("usedQuota");   // 今日已开数量
+                int remainToTask = limit - used;
+                if (remainToTask <= 0) {
+                    Log.record("今日 " + limit + " 个金蛋任务已全部满额");
+                    return;
+                }
+                if (quotaCanUse > 0) {
+                    // 开箱中途退出（次数没归零）：服务端可能已入账新额度，重新读一遍再决定
+                    continue;
+                }
+                if (Status.getIntFlagToday(FLAG_GAME_DRAW_TASK_TRY) >= MAX_GAME_DRAW_TASK_TRY) {
+                    return;
+                }
+                // 本地 quotaCanUse/used 已被本次开箱流程改过，不能当基线，先回读一次真实值
+                JSONObject beforeJo = new JSONObject(AntFarmRpcCall.queryGameList());
+                JSONObject beforeRights = beforeJo.optJSONObject("gameCenterDrawRights");
+                int beforeUsed = beforeRights != null ? beforeRights.optInt("usedQuota", used) : used;
+                int beforeQuota = beforeRights != null ? beforeRights.optInt("quotaCanUse", quotaCanUse) : quotaCanUse;
+                // report 是异步线程，上报完立刻回读会读到旧状态，这里用同步版
+                int successes = GameTask.Farm_ddply.reportSync("庄园", remainToTask);
+                if (successes <= 0) {
+                    return;
+                }
+                // 支付宝侧入账仍是异步的：等一会儿再回读，否则会把已入账的读成旧值
                 TimeUtil.sleep(3000);
-                
-                
-                /*
+                JSONObject afterJo = new JSONObject(AntFarmRpcCall.queryGameList());
+                JSONObject afterRights = afterJo.optJSONObject("gameCenterDrawRights");
+                int afterQuota = afterRights != null ? afterRights.optInt("quotaCanUse", beforeQuota) : beforeQuota;
+                int afterUsed = afterRights != null ? afterRights.optInt("usedQuota", beforeUsed) : beforeUsed;
+                if (afterQuota <= beforeQuota && afterUsed <= beforeUsed) {
+                    Status.setIntFlagToday(FLAG_GAME_DRAW_TASK_TRY,
+                            Status.getIntFlagToday(FLAG_GAME_DRAW_TASK_TRY) + 1);
+                    Log.record("小鸡乐园🎁刷任务未推进#稍后重试[第"
+                            + Status.getIntFlagToday(FLAG_GAME_DRAW_TASK_TRY) + "/"
+                            + MAX_GAME_DRAW_TASK_TRY + "次]");
+                    return;
+                }
+                // 有推进就重置计数，回到循环开头把新额度开掉
+                Status.setIntFlagToday(FLAG_GAME_DRAW_TASK_TRY, 0);
+                Log.record("小鸡乐园🎁刷任务生效#可用次数[" + beforeQuota + "→" + afterQuota + "]");
+            }
+
+            /*
                 JSONObject gameDrawAwardActivity = jo.getJSONObject("gameDrawAwardActivity");
                 int canUseTimes = gameDrawAwardActivity.getInt("canUseTimes");
                 while (canUseTimes > 0) {
@@ -3786,10 +3869,6 @@ public class AntFarm extends ModelTask {
                         TimeUtil.sleep(3000);
                     }
                 }*/
-            } else {
-                Log.i(TAG, "queryGameList falsed result: " + jo.toString());
-            }
-
         } catch (Throwable t) {
             Log.err(TAG, "drawGameCenterAward err:", t);
         }
@@ -4180,9 +4259,9 @@ public class AntFarm extends ModelTask {
 
                 JSONArray taskTips = taskTipsRes.optJSONArray("familyTaskTips");
                 if (taskTips == null || taskTips.length() == 0) {
-                    Log.record("家庭任务🏠道早安#远端无 GREETING 任务，可能今日已完成，跳过");
-
-                    Status.flagToday("antFarm::deliverMsgSend");
+                    // 列表为空既可能是今日已完成，也可能是响应缺项——不能凭猜就打整日标记，
+                    // 否则那天真来任务时也不再发送。留给下一轮重试。
+                    Log.record("家庭任务🏠道早安#远端未取到任务列表#稍后重试");
                     return;
                 }
 
@@ -4198,8 +4277,9 @@ public class AntFarm extends ModelTask {
                 }
 
                 if (!hasGreetingTodo) {
-                    Log.record("家庭任务🏠道早安#GREETING 任务非 TODO 状态，跳过");
-                    Status.flagToday("antFarm::deliverMsgSend");
+                    // 「非 TODO」不等于「已完成」——也可能是今天还没生成这项。
+                    // 真正发成功的那条路径才会打当日标记，这里只跳过本轮，留给下一轮再看。
+                    Log.record("家庭任务🏠道早安#GREETING 任务非 TODO 状态，本轮跳过");
                     return;
                 }
             } catch (Throwable e) {
