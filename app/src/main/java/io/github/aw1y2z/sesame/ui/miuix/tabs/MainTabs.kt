@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Settings
@@ -126,21 +128,27 @@ fun HomeTab(activity: MiuixMainActivity) {
 
 @Composable
 fun StatisticsTable(activity: MiuixMainActivity) {
-    // 左右补 16dp：卡片( CardColumn )自带的 16dp 之外，再补上行内边距，
-    // 让表格文字与「模块状态」那些行的标签左边界对齐（都是 48dp），否则整块会贴着卡片边缘更靠左
-
-    // 订阅 statisticsVersion：load / 广播刷新后自增,触发本表重组读取最新单例数据
+    // 订阅 statisticsVersion：load / 广播刷新后自增，触发本表重组读取最新数据。
+    // ⚠️ 数据源必须是 activity.statisticsPages（按账号从各自文件读出），**不能再读 Statistics 静态单例** ——
+    // 上游 6aad0eb9 起统计按账号隔离，静态单例只对应「本进程启动那一刻加载的那一份」，
+    // 界面若仍读单例，刷新时拿到的永远是旧值（表现为「数据统计一直是 0 / 不更新」）。
     activity.statisticsVersion
-    val rows = listOf(
-        "收" to listOf(DataType.COLLECTED),
-        "帮" to listOf(DataType.HELPED),
-        "浇" to listOf(DataType.WATERED),
-        "被水" to listOf(DataType.WATEREDCOUNT),
-        "浇水" to listOf(DataType.WATERINGCOUNT)
-    )
-    val columns = listOf(TimeType.DAY, TimeType.MONTH, TimeType.YEAR)
-    val headers = listOf("今日", "本月", "今年")
-
+    val pages = activity.statisticsPages
+    if (pages.isEmpty()) {
+        return
+    }
+    // 左右滑动切换账号，默认停在首项（全部账号合计）。
+    // 循环滑动：页数取超大值、真实下标取模，滑到最后一页继续滑就回到第一页（两个方向都能一直滑）。
+    val initialPage = remember(pages.size) {
+        val base = Int.MAX_VALUE / 2
+        base - base % pages.size
+    }
+    val pagerState = rememberPagerState(initialPage = initialPage) { Int.MAX_VALUE }
+    // 每次进入首页都回到首项（合计）：pagerState 自身会记住上次页码，不归位就不算「默认显示合计」
+    LaunchedEffect(pages.size) {
+        pagerState.scrollToPage(initialPage)
+    }
+    val current = pagerState.currentPage % pages.size
     Column(
         Modifier
             .fillMaxWidth()
@@ -151,8 +159,41 @@ fun StatisticsTable(activity: MiuixMainActivity) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 4.dp)
+                .padding(top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            SesameText(text = pages[current].label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.weight(1f))
+            if (pages.size > 1) {
+                // 明示这一块可以左右滑动，否则用户不知道还有别的账号
+                SesameText(
+                    text = "${current + 1}/${pages.size}  左右滑动",
+                    fontSize = 12.sp,
+                    color = sesameOnSurfaceVariant()
+                )
+            }
+        }
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth()) { page ->
+            StatisticsGrid(pages[page % pages.size].statistics)
+        }
+    }
+}
+
+/** 单个账号（或「全部账号合计」）的统计表：行=项目、列=今日/本月/今年 */
+@Composable
+private fun StatisticsGrid(statistics: Statistics) {
+    val rows = listOf(
+        "收" to listOf(DataType.COLLECTED),
+        "帮" to listOf(DataType.HELPED),
+        "浇" to listOf(DataType.WATERED),
+        "被水" to listOf(DataType.WATEREDCOUNT),
+        "浇水" to listOf(DataType.WATERINGCOUNT)
+    )
+    val columns = listOf(TimeType.DAY, TimeType.MONTH, TimeType.YEAR)
+    val headers = listOf("今日", "本月", "今年")
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth()) {
             Box(Modifier.weight(1f))
             headers.forEach { header ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -178,7 +219,7 @@ fun StatisticsTable(activity: MiuixMainActivity) {
                     SesameText(text = label, fontSize = 14.sp)
                 }
                 columns.forEach { timeType ->
-                    val value = types.sumOf { Statistics.getData(timeType, it) }
+                    val value = types.sumOf { statistics.dataOf(timeType, it) }
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         SesameText(text = value.toString(), fontSize = 14.sp)
                     }
