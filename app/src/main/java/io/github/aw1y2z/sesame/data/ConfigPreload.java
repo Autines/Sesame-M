@@ -1,6 +1,7 @@
 package io.github.aw1y2z.sesame.data;
 
 import io.github.aw1y2z.sesame.entity.AlipayGoldenBeansMallItem;
+import io.github.aw1y2z.sesame.entity.AlipaySesameAlchemyTaskList;
 import io.github.aw1y2z.sesame.entity.AlipayGoldTicketTaskList;
 import io.github.aw1y2z.sesame.entity.AlipayWelfareFundTaskList;
 import io.github.aw1y2z.sesame.util.FileUtil;
@@ -29,6 +30,7 @@ import io.github.aw1y2z.sesame.util.idMap.GoldenBeansMallItemMap;
 import io.github.aw1y2z.sesame.util.idMap.MarathonIdMap;
 import io.github.aw1y2z.sesame.util.idMap.MemberBenefitIdMap;
 import io.github.aw1y2z.sesame.util.idMap.MemberCreditSesameTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.SesameAlchemyTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.MonopolyTaskListMap;
 import io.github.aw1y2z.sesame.util.idMap.NewAncientTreeIdMap;
 import io.github.aw1y2z.sesame.util.idMap.PathThemeMapListMap;
@@ -72,6 +74,10 @@ public final class ConfigPreload {
         rpcRequestMap.load();
         ForestHuntIdMap.load();
         MemberCreditSesameTaskListMap.load();
+        // 芝麻炼金 | 黑名单列表：此前漏登记，界面进程从不 load 该 idMap → 候选列表恒为空
+        SesameAlchemyTaskListMap.load();
+        // 候选实体的静态缓存是注入进程写的，App 进程必须清一次才会重建（同 AlipayGoldenBeansMallItem）
+        AlipaySesameAlchemyTaskList.clear();
         AntForestVitalityTaskListMap.load();
         AntForestHuntTaskListMap.load();
         AntFarmDoFarmTaskListMap.load();
