@@ -769,13 +769,21 @@ public class AntOrchard extends ModelTask {
                                 + (rightsTimesLimit > 1 ? "#" + rightsTimes : "");
                         // 走统一策略：400000040 时由 TaskAttemptPolicy 代为 doFarmTask 伪申报，
                         // 裸调 finishTask 会把 UNSUPPORTED 吞成 false，兜底永不触发
+                        TaskAttemptPolicy.Site playSite = new TaskAttemptPolicy.Site(
+                                "AntOrchardTaskList", "农场乐园限定任务",
+                                taskType, sceneCode, TaskAlternative.DEFAULT_VERSION, null,
+                                (k) -> probeOrchardOptionalPlayStatus(sceneCode, taskType),
+                                (k) -> probeOrchardOptionalPlayExhausted(sceneCode, taskType))
+                                .withScene("ORCHARD").withSource("ANTFARM_ORCHARD");
+                        if (rightsTimesLimit > 1 && rightsTimes + 1 < rightsTimesLimit) {
+                            // 多档里程碑的中间档（这次做完还有余量）：列表要打满才变完成，
+                            // 列表复核会把它误判"未完成"，进而挡住后续档位
+                            playSite = playSite.withTrustResponse();
+                        }
                         Outcome outcome = TaskAttemptPolicy.handle(
                                 policyKey, label, null,
                                 () -> attemptFinishOptionalPlayTask(sceneCode, taskType, label), Log::farm,
-                                new TaskAttemptPolicy.Site("AntOrchardTaskList", "农场乐园限定任务",
-                                        taskType, sceneCode, TaskAlternative.DEFAULT_VERSION, null,
-                                        (k) -> probeOrchardOptionalPlayStatus(sceneCode, taskType),
-                                        (k) -> probeOrchardOptionalPlayExhausted(sceneCode, taskType)));
+                                playSite);
                         // 被当日标记挡下（已试过）不算推进，否则每轮都白转一遍
                         if (outcome != Outcome.TRIED_TODAY && outcome != Outcome.SKIPPED) {
                             progressed = true;
@@ -1624,7 +1632,12 @@ public class AntOrchard extends ModelTask {
                     // taskId 当作 taskType 传给 finishTask（该 RPC 的参数名就叫 taskType）
                     String via = finishTaskTwice(sceneCode, title, taskId);
                     if (via != null) {
-                        Log.farm("肥料任务🧾完成[" + title + "]第" + (rightsTimes + cnt + 1) + "次");
+                        // 响应成功 ≠ 服务端已推进：实测"逛一逛快手/逛一逛淘宝拍照"等回成功但任务仍 0/N。
+                        // 故不再按响应打「完成」，交 verifyPendingTasksByList 用任务列表定论
+                        // （做成→打当日标记；没做成→交自动拉黑），避免假完成与每轮重刷。
+                        Log.farm("肥料任务🕓已触发[" + title + "]第" + (rightsTimes + cnt + 1) + "次#" + via
+                                + "，结果以任务列表为准");
+                        pendingVerifyTasks.put(taskId, title);
                     } else {
                         break;
                     }
@@ -1635,19 +1648,32 @@ public class AntOrchard extends ModelTask {
 
             // 处理触发型任务
             if ("TRIGGER".equals(actionType) || "ADD_HOME".equals(actionType) || "PUSH_SUBSCRIBE".equals(actionType)) {
-                // taskId 当作 taskType 传递
+                // taskId 当作 taskType 传递。同 VISIT：响应成功 ≠ 服务端已推进
+                // （实测"试玩农场爆款游戏"回成功但任务仍 0/1），故不按响应打「完成」，
+                // 交 verifyPendingTasksByList 用任务列表定论。
                 String via = finishTaskTwice(sceneCode, title, taskId);
                 if (via != null) {
-                    Log.farm("肥料任务🧾完成[" + title + "]");
+                    Log.farm("肥料任务🕓已触发[" + title + "]#" + via + "，结果以任务列表为准");
+                    pendingVerifyTasks.put(taskId, title);
                 }
                 return true;
             }
 
-            //配合黑名单的兜底操作
+            // 兜底：actionType 未知（SYSTEM_SWITCH / ANTFARM_COLLECT_MANURE / ANTFOREST_DEFOLIATION /
+            // JUMP / P2P_NEW / GAME_CENTER 等）。这类任务多为"外跳打开淘宝/Tmall 页"或需真人操作，
+            // finishTask/doFarmTask 的**响应会撒谎**——实测回成功但任务仍 0/N（如"去淘宝农场得肥料"
+            // 需真打开淘宝页，Alipay 侧根本没有完成 RPC）。
+            // 故不再按响应打「完成」：触发后统一交 verifyPendingTasksByList 用任务列表定论
+            // （做成→打当日标记；没做成→交自动拉黑），并打当日标记避免同一天每轮重发、刷屏。
+            if (Status.hasFlagToday("orchard::fallback::" + taskId)) {
+                return true;
+            }
+            Status.flagToday("orchard::fallback::" + taskId);
             String via = finishTaskTwice(sceneCode, title, taskId);
             if (via != null) {
-                Log.farm("肥料任务🧾完成[" + title + "]");
+                Log.farm("肥料任务🕓已触发[" + title + "]#" + via + "，结果以任务列表为准");
             }
+            pendingVerifyTasks.put(taskId, title);
             return true;
         } catch (Throwable t) {
             Log.err(TAG, "finishOrchardTask err:", t);
@@ -2286,7 +2312,8 @@ public class AntOrchard extends ModelTask {
                                 () -> attemptLimitedTimeVisit(sceneCode, childTaskId), Log::farm,
                                 new TaskAttemptPolicy.Site("AntOrchardTaskList", "农场限时挑战",
                                         childTaskId, sceneCode,
-                                        (k) -> probeLimitedTimeChildStatus(childTaskId)));
+                                        (k) -> probeLimitedTimeChildStatus(childTaskId))
+                                        .withScene("ORCHARD").withSource("ANTFARM_ORCHARD"));
                         break;
 
                     default:

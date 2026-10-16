@@ -328,7 +328,10 @@ public final class GoldenBeansTasks {
                     int remain = rightsTimesLimit > rightsTimes ? rightsTimesLimit - rightsTimes : 1;
                     boolean anyDone = false;
                     for (int cnt = 0; cnt < remain; cnt++) {
-                        if (!finishTask(entry, task, taskId, taskName, rightsTimes + cnt)) {
+                        // 最后一档才走列表复核：中间档是"里程碑"语义（列表要打满才变完成），
+                        // 按响应推进即可，否则中间档会被判"未完成"、break 掉后续档位
+                        // ⚠️ 本地定制：finishTask 多一个 task 参数（游戏任务判定 + 中文标题）
+                        if (!finishTask(entry, task, taskId, taskName, rightsTimes + cnt, cnt == remain - 1)) {
                             break; // 做不了就收手，不再空转剩余次数
                         }
                         anyDone = true;
@@ -442,8 +445,10 @@ public final class GoldenBeansTasks {
         return upper.contains("ZHIFU") || upper.contains("_PAY");
     }
 
-    // ⚠️ 本地定制：比上游多一个 task 参数（游戏任务判定 + 中文标题），同时保留上游新增的 stage（多档推进）
-    private boolean finishTask(GoldenBeansEntry entry, JSONObject task, String taskId, String taskName, int stage) {
+    // ⚠️ 本地定制：比上游多一个 task 参数（游戏任务判定 + 中文标题）；同时保留上游新增的
+    // stage（多档推进）与 lastStage（仅最后一档走列表复核，中间档按响应推进）
+    private boolean finishTask(GoldenBeansEntry entry, JSONObject task, String taskId, String taskName,
+                               int stage, boolean lastStage) {
         if (taskId == null || taskId.isEmpty()) {
             Log.i("金豆[" + entry.alias + "]任务⚠️[" + taskName + "]缺少taskId#跳过");
             return false;
@@ -451,14 +456,20 @@ public final class GoldenBeansTasks {
         // 做不了的当天只试一次、临时故障留待下一轮（见 TaskAttemptPolicy）
         // 完成与否一律以任务列表为准（探针 probeGoldenBeansStatus 复核），响应不可信；
         // 兜底后的核对仍交给本模块的 verifyPendingTasks，故 listField 传 null（黑名单由 verify 管）
-        // 上游 326defdc：key 带档位 —— 多次任务每推进一档都是新的尝试，否则后续档位会被当日标记挡下
+        // key 带档位：多次任务每推进一档都是新的尝试，否则后续档位会被当日标记挡下
+        TaskAttemptPolicy.Site site = new TaskAttemptPolicy.Site(
+                null, "金豆[" + entry.alias + "]任务", null, entry.taskSceneCode,
+                (k) -> probeGoldenBeansStatus(entry, taskId));
+        if (!lastStage) {
+            // 多档里程碑的中间档：列表要打满才变完成，列表复核在这里永远判"未完成"，
+            // 会把成功的提交改判成做不了、break 掉后续档位（与森林兑换同形态）
+            site = site.withTrustResponse();
+        }
         Outcome outcome = TaskAttemptPolicy.handle(
                 "goldenbeans::" + entry.alias + "/" + taskId + "#" + stage, taskName, null,
                 // ⚠️ 本地定制：attemptFinishTask 多一个 task 参数（方法体内要用它判断游戏任务
                 //    与取中文标题），签名见其定义处的注释。
-                () -> attemptFinishTask(entry, task, taskId, taskName), msg -> Log.goldenBeans(msg),
-                new TaskAttemptPolicy.Site(null, "金豆[" + entry.alias + "]任务", null, entry.taskSceneCode,
-                        (k) -> probeGoldenBeansStatus(entry, taskId)));
+                () -> attemptFinishTask(entry, task, taskId, taskName), msg -> Log.goldenBeans(msg), site);
         return outcome == Outcome.DONE || outcome == Outcome.TRIGGERED;
     }
 
@@ -479,10 +490,12 @@ public final class GoldenBeansTasks {
                 return Outcome.RETRY;
             }
             // 另一种实现方案（见 TaskAlternative）；乐园游戏类任务会被 finishTaskantorchard 以 400000040 拒绝。
-            // 本模块自行伪申报并登记同轮核对（verifyPendingTasks），故返回 FORGED 而不是交给通用类
+            // 本模块自行伪申报并登记同轮核对（verifyPendingTasks），故返回 FORGED 而不是交给通用类。
+            // 场景码/来源用本入口自己的（各入口不同），不能用兜底默认的庄园
             if (TaskAlternative.hit(jo, entry.taskSceneCode)) {
                 TaskAlternative.trigger(pendingVerifyTasks, taskId, taskName, taskId, entry.taskSceneCode,
-                        goldenbeansRpcCall.VERSION, "金豆[" + entry.alias + "]任务", msg -> Log.goldenBeans(msg));
+                        goldenbeansRpcCall.VERSION, entry.taskSceneCode, entry.source,
+                        "金豆[" + entry.alias + "]任务", msg -> Log.goldenBeans(msg));
                 return Outcome.FORGED;
             }
             // 🔴 游戏任务**不计入拉黑**：与芝麻果园（AntOrchard）保持同一口径，见 IGameTask 接口注释

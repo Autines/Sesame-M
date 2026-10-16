@@ -38,6 +38,7 @@ public final class TaskAlternative {
      * GOLDENBEAN_GAME_CZ_XDDQ_AI / GROUP_DAILY_GAME_CZ / 2026cc_cz6ylyb_fz  → 游戏充值
      * ORCHARD_NORMAL_KUAIDI100 / ORCHARD_NORMAL_JIUYIHUISHOU_VISIT          → 寄件/回收
      * IP_chouchoule_juankuan                                                → 捐款
+     * IP_chouchoule_choukuan                                                → 筹款（庄园装扮抽抽乐"伸出援手，点亮希望"等）
      * </pre>
      *
      * <p><b>不要再加 {@code taobao} 这类宽泛词、也不要匹配任务标题</b>：标题/宽泛词会把外跳类
@@ -61,8 +62,8 @@ public final class TaskAlternative {
             "kuaidi", "huishou",
             // 酒店
             "jiudian",
-            // 捐款：需真实付款，伪申报会被判风险操作
-            "juankuan",
+            // 捐款/筹款：需真实付款，伪申报会被判风险操作（choukuan=抽抽乐筹款类，如 庄园装扮抽抽乐"伸出援手，点亮希望"）
+            "juankuan", "choukuan",
     };
 
     /** 英文短词：两侧不得紧邻字母（数字/下划线/连字符/首尾都算边界）。 */
@@ -114,19 +115,55 @@ public final class TaskAlternative {
         Status.flagToday("TaskAlternative::verify::" + key);
     }
 
-    /** 唯一的 doFarmTask payload，返回原始响应。 */
+    /**
+     * 兜底伪申报的默认场景码（庄园）。**其它模组必须传自己的**：农场 {@code ORCHARD}、森林 {@code ANTFOREST}…
+     * 冒用别的模组的场景会被服务端判"场景不合法"。
+     */
+    public static final String DEFAULT_SCENE_CODE = "ANTFARM";
+
+    /**
+     * 兜底伪申报的默认来源。**各模组可传本家 RPC 的 source**：农场 {@code ANTFARM_ORCHARD}、
+     * 新村 {@code AST}、神奇物种 {@code af-biodiversity}、海洋 {@code ANTFOCEAN}…
+     */
+    public static final String DEFAULT_SOURCE = "H5";
+
+    /** 唯一的 doFarmTask payload，返回原始响应（场景码与来源用默认值：庄园 + H5）。 */
     public static String request(String bizKey, String taskSceneCode, String version) {
+        return request(bizKey, taskSceneCode, version, DEFAULT_SCENE_CODE, DEFAULT_SOURCE);
+    }
+
+    /** 唯一的 doFarmTask payload，返回原始响应；{@code sceneCode} 需与调用方模组一致。 */
+    public static String request(String bizKey, String taskSceneCode, String version, String sceneCode) {
+        return request(bizKey, taskSceneCode, version, sceneCode, DEFAULT_SOURCE);
+    }
+
+    /** 完整形态：{@code sceneCode} 与 {@code source} 都按调用方模组给（混用会被判"场景不合法"）。 */
+    public static String request(String bizKey, String taskSceneCode, String version, String sceneCode,
+                                 String source) {
         if (isTransactionTask(bizKey)) {
             Log.i("⏭️跳过交易/履约类任务#bizKey=" + bizKey + "，不自动申报");
             return "{}";
         }
-        String args = "[{\"bizKey\":\"" + bizKey + "\",\"requestType\":\"RPC\",\"sceneCode\":\"ANTFARM\","
-                + "\"source\":\"H5\",\"taskSceneCode\":\"" + taskSceneCode + "\",\"version\":\"" + version + "\"}]";
+        String scene = (sceneCode == null || sceneCode.isEmpty()) ? DEFAULT_SCENE_CODE : sceneCode;
+        String src = (source == null || source.isEmpty()) ? DEFAULT_SOURCE : source;
+        String args = "[{\"bizKey\":\"" + bizKey + "\",\"requestType\":\"RPC\",\"sceneCode\":\"" + scene + "\","
+                + "\"source\":\"" + src + "\",\"taskSceneCode\":\"" + taskSceneCode + "\",\"version\":\""
+                + version + "\"}]";
         return ApplicationHook.requestString("com.alipay.antfarm.doFarmTask", args);
     }
 
     public static JSONObject doFarmTask(String bizKey, String taskSceneCode, String version) throws JSONException {
         return new JSONObject(request(bizKey, taskSceneCode, version));
+    }
+
+    public static JSONObject doFarmTask(String bizKey, String taskSceneCode, String version, String sceneCode)
+            throws JSONException {
+        return new JSONObject(request(bizKey, taskSceneCode, version, sceneCode));
+    }
+
+    public static JSONObject doFarmTask(String bizKey, String taskSceneCode, String version, String sceneCode,
+                                        String source) throws JSONException {
+        return new JSONObject(request(bizKey, taskSceneCode, version, sceneCode, source));
     }
 
     /** 日志片段 {@code resultCode/memo}（{@code desc}、{@code resultDesc} 兜底）。 */
@@ -162,6 +199,22 @@ public final class TaskAlternative {
     public static JSONObject trigger(Map<String, String> pending, String taskId, String taskTitle,
                                      String bizKey, String taskSceneCode, String version,
                                      String logPrefix, LogSink sink) {
+        return trigger(pending, taskId, taskTitle, bizKey, taskSceneCode, version, DEFAULT_SCENE_CODE,
+                logPrefix, sink);
+    }
+
+    /** 指定伪申报场景码（各模组不同，见 {@link #DEFAULT_SCENE_CODE}）。 */
+    public static JSONObject trigger(Map<String, String> pending, String taskId, String taskTitle,
+                                     String bizKey, String taskSceneCode, String version, String sceneCode,
+                                     String logPrefix, LogSink sink) {
+        return trigger(pending, taskId, taskTitle, bizKey, taskSceneCode, version, sceneCode, "H5",
+                logPrefix, sink);
+    }
+
+    /** 指定伪申报场景码 + 来源。 */
+    public static JSONObject trigger(Map<String, String> pending, String taskId, String taskTitle,
+                                     String bizKey, String taskSceneCode, String version, String sceneCode,
+                                     String source, String logPrefix, LogSink sink) {
         try {
             if (isTransactionTask(bizKey)) {
                 Log.i(logPrefix + "⏭️跳过[" + taskTitle + "]#bizKey=" + bizKey + "，交易/履约类不自动申报");
@@ -172,7 +225,7 @@ public final class TaskAlternative {
                 }
                 return null;
             }
-            JSONObject doFarmJo = doFarmTask(bizKey, taskSceneCode, version);
+            JSONObject doFarmJo = doFarmTask(bizKey, taskSceneCode, version, sceneCode, source);
             if (pending != null && taskId != null && !taskId.isEmpty()) {
                 pending.put(taskId, taskTitle);
             }
