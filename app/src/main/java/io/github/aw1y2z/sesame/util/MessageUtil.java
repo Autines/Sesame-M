@@ -926,6 +926,9 @@ public class MessageUtil {
             boolean unsupportedRpc = isUnsupportedRpc(jo);
             boolean canAddBlackList = strongHit && !unsupportedRpc;
             boolean needConfirm = (weakHit && !strongHit) || unsupportedRpc;
+            // 是否走「永久拉黑」（一次即黑、永不自动解禁）：仅用于**确定性失败**
+            // —— 交易/支付类，以及服务端固定拒绝（见 SesameAlchemyTaskList 分支）。
+            boolean permanentAdd = false;
             // 少数列表有自己的额外判据（服务端错误码、特有文案），其余列表走上面的默认判据
             switch (listTitle) {
                 // 运动任务：错误码/文案指明任务 id 非法时可直接拉黑
@@ -954,12 +957,22 @@ public class MessageUtil {
                     break;
 
                 // 芝麻炼金任务：「参数[promiseActivityExtCheck]不是有效的入参」是服务端对
-                // 「需真实行为校验」类任务（zm_* / 玩XX游戏）的固定拒绝 → 走连续确认。
-                // 连续 N 次都没做成，才认为该任务确实做不了（避免偶发一次就永久停掉）。
+                // 「需真实行为校验」类任务（zm_* / 玩XX游戏）的**确定性固定拒绝**。
+                // 与"临时故障"性质不同：无论试多少次都不可能成功，且服务端还会换任务名变体
+                // （实测：「玩寻道大千」→「玩寻道大千砍伐10次」、「玩青云诀之伏魔」→「…完成任务1次」），
+                // 而拉黑是**按任务名精确匹配** ⇒ 走"3 天确认 + 满 3 天解禁"的循环永远追不上，
+                // 旧名刚拉黑、新变体又要重刷 3 天，天天刷错。
+                // 🔴 2026-10-17（老板确认 A 方案）：改为**一次即永久拉黑**，不进解禁重试生命周期。
+                // 仍可人工恢复：在黑名单页取消勾选后任务会重新尝试，成功则不再被拉黑。
+                // 其余模糊错误（非固定拒绝）保留连续确认，避免一次误判就把任务永久停掉。
                 case "SesameAlchemyTaskList":
-                    needConfirm = weakHit
-                            || anyFieldContains(jo, "不是有效的入参")
-                            || anyFieldContains(jo, "promiseActivityExtCheck");
+                    if (anyFieldContains(jo, "不是有效的入参")
+                            || anyFieldContains(jo, "promiseActivityExtCheck")) {
+                        canAddBlackList = true;
+                        permanentAdd = true;
+                    } else {
+                        needConfirm = weakHit;
+                    }
                     break;
                 // 福利金任务：事件规则任务被 10000005「不允许完成事件规则任务」拒绝，文案里没有
                 // 「不支持rpc调用」关键字，须按错误码单独接入连续确认，不能靠 strongHit
@@ -1005,7 +1018,13 @@ public class MessageUtil {
             }
 
             if (canAddBlackList) {
-                MarkTaskBlackList(target[0], listTitle, target[1], taskTitle, displayName);
+                if (permanentAdd) {
+                    // 确定性失败（交易/支付类、服务端固定拒绝）：一次即永久，
+                    // 不进"满 3 天解禁重试"的生命周期（否则要绕 2 轮、约 9 天）
+                    MarkTaskBlackListPermanent(target[0], listTitle, target[1], taskTitle);
+                } else {
+                    MarkTaskBlackList(target[0], listTitle, target[1], taskTitle, displayName);
+                }
             } else if (needConfirm) {
                 MarkTaskBlackListConfirm(target[0], listTitle, target[1], taskTitle, displayName);
             }
@@ -1042,15 +1061,20 @@ public class MessageUtil {
     }
 
     /**
-     * 【底线】交易/支付类任务：**立即永久拉黑、永不自动解禁**。
+     * 【底线】**确定性失败**的任务：立即永久拉黑、永不自动解禁。适用两类：
+     * <ol>
+     *   <li><b>交易/支付类</b>：只能靠真实交易完成，伪申报会被服务端判风险操作（1009 风控）；</li>
+     *   <li><b>服务端固定拒绝</b>（{@code promiseActivityExtCheck 不是有效的入参} 等）：
+     *       无论试多少次都不可能成功，且服务端会换任务名变体、拉黑按名精确匹配
+     *       ⇒ 走"3 天确认 + 满 3 天解禁"永远追不上（2026-10-17 起，芝麻炼金走这条）。</li>
+     * </ol>
      *
-     * <p>这类任务只能靠真实交易完成，伪申报会被服务端判风险操作（1009 风控），必须一次拦死：
-     * 不能写 {@code blackDay=今天}——那会进入"满 {@link #BLACKLIST_RETRY_DAYS} 天自动解禁重试"的
+     * <p>必须一次拦死：不能写 {@code blackDay=今天}——那会进入"满 {@link #BLACKLIST_RETRY_DAYS} 天自动解禁重试"的
      * 生命周期（要循环 {@link #BLACKLIST_MAX_RETRY} 次、约 9 天才变永久），期间任务会反复回到待办；
      * 这里直接写 {@link AutoBlackRecord#PERMANENT}，{@link #sweepExpiredBlackList} 永不解禁。
      *
      * <p>**不走延迟拉黑缓冲**：缓冲的用途是"等任务列表核对后再决定是否拉黑"，
-     * 而交易/支付类没有可核对的成功路径（绝不允许被伪申报做成）。
+     * 而这两类都没有可核对的成功路径（绝不允许被伪申报做成）。
      */
     public static void MarkTaskBlackListPermanent(String ModelFieldsType, String listTitle, String TaskListName,
                                                   String taskTitle) {
@@ -1083,7 +1107,7 @@ public class MessageUtil {
         if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
             Log.record((permanent ? "自动拉黑🔒永久" : "自动拉黑🏴") + "在[" + TaskListName + "]中添加[" + taskTitle
                     + "]黑名单:" + TaskSelectModelField.getValue()
-                    + (permanent ? "#交易/支付类，永不自动解禁" : ""));
+                    + (permanent ? "#确定性失败(交易/支付或服务端固定拒绝)，永不自动解禁" : ""));
             // 记录拉黑日期，供"超期自动解禁重试"使用（只记自动项，用户手动加的不会被解禁）
             if (permanent) {
                 // 交易/支付类：一次即永久，绝不进入"解禁重试"生命周期

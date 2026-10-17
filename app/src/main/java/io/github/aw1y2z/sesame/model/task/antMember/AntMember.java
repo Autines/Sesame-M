@@ -2923,8 +2923,10 @@ public class AntMember extends ModelTask {
                     }
                     else {
                         Log.error("芝麻炼金任务完成失败: " + title + " - " + finishJo);
-                        // 连续多次被服务端拒绝（如 promiseActivityExtCheck）→ 自动加入炼金黑名单，
-                        // 避免每天重复空试。判据与白名单在 MessageUtil.checkResultCodeAndMarkTaskBlackList 内。
+                        // 服务端固定拒绝（如 promiseActivityExtCheck）→ 自动加入炼金黑名单。
+                        // 🔴 2026-10-17 起改为**一次即永久**（此前是"连续 3 天确认 + 满 3 天解禁"，
+                        // 但服务端会换任务名变体，旧名拉黑追不上新变体，天天刷错）。
+                        // 判据与白名单在 MessageUtil.checkResultCodeAndMarkTaskBlackList 内。
                         if (AutoSesameAlchemyTaskList.getValue()) {
                             MessageUtil.checkResultCodeAndMarkTaskBlackList(
                                     "SesameAlchemyTaskList", title, finishJo);
