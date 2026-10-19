@@ -71,6 +71,7 @@ public class AntOrchard extends ModelTask {
 
     private BooleanModelField orchardPlantNew;
     private BooleanModelField drawGameCenterAward;
+    private BooleanModelField receiveOrchardGameStay;
     private ChoiceModelField driveAnimalType;
     private SelectModelField driveAnimalList;
     private BooleanModelField batchHireAnimal;
@@ -128,6 +129,7 @@ public class AntOrchard extends ModelTask {
                 .setDependsOn("orchardSpreadManure")
                 .setDescription("按轮计：开一键施肥5次时精确施肥到该值，设为200则突破到204；未开启时全程单次施肥到该值"));
         modelFields.addField(drawGameCenterAward = new BooleanModelField("drawGameCenterAward", "农场乐园 | 游戏宝箱", true));
+        modelFields.addField(receiveOrchardGameStay = new BooleanModelField("receiveOrchardGameStay", "游戏时长任务 | 开启", false));
         //modelFields.addField(driveAnimalType = new ChoiceModelField("driveAnimalType", "驱赶小鸡 | 动作", DriveAnimalType.NONE, DriveAnimalType.nickNames));
         //modelFields.addField(driveAnimalList = new SelectModelField("driveAnimalList", "驱赶小鸡 | 好友列表", new LinkedHashSet<>(), AlipayUser::getList));
         //modelFields.addField(batchHireAnimal = new BooleanModelField("batchHireAnimal", "捉鸡除草 | 开启", false));
@@ -186,6 +188,13 @@ public class AntOrchard extends ModelTask {
             // 好友助力
             if (assistFriend.getValue()) {
                 orchardAssistFriend();
+            }
+
+            // 完成游戏时长任务: 极速模拟游玩悬浮球游戏领肥料（上游 68e7bbc8 新增，默认关）
+            // 注：本地已把旧的 orchardChouChouLe 合并进上方的 orchardDrawTask()，
+            //     故此处不再有「农场抽抽乐」那一段
+            if (receiveOrchardGameStay.getValue()) {
+                AntOrchardGameStayTask.execute();
             }
 
         } catch (Throwable t) {
@@ -247,7 +256,11 @@ public class AntOrchard extends ModelTask {
         try {
             JSONObject enterJo = new JSONObject(AntOrchardRpcCall.enterDrawActivityantorchard());
             String activityId = "";
-            if (MessageUtil.checkSuccess(TAG, enterJo)) {
+            // 该接口在某些模式下只回 code=100000000 + desc=处理成功，**没有 success 字段**，
+            // checkSuccess 会误判失败 → 抽奖整段不做（上游 79021a9c 修的正是这个）。两种结构都认。
+            boolean enterOk = MessageUtil.checkSuccess(TAG, enterJo)
+                    || "100000000".equals(enterJo.optString("code"));
+            if (enterOk) {
                 JSONObject drawActivity = enterJo.optJSONObject("drawActivity");
                 if (drawActivity != null) {
                     activityId = drawActivity.optString("activityId", "");
@@ -338,18 +351,16 @@ public class AntOrchard extends ModelTask {
                             received++;
                             Log.farm("抽抽乐🎖️领取[" + title + "]奖励[" + awardCountForReceive + "]");
                         } else {
-                            // 领奖收口：先按任务列表复核"已领到"，未确认才交自动拉黑（顺序由 TaskAward 固定）
-                            // ⚠️ 本地定制三处：① 列表名用 AntOrchardDrawTaskList（本地已把废弃的
-                            //    OrchardChouChouLeTaskList 并入它，后者连类都删了）；② key 用 taskType
-                            //    与探针口径一致；③ 带展示名 title —— 否则黑名单页只显示英文 taskType。
-                            // ⚠️ 探针传 null：上游的 probeOrchardChouChouLeStatus 需要「专场 sceneCode +
-                            //    任务 sceneCode,而本地已把拉列表重构成「直接拉全量、不按专场遍历」
-                            //    （见 enterAndSyncOrchardDraw），这两个值在此作用域不可得。
-                            //    传 null 时 TaskAward 会跳过复核、直接走拉黑 —— 与本地原有行为一致，不引入误判。
-                            TaskAward.confirmReceivedOrBlackList("农场抽抽乐🎖️",
-                                    null, taskType, title,
-                                    () -> MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardDrawTaskList", taskType, title, aw),
-                                    msg -> Log.farm(msg));
+                            // 领奖响应失败：**不拉黑**（上游 79021a9c）——这是已完成任务**已获得的奖励**，
+                            // 临时失败下轮重试即可；拉黑会让它连续 3 天不再领，等于白丢奖励。
+                            // ⚠️ 探针传 null：本地已把拉列表重构成「直接拉全量、不按专场遍历」
+                            //    （见 enterAndSyncOrchardDraw），拿不到「专场 sceneCode + 任务 sceneCode」。
+                            //    probe 与 blackList 都为 null 时，TaskAward 只回报"未确认"，由下面补一条日志。
+                            boolean awardConfirmed = TaskAward.confirmReceivedOrBlackList("农场抽抽乐🎖️",
+                                    null, taskType, title, null, msg -> Log.farm(msg));
+                            if (!awardConfirmed) {
+                                Log.farm("农场抽抽乐🎖️[" + title + "]#领奖失败，下轮重试");
+                            }
                         }
                     } else {
                         received++;
@@ -718,21 +729,9 @@ public class AntOrchard extends ModelTask {
                     // 但下一轮可再试——服务端状态推进有延迟，跨轮仍可能落到新阶段
                     String attemptKey = taskType + "#" + rightsTimes + "@" + round;
 
-                    // 黑名单任务跳过
-                    if (AntOrchardTaskList.getValue().contains(title)) {
-                        continue;
-                    }
-                    // 底线：交易/支付/充值类一律不申报、一次即永久拉黑，绝不伪造
-                    if (TaskAlternative.isTransactionTask(taskType)
-                            || TaskAlternative.isTransactionTask(groupId)
-                            || TaskAlternative.isTransactionTask(sceneCode)) {
-                        MessageUtil.MarkTaskBlackListPermanent("AntOrchard", "AntOrchardTaskList",
-                                "农场乐园限定任务", title);
-                        Log.farm("农场乐园⏭️交易/履约类[" + title + "]#不申报，已永久拉黑");
-                        continue;
-                    }
-
-                    // 已完成待领：领奖。已领满（awardCountForReceive<=0）不再重复请求
+                    // 已完成待领：领奖。已领满（awardCountForReceive<=0）不再重复请求。
+                    // 领奖必须放在黑名单检查之前：黑名单只表示"不再尝试完成"，不应阻止领取已完成任务的奖励。
+                    // 原顺序（黑名单在前）会让"每日砸金蛋10次"这类已完成(FINISHED)但被拉黑的任务永远领不到奖。
                     if (TaskStatus.FINISHED.name().equals(taskStatus)) {
                         if (awardCountForReceive > 0 && attempted.add(attemptKey + "-award")) {
                             progressed = true;
@@ -753,6 +752,20 @@ public class AntOrchard extends ModelTask {
                                         msg -> Log.farm(msg));
                             }
                         }
+                        continue;
+                    }
+
+                    // 黑名单任务跳过（只拦截待完成任务的申报；领奖已在上面处理，不受黑名单影响）
+                    if (AntOrchardTaskList.getValue().contains(title)) {
+                        continue;
+                    }
+                    // 底线：交易/支付/充值类一律不申报、一次即永久拉黑，绝不伪造
+                    if (TaskAlternative.isTransactionTask(taskType)
+                            || TaskAlternative.isTransactionTask(groupId)
+                            || TaskAlternative.isTransactionTask(sceneCode)) {
+                        MessageUtil.MarkTaskBlackListPermanent("AntOrchard", "AntOrchardTaskList",
+                                "农场乐园限定任务", title);
+                        Log.farm("农场乐园⏭️交易/履约类[" + title + "]#不申报，已永久拉黑");
                         continue;
                     }
 
@@ -2088,11 +2101,17 @@ public class AntOrchard extends ModelTask {
         try {
             String triggerResult = AntOrchardRpcCall.triggerYebMoneyTree();
             JSONObject triggerJo = new JSONObject(triggerResult);
-            if (!MessageUtil.checkResultCode(TAG, triggerJo)) {
+            // 该接口响应内容在 result 对象里（外层无 resultCode/success），checkResultCode 会误判失败，
+            // 故优先看 result 是否存在；无 result 时才退回通用判定
+            JSONObject result = triggerJo.optJSONObject("result");
+            boolean ok = result != null || MessageUtil.checkResultCode(TAG, triggerJo);
+            if (!ok) {
                 Log.record("摇钱树触发未成功：" + (triggerResult.length() > 200 ? triggerResult.substring(0, 200) : triggerResult));
                 return;
             }
             // 只记"已受理"：金额是触发响应当次返回的值，不作为"已到账收益"上报
+            JSONObject awardInfo = result != null ? result.optJSONObject("awardInfo") : null;
+            String amount = awardInfo != null ? awardInfo.optString("totalAmount", "") : "";
             Log.farm("💰领取奖励[摇钱树]");
         } catch (Throwable t) {
             Log.err(TAG, "triggerYebMoneyTree err:", t);

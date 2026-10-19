@@ -148,7 +148,9 @@ public class AntOrchardRpcCall {
     }
 
     public static String yebPlantSceneRevenuePage() {
-        return ApplicationHook.requestString("com.alipay.gamecenteruprod.biz.rpc.v3.yebPlantSceneRevenuePage", "[{\"requestType\":\"NORMAL\",\"sceneCode\":\"ORCHARD\",\"source\":\"ANTFARM_ORCHARD\"}]");
+        // gamecenteruprod 系列接口不吃 sceneCode（那是 antorchard 系列的参数），传 ORCHARD 会被服务端
+        // 判为 error 3000「系统出错」；同系列的 queryPointBallList 用极简参数即可
+        return ApplicationHook.requestString("com.alipay.gamecenteruprod.biz.rpc.v3.yebPlantSceneRevenuePage", "[{}]");
     }
 
     public static String triggerYebMoneyTree() {
@@ -181,7 +183,7 @@ public class AntOrchardRpcCall {
      * 农场抽抽乐-进入/查询活动
      */
     public static String enterDrawActivityantorchard(String activityId, String sceneCode, String source) {
-        String args = "[{\"activityId\":\"" + activityId + "\",\"context\":{\"appMode\":\"INT\"},\"requestType\":\"RPC\",\"sceneCode\":\"" + sceneCode + "\",\"source\":\"" + source + "\"}]";
+        String args = "[{\"activityId\":\"" + activityId + "\",\"context\":{\"appMode\":\"normal\"},\"requestType\":\"RPC\",\"sceneCode\":\"" + sceneCode + "\",\"source\":\"" + source + "\"}]";
         return ApplicationHook.requestString("com.alipay.antiepdrawprod.enterDrawActivityantorchard", args);
     }
 
@@ -189,7 +191,7 @@ public class AntOrchardRpcCall {
      * 农场抽抽乐-请求任务列表
      */
     public static String listTaskantorchard(String sceneCode, String source) {
-        String args = "[{\"extend\":{\"appMode\":\"INT\"},\"requestType\":\"RPC\",\"sceneCode\":\"" + sceneCode + "\",\"source\":\"" + source + "\"}]";
+        String args = "[{\"extend\":{\"appMode\":\"normal\"},\"requestType\":\"RPC\",\"sceneCode\":\"" + sceneCode + "\",\"source\":\"" + source + "\"}]";
         return ApplicationHook.requestString("com.alipay.antieptask.listTaskantorchard", args);
     }
 
