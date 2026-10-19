@@ -27,6 +27,25 @@ public class ConfigV2 {
 
     public static final ConfigV2 INSTANCE = new ConfigV2();
 
+    /**
+     * 本进程是否已完成一次 {@link #load}（即内存里的字段值可信）。
+     *
+     * <p><b>这不是装饰性标记，而是 {@link #save} 的安全闸。</b>
+     * {@link #unload()} 会在服务销毁时把所有字段 {@code reset()} 成默认值——此后内存里只剩
+     * 默认值，而 {@link #valueBaseline} 还留着卸载前的真实值，于是
+     * {@link #collectChangedFields()} 会把"100 多个字段从真实值变成默认值"误判成
+     * "本进程改了 100 多个字段"，进而整份写盘、把磁盘上的用户配置冲成默认。
+     *
+     * <p>2026-10-19 实测（K40）：服务销毁 → unload → 未退出的异步任务调了一次 save，
+     * 115 个字段被写成默认值（模块开关全关、黑名单全清）。日志特征：
+     * <pre>
+     * 21:14:32.300 保存配置
+     * 21:14:33.367 配置已被其他进程更新，已合并本进程改动后再保存   ← 把默认值压回磁盘
+     * 21:14:33.434 ConfigV2, 开始加载配置                          ← 才加载
+     * </pre>
+     *
+     * <p>所以必须：load() 成功结束才置 true，unload() 立即置 false。
+     */
     @JsonIgnore
     private boolean init;
 
@@ -156,6 +175,14 @@ public class ConfigV2 {
     }
 
     public static synchronized Boolean save(String userId, Boolean force) {
+        // 【安全闸】本进程还没完整加载过配置时，内存里只有各字段的默认值，
+        // 任何一次落盘都会把磁盘上的真实设置整份冲成默认（见 init 字段的注释）。
+        // 典型触发：服务销毁 unload() 之后，仍在跑的异步任务（森林/农场线程、延迟拉黑缓冲）调了一次 save。
+        // 返回 true 表示"无需保存"，与下面几条"没改动就跳过"的分支保持一致，避免上层误报保存失败。
+        if (!INSTANCE.isInit()) {
+            Log.record("跳过保存：配置尚未加载" + (StringUtil.isEmpty(userId) ? "（默认）" : "（" + userId + "）"));
+            return true;
+        }
         // 本进程没有任何字段级改动时直接返回：写盘只会把磁盘上本进程不认识的键整份覆盖丢失
         if (!valueBaseline.isEmpty() && collectChangedFields().isEmpty()) {
             return true;
@@ -269,6 +296,10 @@ public class ConfigV2 {
                 }
             }
         }
+        // 字段已回到默认值、内存不再可信：立刻关掉 save() 的安全闸，
+        // 否则卸载后仍在跑的异步任务一落盘就会把这些默认值写成用户配置（见 init 字段的注释）。
+        // 注：load() 内部也会调本方法重建默认表，之后 load 结束会重新置 true。
+        INSTANCE.setInit(false);
     }
 
     /**
