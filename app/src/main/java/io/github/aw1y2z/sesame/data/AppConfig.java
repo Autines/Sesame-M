@@ -76,6 +76,7 @@ public class AppConfig {
     private Boolean enableDebugLog = false;
     private Boolean enableViewErrorLog = true;
     private Boolean enableViewRuntimeLog = true;
+    private Boolean logViewByRun = false;
     private Boolean batteryPerm = true;
 
     /** 底栏液态玻璃悬浮效果（iOS 26 风折射）；默认开启，由「设置 → 底栏液态玻璃」开关控制 */
@@ -126,6 +127,14 @@ public class AppConfig {
 
     public void setCloseCaptchaDialog(Boolean value) {
         closeCaptchaDialog = value;
+    }
+
+    public Boolean getLogViewByRun() {
+        return logViewByRun;
+    }
+
+    public void setLogViewByRun(Boolean value) {
+        logViewByRun = value;
     }
 
     public Boolean getLanguageSimplifiedChinese() {

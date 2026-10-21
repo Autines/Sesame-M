@@ -741,6 +741,18 @@ fun SettingsTab(
                 iconHidden = activity.isIconHidden()
             }
         )
+        var logViewByRun by remember { mutableStateOf(AppConfig.INSTANCE.logViewByRun ?: false) }
+        SesameSwitchRow(
+            title = "日志按轮次查看",
+            icon = Icons.Outlined.Terminal,
+            checked = logViewByRun,
+            summary = "按每轮「开始执行」把日志聚成一页，重进日志页生效",
+            onCheckedChange = {
+                AppConfig.INSTANCE.logViewByRun = it
+                AppConfig.save()
+                logViewByRun = it
+            }
+        )
         // 深色/跟随系统的开关已上移为「主题 → 主题样式」的三态选择：
         // 原来的两个开关是「一个布尔管另一个布尔」的从属关系（跟随系统开着时深色模式不参与取色），
         // 拆成三态后每个选项都自解释，不会再出现「点了没反应」的死开关。

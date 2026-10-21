@@ -43,11 +43,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ModelGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
 import io.github.aw1y2z.sesame.ui.theme.SesameFilterChip
 import io.github.aw1y2z.sesame.ui.theme.SesameLogCard
+import io.github.aw1y2z.sesame.ui.theme.SesameRunCard
 import io.github.aw1y2z.sesame.ui.theme.SesameSearchField
 import io.github.aw1y2z.sesame.ui.theme.SesameTopBar
 import io.github.aw1y2z.sesame.ui.theme.sesameSurface
@@ -227,6 +229,98 @@ data class LogEntry(
     val sortKey: String = ""
 )
 
+/* ───────────────────── 按执行轮次查看 ─────────────────────
+ * 一轮 = 从运行日志里的一条「开始执行」到下一轮「开始执行」之间的所有日志。
+ * 边界只认运行日志（RUNTIME tag）的这三种形态，其余含「开始执行」字样的业务日志
+ * （如「森林阅读📖开始执行…」「黄金票[开始执行]」）不算边界 —— 否则一轮会被切碎。
+ */
+
+/** 日志视图模式：按单条 / 按执行轮次 */
+enum class LogViewMode { BY_ENTRY, BY_RUN }
+
+/**
+ * 一轮执行的聚合结果。
+ *
+ * [startKey] 是本轮首条日志的「来源文件-行号」，只用作 LazyColumn 的稳定 key ——
+ * 分组页的数据来自 5 个文件，单看 [LogEntry.lineNumber] 会重复。
+ */
+data class LogRunEntry(
+    val runIndex: Int,
+    val startTime: String?,
+    val startKey: String,
+    val entries: List<LogEntry>
+)
+
+/**
+ * 轮次开始行正则。三形态：`[账号N]开始执行`、`[账号N]开始执行分组【xx】任务`、
+ * `[账号N]开始执行全部任务`。用「前缀 + 整行收尾」双重限定，避免误判业务日志。
+ */
+private val RUN_START_REGEX =
+    Regex("""^\[账号\d+\]开始执行(?:\s*$|分组【[^】]*】任务\s*$|全部任务\s*$)""")
+
+/**
+ * 从运行日志**全文**提取所有轮次开始时间（升序）。
+ *
+ * 为什么要读全文、而不是复用页面上已加载的条目：页面只保留了尾部窗口
+ * （[MAX_LOG_ENTRIES] / [MAX_TAIL_BYTES] 限制），而锚点必须覆盖全天每一轮，
+ * 否则「森林/庄园/金豆」这些自身没有轮次标记的页面，早上的日志会被归到错误的一轮。
+ * 读全文只在进页面时做一次（[remember] 缓存），当天文件量级下开销可忽略。
+ */
+private fun readRuntimeAnchors(): List<String> {
+    val file = LogType.RUNTIME.file
+    if (!file.exists()) return emptyList()
+    val anchors = mutableListOf<String>()
+    try {
+        file.forEachLine(Charsets.UTF_8) { line ->
+            val m = LOG_TIME_REGEX.find(line) ?: return@forEachLine
+            val tag = m.groupValues[2].takeIf { it.isNotEmpty() }
+            val body = m.groupValues[3]
+            if (tag == "RUNTIME" && RUN_START_REGEX.containsMatchIn(body)) {
+                m.groupValues[1].takeIf { it.isNotEmpty() }?.let { anchors.add(it) }
+            }
+        }
+    } catch (_: Throwable) {
+        // 读取失败时退化为无锚点（各页按单条显示），不影响原有查看能力
+    }
+    return anchors.sorted()
+}
+
+/**
+ * 把条目按「最近一次开始执行」归轮。
+ *
+ * 无锚点（当天还没跑过）时整批归为一轮，而非返回空 —— 否则刚装完/刚清完日志时
+ * 切到按轮模式会一片空白，容易误判成功能坏了。时间比较基于 `HH:mm:ss.SSS` 的
+ * 字典序，同一天内等价于时间序。
+ */
+private fun aggregateByRun(source: List<LogEntry>, anchors: List<String>): List<LogRunEntry> {
+    if (source.isEmpty()) return emptyList()
+    if (anchors.isEmpty()) {
+        val first = source.first()
+        return listOf(
+            LogRunEntry(1, first.time, "${first.source}-${first.lineNumber}", source)
+        )
+    }
+    val buckets = MutableList(anchors.size) { mutableListOf<LogEntry>() }
+    for (e in source) {
+        val t = e.time
+        // 找不到 <= t 的锚点（早于全部锚点的散落行）归入最早一轮
+        val k = if (t == null) -1 else anchors.indexOfLast { it <= t }
+        buckets[(if (k < 0) 0 else k)].add(e)
+    }
+    return buckets.mapIndexedNotNull { index, list ->
+        if (list.isEmpty()) null
+        else {
+            val first = list.first()
+            LogRunEntry(
+                runIndex = index + 1,
+                startTime = first.time,
+                startKey = "${first.source}-${first.lineNumber}",
+                entries = list.toList()
+            )
+        }
+    }
+}
+
 class MiuixLogViewerActivity : MiuixBaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -266,6 +360,8 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
     var searchQuery by remember { mutableStateOf("") }
     // 模块过滤：日志正文 [模块名] 前缀里的模块名，null = 全部模块
     var selectedModule by remember(logType) { mutableStateOf<String?>(null) }
+    // 视图模式：跟随设置页「日志按轮次查看」开关（在设置页切换后重进本页生效）
+    val viewMode = if (AppConfig.INSTANCE.logViewByRun == true) LogViewMode.BY_RUN else LogViewMode.BY_ENTRY
 
     val listState = rememberLazyListState()
 
@@ -321,6 +417,18 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                 e.body.contains(searchQuery, ignoreCase = true)
         val matchModule = selectedModule == null || displayLabelOf(e, groupFilter.subLabels) == selectedModule
         matchSearch && matchModule
+    }
+
+    /**
+     * 按轮次聚合后的列表（仅 [LogViewMode.BY_RUN] 用）。
+     *
+     * ⚠️ 聚合放在**搜索/模块过滤之后**：这样轮内条数就是「当前筛选条件下的条数」，
+     * 与按条模式的列表内容严格一致 —— 反过来先聚合再过滤，会出现「点数变少了、
+     * 展开却是全量」的错位。
+     */
+    val runAnchors = remember { readRuntimeAnchors() }
+    val runEntries = remember(filteredEntries, runAnchors) {
+        aggregateByRun(filteredEntries, runAnchors)
     }
 
     /**
@@ -544,15 +652,49 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                         bottom = 8.dp
                     )
                 ) {
+                    // 按轮模式用聚合后的轮次列表，按条模式用原始单条列表
+                    val displayList: List<Any> = if (viewMode == LogViewMode.BY_RUN) {
+                        runEntries.asReversed()
+                    } else {
+                        filteredEntries.asReversed()
+                    }
                     itemsIndexed(
-                        filteredEntries.asReversed(),
-                        key = { _, e -> "${e.source}-${e.lineNumber}-${e.hashCode()}" }
-                    ) { _, entry ->
-                        SesameLogCard(
-                            tag = logTagOf(entry, groupFilter.subLabels),
-                            time = entry.time ?: "",
-                            body = entry.body
-                        )
+                        displayList,
+                        key = { _, item ->
+                            when (item) {
+                                is LogEntry -> "${item.source}-${item.lineNumber}-${item.hashCode()}"
+                                is LogRunEntry -> "run-${item.startKey}-${item.runIndex}"
+                                else -> item.hashCode().toString()
+                            }
+                        }
+                    ) { _, item ->
+                        when (item) {
+                            is LogEntry -> SesameLogCard(
+                                tag = logTagOf(item, groupFilter.subLabels),
+                                time = item.time ?: "",
+                                body = item.body
+                            )
+                            is LogRunEntry -> {
+                                // 折叠状态按轮独立保存：切换筛选导致列表重建时，已展开的轮不会跟着收起
+                                var expanded by remember(item.startKey) { mutableStateOf(true) }
+                                SesameRunCard(
+                                    title = "第 ${item.runIndex} 轮" +
+                                            (item.startTime?.let { "  $it" } ?: ""),
+                                    count = item.entries.size,
+                                    expanded = expanded,
+                                    onToggle = { expanded = !expanded },
+                                    details = item.entries.map { e ->
+                                        buildString {
+                                            if (e.time != null) append(e.time).append(" ")
+                                            val label = logTagOf(e, groupFilter.subLabels)
+                                            if (label.isNotBlank()) append(label).append(": ")
+                                            append(e.body)
+                                        }
+                                    }
+                                )
+                            }
+                            else -> Unit
+                        }
                     }
                 }
             }

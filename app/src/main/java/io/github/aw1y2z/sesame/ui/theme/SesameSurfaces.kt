@@ -2,6 +2,8 @@ package io.github.aw1y2z.sesame.ui.theme
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -275,6 +278,98 @@ fun SesameLogCard(tag: String, time: String, body: String) {
                     )
                 }
                 if (body.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = body,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 「按轮次」视图里的一轮执行卡片：头部是轮次序号与开始时间，右侧是条数，
+ * 点一下整行折叠/展开，展开后把本轮所有条目按「时间 标签: 正文」逐行拼成一段文字。
+ *
+ * 为什么整轮拼成**一段文字**而不是每轮再套一层小卡片：一轮动辄几十上百条，
+ * 逐条套卡会把列表撑成几百个 composable，滚动直接卡死；拼成单段 [Text]
+ * 一次测量就能画完，且视觉上「一轮 = 一页」更接近翻执行记录的感觉。
+ */
+@Composable
+fun SesameRunCard(
+    title: String,
+    count: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    details: List<String>
+) {
+    val body = details.joinToString("\n")
+    when (LocalUiStyle.current) {
+        UiStyle.MIUIX -> Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MiuixTheme.colorScheme.surfaceContainer)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onToggle() }
+                .padding(12.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MiuixText(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.primary
+                )
+                MiuixText(
+                    text = "$count 条" + if (expanded) " ▾" else " ▸",
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                )
+            }
+            if (expanded && body.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                MiuixText(
+                    text = body,
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onBackground
+                )
+            }
+        }
+
+        UiStyle.MATERIAL3 -> Surface(
+            modifier = Modifier.fillMaxWidth().clickable { onToggle() },
+            shape = MaterialTheme.shapes.medium,
+            color = sesameSurfaceContainer(),
+            tonalElevation = 0.dp
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        text = "$count 条" + if (expanded) " ▾" else " ▸",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (expanded && body.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = body,
