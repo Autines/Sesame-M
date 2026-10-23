@@ -113,6 +113,14 @@ public class AntFarm extends ModelTask {
      */
     private boolean farmTaskAwardBusy = false;
     /**
+     * 本轮是否已遇**网络不可用**（error 48 / 46，文案「当前网络不可用，请稍后重试」）。
+     * <p>命中后本轮中止剩余饲料任务：网络整段不通时逐条去打只是白等超时
+     * （2026-10-23 实测：08:44–09:00 一轮耗 16 分钟，其中约 7 分钟在打网络失败请求）。
+     * <p>⚠️ 与 {@link #farmTaskAwardBusy} 的差别：网络故障**不落当日标记**，
+     * 下一轮照常重试（由 {@code TaskAttemptPolicy} 的 RETRY 分支保证，每轮开头重置见 run()）。
+     */
+    private boolean farmTaskNetworkDown = false;
+    /**
      * 本轮投喂时服务端回了「饲料槽已满」(结果码见 CODE_FEED_TROUGH_FULL)：本轮不再投喂；
      * 槽满后每 10 秒级的重试只是白打接口，每轮开头重置 (见 run())。
      */
@@ -301,6 +309,7 @@ public class AntFarm extends ModelTask {
         try {
             farmTaskAwardBusy = false;
             feedTroughFullThisRun = false;
+            farmTaskNetworkDown = false;
             if (enterFarm() == null) {
                 return;
             }
@@ -1762,6 +1771,12 @@ public class AntFarm extends ModelTask {
                 if (farmTaskAwardBusy) {
                     break;
                 }
+                // 本轮已确认网络不通：剩余任务一条都不打，直接收工等下一轮
+                // （逐条去打只会白等超时，且这些任务此刻都会被判 RETRY、不落当日标记）
+                if (farmTaskNetworkDown) {
+                    Log.record("网络不可用🌐本轮剩余饲料任务跳过，下一轮重试");
+                    break;
+                }
                 jo = ja.getJSONObject(i);
                 TaskStatus taskStatus = TaskStatus.valueOf(jo.getString("taskStatus"));
                 String title = jo.getString("title");
@@ -1872,6 +1887,10 @@ public class AntFarm extends ModelTask {
     private Outcome attemptVideoTask(String title, String bizKey) {
         try {
             JSONObject jo = new JSONObject(AntFarmRpcCall.doFarmTask(bizKey));
+            // 网络类故障：本轮的其余任务也别再打了（见 farmTaskNetworkDown）
+            if (MessageUtil.isNetworkTransient(jo)) {
+                farmTaskNetworkDown = true;
+            }
             //检查并标记黑名单任务（此处是庄园饲料任务，应写入饲料黑名单而非抽抽乐）
             MessageUtil.checkResultCodeAndMarkTaskBlackList("AntFarmDoFarmTaskList", title, jo);
             if (MessageUtil.checkResultCode(TAG, jo)) {
@@ -1891,6 +1910,11 @@ public class AntFarm extends ModelTask {
     private Outcome attemptFarmTask(String title, String bizKey) {
         try {
             JSONObject jo = new JSONObject(AntFarmRpcCall.doFarmTask(bizKey));
+            // 网络类故障：本轮的其余任务也别再打了（见 farmTaskNetworkDown）。
+            // 这里只置「本轮」标志、不落当日标记 —— 下一轮网络恢复后要能照常重试。
+            if (MessageUtil.isNetworkTransient(jo)) {
+                farmTaskNetworkDown = true;
+            }
             // 风控挑战：自动过滑块在支付宝 12.12.x 上不可用，该接口当日已废。
             // 置当日标记，由 doFarmTask / listFarmTask 中止剩余任务（本次照常走完下面的错误记录，便于日志留痕）。
             // ⚠️ 本地定制：上游把这段重构成 attemptFarmTask 时未带过来，此处按原语义补回。
@@ -2058,6 +2082,11 @@ public class AntFarm extends ModelTask {
                                 task.optString("title", ""), jo),
                         msg -> Log.farm(msg))) {
                     return true;
+                }
+                // 网络不可用：本轮剩下的任务（领奖与做任务）都别打了，等下一轮
+                if (MessageUtil.isNetworkTransient(jo) && !farmTaskNetworkDown) {
+                    farmTaskNetworkDown = true;
+                    Log.record("网络不可用🌐本轮跳过剩余饲料任务，下一轮重试");
                 }
                 // 服务端繁忙(102)：本轮不再继续领其余任务，避免整轮反复白刷（请求本身已经发出过）
                 if (MessageUtil.isServerBusy(jo) && !farmTaskAwardBusy) {

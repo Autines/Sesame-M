@@ -505,15 +505,16 @@ public class MessageUtil {
     };
 
     /**
-     * 是否为"可重试错误"（限流、远端异常、网络抖动等）。
-     * <p>这类错误只是临时故障，一律不拉黑，避免把任务永久跳过。
+     * 是否为**网络类临时故障**（网络不可用/超时，服务端已明说「请稍后重试」）。
+     * <p>单独暴露给调用方，是因为它的处置比普通可重试错误更激进：
+     * 网络整段不通时，逐个任务去打只会白等超时（庄园一轮能白耗 7 分钟），
+     * 调用方可以选择**本轮直接中止**、下一轮再试（见 AntFarm#farmTaskNetworkDown）。
+     * <p>⚠️ 码不统一：庄园/会员回 48、海洋回 46，文案都是「当前网络不可用，请稍后重试」。
      */
-    public static boolean isRetryable(JSONObject jo) {
+    public static boolean isNetworkTransient(JSONObject jo) {
         if (jo == null) {
             return false;
         }
-        // 网络类临时故障优先判定：其错误码不在下面 code 字段里（走的是 error 字段），
-        // 漏判的代价是整批任务当天作废，比误判重试严重得多。
         String errCode = jo.optString("error", "").trim();
         if (errCode.isEmpty()) {
             errCode = jo.optString("errorTip", "").trim();
@@ -527,6 +528,22 @@ public class MessageUtil {
             if (anyFieldContains(jo, keyword)) {
                 return true;
             }
+        }
+        return false;
+    }
+
+    /**
+     * 是否为"可重试错误"（限流、远端异常、网络抖动等）。
+     * <p>这类错误只是临时故障，一律不拉黑，避免把任务永久跳过。
+     */
+    public static boolean isRetryable(JSONObject jo) {
+        if (jo == null) {
+            return false;
+        }
+        // 网络类临时故障优先判定：其错误码不在下面 code 字段里（走的是 error 字段），
+        // 漏判的代价是整批任务当天作废，比误判重试严重得多。
+        if (isNetworkTransient(jo)) {
+            return true;
         }
         String code = jo.optString("code", "").trim();
         if (code.isEmpty()) {
