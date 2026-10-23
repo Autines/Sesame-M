@@ -486,12 +486,47 @@ public class MessageUtil {
     }
 
     /**
+     * 网络类临时故障的 `error` 码：**码在各接口间并不统一** —— 庄园/会员回 48、海洋回 46，
+     * 文案都是「当前网络不可用，请稍后重试」。用码兜底、用文案主判。
+     */
+    private static final String[] NETWORK_TRANSIENT_CODES = {"46", "48"};
+
+    /**
+     * 网络类临时故障的文案特征。服务端已明说「请稍后重试」，属临时故障，
+     * **绝不能判成「任务做不了」**。
+     * <p>用例（2026-10-23 实测）：08:48~08:55 手机网络抖动，庄园 33 次 `error:48`、
+     * 海洋 `error:46`、会员 `error:48`。由于 {@link #isRetryable} 不认这两个码，
+     * 庄园每个任务都被判 {@code Outcome.UNABLE} → 落「今日不再尝试」标记 →
+     * 当天后续每轮都是「今日已试[…]＃跳过」，**11 个饲料任务整天废掉**（约 990g）。
+     * 网络恢复后也没机会补做，这是"任务突然变少、饲料不够"的真凶。
+     */
+    private static final String[] NETWORK_TRANSIENT_KEYWORDS = {
+            "网络不可用", "网络异常", "网络超时", "请稍后重试"
+    };
+
+    /**
      * 是否为"可重试错误"（限流、远端异常、网络抖动等）。
      * <p>这类错误只是临时故障，一律不拉黑，避免把任务永久跳过。
      */
     public static boolean isRetryable(JSONObject jo) {
         if (jo == null) {
             return false;
+        }
+        // 网络类临时故障优先判定：其错误码不在下面 code 字段里（走的是 error 字段），
+        // 漏判的代价是整批任务当天作废，比误判重试严重得多。
+        String errCode = jo.optString("error", "").trim();
+        if (errCode.isEmpty()) {
+            errCode = jo.optString("errorTip", "").trim();
+        }
+        for (String c : NETWORK_TRANSIENT_CODES) {
+            if (c.equals(errCode)) {
+                return true;
+            }
+        }
+        for (String keyword : NETWORK_TRANSIENT_KEYWORDS) {
+            if (anyFieldContains(jo, keyword)) {
+                return true;
+            }
         }
         String code = jo.optString("code", "").trim();
         if (code.isEmpty()) {
