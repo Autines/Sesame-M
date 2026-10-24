@@ -25,6 +25,9 @@ public class AppConfig {
     /** 界面风格：Material Design 3（Material You，支持动态取色） */
     public static final String UI_STYLE_MATERIAL3 = "material3";
 
+    /** 本进程是否已打印过「加载APP配置」，避免启动多阶段重复初始化时刷重复日志 */
+    private static volatile boolean loadLogged = false;
+
     /** 上次 load 解析失败：内存此时只是默认值，必须禁止写盘，否则会把默认值整份固化 */
     private static volatile boolean loadFailed = false;
 
@@ -249,7 +252,10 @@ public class AppConfig {
                 JsonUtil.copyMapper().readerForUpdating(INSTANCE).readValue(json);
                 // 注意：必须先加载文件再打印日志，否则开关判断仍取默认值 true，
                 // 导致「运行日志已关闭」时启动进程仍写入加载日志
-                Log.i("加载APP配置");
+                if (!loadLogged) {
+                    loadLogged = true;
+                    Log.i("加载APP配置");
+                }
                 String formatted = toSaveStr();
                 if (formatted != null && !formatted.equals(json)) {
                     Log.i(TAG, "格式化APP配置");

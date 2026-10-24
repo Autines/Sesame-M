@@ -1477,6 +1477,7 @@ public class MessageUtil {
             TASK_WHITE_LIST.put(listTitle, new HashSet<>(whiteList));
         }
         Set<String> currentValues = field.getValue();
+        boolean added = false;
         if (currentValues != null) {
             for (String task : blackList) {
                 // 白名单优先：若预置黑名单与白名单冲突，以白名单为准，不自动添加
@@ -1485,10 +1486,15 @@ public class MessageUtil {
                 }
                 if (!currentValues.contains(task)) {
                     field.add(task, 0);
+                    added = true;
                 }
             }
             // 注意：不再遍历 whiteList 调用 remove。白名单只挡"自动拉黑去加它"，
             // 用户手动加入黑名单的条目（无论是否为白名单任务）一律保留。
+        }
+        if (!added) {
+            // 预置项均已在列表中：不重复落盘、不重复刷日志（每轮会被多次调用）
+            return;
         }
         if (ConfigV2.save(UserIdMap.getCurrentUid(), false)) {
             Log.record("黑白名单🈲" + displayName + "自动设置: " + field.getValue());

@@ -259,40 +259,67 @@ private val RUN_START_REGEX =
     Regex("""^\[账号\d+\]开始执行(?:\s*$|分组【[^】]*】任务\s*$|全部任务\s*$)""")
 
 /**
- * 从运行日志**全文**提取所有轮次开始时间（升序）。
+ * 模块加载起点行正则：「模块初始化开始」。
+ * 由 ApplicationHook 在主进程、AppConfig.load 之前打印，是主进程一次加载周期的最早日志。
+ * 旧版模块没有这一行，所以对历史日志的轮次划分没有影响。
+ */
+private val INIT_START_REGEX = Regex("""^模块初始化开始\s*$""")
+
+/** 运行日志的两类轮次锚点（均已按时间升序） */
+private data class RuntimeAnchors(
+    val runStarts: List<String>,
+    val initStarts: List<String>
+)
+
+/**
+ * 从运行日志**全文**提取轮次锚点：
+ * ① 执行起点（`[账号N]开始执行…`）；② 模块加载起点（`模块初始化开始`）。
  *
  * 为什么要读全文、而不是复用页面上已加载的条目：页面只保留了尾部窗口
  * （[MAX_LOG_ENTRIES] / [MAX_TAIL_BYTES] 限制），而锚点必须覆盖全天每一轮，
  * 否则「森林/庄园/金豆」这些自身没有轮次标记的页面，早上的日志会被归到错误的一轮。
  * 读全文只在进页面时做一次（[remember] 缓存），当天文件量级下开销可忽略。
  */
-private fun readRuntimeAnchors(): List<String> {
+private fun readRuntimeAnchors(): RuntimeAnchors {
     val file = LogType.RUNTIME.file
-    if (!file.exists()) return emptyList()
-    val anchors = mutableListOf<String>()
+    if (!file.exists()) return RuntimeAnchors(emptyList(), emptyList())
+    val runStarts = mutableListOf<String>()
+    val initStarts = mutableListOf<String>()
     try {
         file.forEachLine(Charsets.UTF_8) { line ->
             val m = LOG_TIME_REGEX.find(line) ?: return@forEachLine
             val tag = m.groupValues[2].takeIf { it.isNotEmpty() }
             val body = m.groupValues[3]
-            if (tag == "RUNTIME" && RUN_START_REGEX.containsMatchIn(body)) {
-                m.groupValues[1].takeIf { it.isNotEmpty() }?.let { anchors.add(it) }
+            val time = m.groupValues[1].takeIf { it.isNotEmpty() } ?: return@forEachLine
+            if (tag == "RUNTIME") {
+                when {
+                    RUN_START_REGEX.containsMatchIn(body) -> runStarts.add(time)
+                    INIT_START_REGEX.containsMatchIn(body) -> initStarts.add(time)
+                }
             }
         }
     } catch (_: Throwable) {
         // 读取失败时退化为无锚点（各页按单条显示），不影响原有查看能力
     }
-    return anchors.sorted()
+    return RuntimeAnchors(runStarts.sorted(), initStarts.sorted())
 }
 
 /**
  * 把条目按「最近一次开始执行」归轮。
  *
+ * 若两轮「开始执行」之间存在模块加载起点（进程重启后的加载阶段），该轮边界提前到
+ * 加载起点，使加载阶段的日志归到本轮开头，而不是被算进上一轮尾巴（见 [effectiveRunStarts]）。
+ *
  * 无锚点（当天还没跑过）时整批归为一轮，而非返回空 —— 否则刚装完/刚清完日志时
  * 切到按轮模式会一片空白，容易误判成功能坏了。时间比较基于 `HH:mm:ss.SSS` 的
  * 字典序，同一天内等价于时间序。
  */
-private fun aggregateByRun(source: List<LogEntry>, anchors: List<String>): List<LogRunEntry> {
+private fun aggregateByRun(
+    source: List<LogEntry>,
+    runStarts: List<String>,
+    initStarts: List<String>
+): List<LogRunEntry> {
+    val anchors = effectiveRunStarts(runStarts, initStarts)
     if (source.isEmpty()) return emptyList()
     if (anchors.isEmpty()) {
         val first = source.first()
@@ -317,6 +344,49 @@ private fun aggregateByRun(source: List<LogEntry>, anchors: List<String>): List<
                 startKey = "${first.source}-${first.lineNumber}",
                 entries = list.toList()
             )
+        }
+    }
+}
+
+/**
+ * 加载起点与「开始执行」之间允许的最大间隔。
+ * 只接受紧邻轮次开始前的加载标记，避免执行中途其它子进程的偶发标记把下一轮边界
+ * 拖到本轮中间（表现为轮次卡片错位/消失）。正常冷启动加载到开始执行不足 1 秒，
+ * 10 秒上限足够覆盖慢设备。
+ */
+private const val INIT_BOUNDARY_WINDOW_MS = 10_000L
+
+/** `HH:mm:ss.SSS` → 当天毫秒数（同日有效）；格式异常返回 null */
+private fun timeToMillis(t: String): Long? {
+    return try {
+        val parts = t.split(':', '.')
+        if (parts.size != 4) return null
+        (((parts[0].toLong() * 60 + parts[1].toLong()) * 60 + parts[2].toLong()) * 1000) + parts[3].toLong()
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+/**
+ * 每轮的有效起点：默认取该轮「开始执行」时间；若开始执行前 [INIT_BOUNDARY_WINDOW_MS] 内
+ * 存在模块加载起点（取离开始执行最近的一条），则把边界提前到该加载起点。
+ * 第 1 轮不调整 —— 早于所有锚点的散落日志本就归入第 1 轮。
+ * 旧版模块不打印「模块初始化开始」，initStarts 为空时行为与原来完全一致。
+ */
+private fun effectiveRunStarts(runStarts: List<String>, initStarts: List<String>): List<String> {
+    if (runStarts.isEmpty() || initStarts.isEmpty()) return runStarts
+    return runStarts.mapIndexed { index, start ->
+        if (index == 0) {
+            start
+        } else {
+            val prev = runStarts[index - 1]
+            val startMs = timeToMillis(start) ?: return@mapIndexed start
+            // initStarts 已升序：区间内最后一条即离开始执行最近的标记
+            val marker = initStarts.lastOrNull { it > prev && it < start }?.takeIf { m ->
+                val mMs = timeToMillis(m)
+                mMs != null && startMs - mMs in 0..INIT_BOUNDARY_WINDOW_MS
+            }
+            marker ?: start
         }
     }
 }
@@ -426,9 +496,9 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
      * 与按条模式的列表内容严格一致 —— 反过来先聚合再过滤，会出现「点数变少了、
      * 展开却是全量」的错位。
      */
-    val runAnchors = remember { readRuntimeAnchors() }
-    val runEntries = remember(filteredEntries, runAnchors) {
-        aggregateByRun(filteredEntries, runAnchors)
+    val runtimeAnchors = remember { readRuntimeAnchors() }
+    val runEntries = remember(filteredEntries, runtimeAnchors) {
+        aggregateByRun(filteredEntries, runtimeAnchors.runStarts, runtimeAnchors.initStarts)
     }
 
     /**
@@ -663,7 +733,9 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                         key = { _, item ->
                             when (item) {
                                 is LogEntry -> "${item.source}-${item.lineNumber}-${item.hashCode()}"
-                                is LogRunEntry -> "run-${item.startKey}-${item.runIndex}"
+                                // key 与内容解耦：轮次卡片若把 startKey（含行号）纳入 key，
+                                // 尾部窗口丢弃旧条目时 key 会变，锚点失效、卡片被重建（视图自己跳）
+                                is LogRunEntry -> "run-${item.runIndex}"
                                 else -> item.hashCode().toString()
                             }
                         }

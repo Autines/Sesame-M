@@ -265,19 +265,27 @@ public class AntMember extends ModelTask {
                 
                 jo = new JSONObject(AntMemberRpcCall.queryAllStatusTaskList());
                 if (MessageUtil.checkResultCode(TAG, jo)) {
-                    JSONArray availableTaskList = jo.getJSONArray("availableTaskList");
-                    for (int i = 0; i < availableTaskList.length(); i++) {
-                        JSONObject task = availableTaskList.getJSONObject(i);
-                        JSONObject taskConfigInfo = task.getJSONObject("taskConfigInfo");
-                        String name = taskConfigInfo.getString("name");
-                        AntMemberTaskListMap.add(name, name);
+                    JSONArray availableTaskList = jo.optJSONArray("availableTaskList");
+                    if (availableTaskList != null) {
+                        for (int i = 0; i < availableTaskList.length(); i++) {
+                            JSONObject task = availableTaskList.optJSONObject(i);
+                            JSONObject taskConfigInfo = task == null ? null : task.optJSONObject("taskConfigInfo");
+                            String name = taskConfigInfo == null ? "" : taskConfigInfo.optString("name", "");
+                            if (!name.isEmpty()) {
+                                AntMemberTaskListMap.add(name, name);
+                            }
+                        }
                     }
-                    JSONArray taskHistoryList = jo.getJSONArray("taskHistoryList");
-                    for (int i = 0; i < taskHistoryList.length(); i++) {
-                        JSONObject task = taskHistoryList.getJSONObject(i);
-                        JSONObject taskConfigInfo = task.getJSONObject("taskConfigInfo");
-                        String name = taskConfigInfo.getString("name");
-                        AntMemberTaskListMap.add(name, name);
+                    JSONArray taskHistoryList = jo.optJSONArray("taskHistoryList");
+                    if (taskHistoryList != null) {
+                        for (int i = 0; i < taskHistoryList.length(); i++) {
+                            JSONObject task = taskHistoryList.optJSONObject(i);
+                            JSONObject taskConfigInfo = task == null ? null : task.optJSONObject("taskConfigInfo");
+                            String name = taskConfigInfo == null ? "" : taskConfigInfo.optString("name", "");
+                            if (!name.isEmpty()) {
+                                AntMemberTaskListMap.add(name, name);
+                            }
+                        }
                     }
                 }
                 
@@ -1982,8 +1990,9 @@ public class AntMember extends ModelTask {
             String response = ApplicationHook.requestString("com.alipay.gamecenteruprod.biz.rpc.v3.queryPointBallList", "[{}]");
             JSONObject jsonObject = new JSONObject(response);
             if (MessageUtil.checkSuccess(TAG, jsonObject)) {
-                JSONArray pointBallList = jsonObject.getJSONObject("data").getJSONArray("pointBallList");
-                if (pointBallList.length() > 0) {
+                JSONArray pointBallList = jsonObject.optJSONObject("data") == null
+                        ? null : jsonObject.getJSONObject("data").optJSONArray("pointBallList");
+                if (pointBallList != null && pointBallList.length() > 0) {
                     batchReceivePointBall();
                 }
             }
@@ -3285,10 +3294,16 @@ public class AntMember extends ModelTask {
             String response = AntMemberRpcCall.queryRecommendTask();
             JSONObject jsonResponse = new JSONObject(response);
             // 获取 taskDetailList 数组
-            JSONArray taskDetailList = jsonResponse.getJSONArray("taskDetailList");
+            JSONArray taskDetailList = jsonResponse.optJSONArray("taskDetailList");
+            if (taskDetailList == null) {
+                return;
+            }
             // 遍历 taskDetailList
             for (int i = 0; i < taskDetailList.length(); i++) {
-                JSONObject taskDetail = taskDetailList.getJSONObject(i);
+                JSONObject taskDetail = taskDetailList.optJSONObject(i);
+                if (taskDetail == null) {
+                    continue;
+                }
                 // 检查 "canAccess" 的值是否为 true
                 boolean canAccess = taskDetail.optBoolean("canAccess", false);
                 if (!canAccess) {

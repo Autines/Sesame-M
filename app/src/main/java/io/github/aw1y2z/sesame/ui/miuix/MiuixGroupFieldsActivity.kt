@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -326,14 +327,18 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
                     title?.let { SmallTitle(text = it) }
                     CardColumn {
                         fields.forEach { fieldRow ->
-                            GroupFieldRow(
-                                activity = activity,
-                                userId = userId,
-                                groupCode = groupCode,
-                                row = fieldRow,
-                                onDependencyChanged =
-                                    if (dependencyCodes.contains(fieldRow.field.code)) bumpDependency else null
-                            )
+                            // 按行唯一 key 分组：依赖子行增删后下方行会重排，
+                            // 不包 key 会沿用上一行的组合状态（表现为下方开关显示错位）
+                            key(fieldRow.key) {
+                                GroupFieldRow(
+                                    activity = activity,
+                                    userId = userId,
+                                    groupCode = groupCode,
+                                    row = fieldRow,
+                                    onDependencyChanged =
+                                        if (dependencyCodes.contains(fieldRow.field.code)) bumpDependency else null
+                                )
+                            }
                         }
                     }
                 }
