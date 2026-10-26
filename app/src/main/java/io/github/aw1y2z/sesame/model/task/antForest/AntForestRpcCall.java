@@ -444,7 +444,33 @@ public class AntForestRpcCall {
     public static String queryMonopolyEntryInfo() {
         return ApplicationHook.requestString("alipay.antisle.monopoly.h5.queryMonopolyEntryInfo", monopolyPayload(""));
     }
-    
+
+    /* 新版保护地：地图页（含全部保护地列表 regionList 与当前保护地全部展区 currentRegionMapList） */
+    public static String queryMonopolyMapPage() {
+        return ApplicationHook.requestString("alipay.antisle.monopoly.h5.queryMonopolyMapPage",
+                "[{\"source\":\"monopoly_home_animal\",\"uniqueId\":\"" + RandomUtil.getRandomString(16) + "\"}]");
+    }
+
+    /* 新版保护地：切换当前巡护的保护地（regionCode 为查询地图页得到的区域码） */
+    public static String switchMonopolyRegion(String regionCode) {
+        return ApplicationHook.requestString("alipay.antisle.monopoly.h5.switchMonopolyRegion",
+                "[{\"regionCode\":\"" + regionCode + "\",\"source\":\"monopoly_home_animal\",\"uniqueId\":\""
+                        + RandomUtil.getRandomString(16) + "\"}]");
+    }
+
+    /* 新版保护地：查询证书兑换项目（响应含 currentEnergy 当前能量与 energy 所需能量） */
+    public static String queryMonopolyExchangeTree(String projectId) {
+        return ApplicationHook.requestString("alipay.antforest.forest.h5.queryTreeForExchange",
+                "[{\"projectId\":\"" + projectId + "\",\"source\":\"monopoly_exchange_mappage\",\"version\":\"20240704\"}]");
+    }
+
+    /* 新版保护地：兑换解锁证书，消耗能量；projectId 按数字下发，sToken 为 13 位毫秒时间戳 */
+    public static String exchangeMonopolyTree(String projectId) {
+        return ApplicationHook.requestString("alipay.antmember.forest.h5.exchangeTree",
+                "[{\"projectId\":" + projectId + ",\"sToken\":\"" + System.currentTimeMillis()
+                        + "\",\"source\":\"monopoly_exchange_mappage\",\"version\":\"20230501\"}]");
+    }
+
     /* 领取新版保护地首页道具（当日巡护机会） */
     public static String triggerMonopolyHomeProps() {
         return ApplicationHook.requestString("alipay.antisle.monopoly.h5.triggerHomePageProps", monopolyPayload(""));

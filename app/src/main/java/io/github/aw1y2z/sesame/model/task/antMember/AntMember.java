@@ -59,6 +59,9 @@ public class AntMember extends ModelTask {
 
     /** 游戏中心宝箱每日上限（首页 {@code taskModule.dailyTaskCertCntUpperLimit} 的兜底值）。 */
     private static final int GAME_CENTER_CERT_LIMIT = 30;
+
+    /** 当日任务列表未取到(风控/1009)：置当日标记，后续轮次不再请求，避免反复触发加重风控 */
+    private static final String FLAG_SIGN_PAGE_TASK_FAILED = "AntMember::signPageTaskListFailed";
     
     @Override
     public String getName() {
@@ -172,8 +175,10 @@ public class AntMember extends ModelTask {
             
             if (AntMemberTask.getValue()) {
                 queryPointCert(1, 8);
-                signPageTaskList();
-                queryAllStatusTaskList();
+                // 先判断任务列表能否取到：风控(1009等)拿不到列表时，不再请求其它任务接口，避免加重风控
+                if (signPageTaskList()) {
+                    queryAllStatusTaskList();
+                }
             }
             
             memberPointExchangeBenefit();
@@ -476,26 +481,57 @@ public class AntMember extends ModelTask {
     
     /**
      * 做任务赚积分
+     *
+     * @return 是否成功取到任务列表；取不到(风控/无列表)时返回 false，调用方不应再发起其它任务 RPC
      */
-    private void signPageTaskList() {
+    private boolean signPageTaskList() {
+        boolean obtained = false;
         try {
+            // 当日已确认取不到列表(风控/1009)：本轮及后续轮次都不再请求，避免加重风控
+            if (Status.hasFlagToday(FLAG_SIGN_PAGE_TASK_FAILED)) {
+                Log.i(TAG, "今日任务列表获取失败(风控)，跳过");
+                return false;
+            }
             do {
                 String rawJson = AntMemberRpcCall.signPageTaskList();
                 JSONObject jo = new JSONObject(rawJson);
                 TimeUtil.sleep(500);
                 boolean doubleCheck = false;
                 if (!MessageUtil.checkResultCode(TAG + " signPageTaskList", jo)) {
-                    return;
+                    // ⚠️ 本地定制：网络类临时故障不能算「取不到列表」。
+                    // 上游这里一律打当日标记，但网络抖动（error 46/48「当前网络不可用，请稍后重试」）
+                    // 恢复后本该能正常取到，打标记会让会员任务整天停摆 —— 这正是 2026-10-23
+                    // 在任务层踩过的坑（网络抖动被当成任务做不了，一天废掉十几个任务）。
+                    // 只有真正的风控/业务失败才落标记。
+                    if (!obtained && !MessageUtil.isNetworkTransient(jo)) {
+                        Status.flagToday(FLAG_SIGN_PAGE_TASK_FAILED);
+                    }
+                    return false;
                 }
                 if (!jo.has("categoryTaskList")) {
-                    Log.i(TAG, "signPageTaskList 无 categoryTaskList 字段");
-                    return;
+                    Log.i(TAG, "signPageTaskList 无 categoryTaskList 字段，今日不再重试");
+                    if (!obtained) {
+                        Status.flagToday(FLAG_SIGN_PAGE_TASK_FAILED);
+                    }
+                    return false;
                 }
                 JSONArray categoryTaskList = jo.getJSONArray("categoryTaskList");
+                if (categoryTaskList.length() == 0) {
+                    Log.i(TAG, "signPageTaskList 任务列表为空，今日不再重试");
+                    if (!obtained) {
+                        Status.flagToday(FLAG_SIGN_PAGE_TASK_FAILED);
+                    }
+                    return false;
+                }
+                obtained = true;
                 for (int i = 0; i < categoryTaskList.length(); i++) {
-                    jo = categoryTaskList.getJSONObject(i);
-                    JSONArray taskList = jo.getJSONArray("taskList");
-                    String type = jo.getString("type");
+                    JSONObject category = categoryTaskList.getJSONObject(i);
+                    // 先判断有没有任务列表：无列表说明没有可做的任务，不做 doMoreTask 上报
+                    JSONArray taskList = category.optJSONArray("taskList");
+                    if (taskList == null || taskList.length() == 0) {
+                        continue;
+                    }
+                    String type = category.optString("type");
                     // 登记任务名到黑名单候选项：signPageTaskList 的任务(含广告任务)不在其它列表里，否则设置页搜不到
                     for (int j = 0; j < taskList.length(); j++) {
                         JSONObject task = taskList.optJSONObject(j);
@@ -518,7 +554,7 @@ public class AntMember extends ModelTask {
                         doubleCheck = doBrowseTask(taskList);
                     }
                     else {
-                        ExtensionsHandle.handleAlphaRequest("antMember", "doMoreTask", jo);
+                        ExtensionsHandle.handleAlphaRequest("antMember", "doMoreTask", category);
                     }
                 }
                 AntMemberTaskListMap.save();
@@ -531,7 +567,11 @@ public class AntMember extends ModelTask {
         }
         catch (Throwable t) {
             Log.err(TAG, "signPageTaskList err:", t);
+            if (!obtained) {
+                Status.flagToday(FLAG_SIGN_PAGE_TASK_FAILED);
+            }
         }
+        return obtained;
     }
     
     /**
@@ -546,7 +586,12 @@ public class AntMember extends ModelTask {
                 Log.i(TAG, "queryAllStatusTaskList 接口返回失败");
                 return;
             }
-            JSONArray availableTaskList = jo.getJSONArray("availableTaskList");
+            JSONArray availableTaskList = jo.optJSONArray("availableTaskList");
+            // 风控(如 1009)时列表可能缺失或为空，此时不做任何任务处理，避免加重风控
+            if (availableTaskList == null || availableTaskList.length() == 0) {
+                Log.i(TAG, "queryAllStatusTaskList 无可做任务列表");
+                return;
+            }
             if (doBrowseTask(availableTaskList)) {
                 queryAllStatusTaskList();
             }

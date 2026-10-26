@@ -248,6 +248,7 @@ public class AntForestV2 extends ModelTask {
     private BooleanModelField userPatrol;
     private BooleanModelField monopolyPatrol;
     private BooleanModelField monopolyTasks;
+    private BooleanModelField monopolyExchangeCert;
     private BooleanModelField monopolyAnimalEnergy;
     private BooleanModelField monopolyDispatchAnimal;
     private ChoiceModelField monopolyDispatchPriority;
@@ -364,6 +365,7 @@ public class AntForestV2 extends ModelTask {
         modelFields.addField(userPatrol = new BooleanModelField("userPatrol", "旧版保护地巡护", false));
         modelFields.addField(monopolyPatrol = new BooleanModelField("monopolyPatrol", "新版保护地 | 自动前进", false));
         modelFields.addField(monopolyTasks = new BooleanModelField("monopolyTasks", "新版保护地 | 自动任务", false));
+        modelFields.addField(monopolyExchangeCert = new BooleanModelField("monopolyExchangeCert", "新版保护地 | 自动兑换证书(每张图消耗5000g能量)", false));
         modelFields.addField(monopolyAnimalEnergy = new BooleanModelField("monopolyAnimalEnergy", "新版动物伙伴 | 领取能量", false));
         modelFields.addField(monopolyDispatchAnimal = new BooleanModelField("monopolyDispatchAnimal", "新版动物伙伴 | 自动派遣", false));
         modelFields.addField(monopolyDispatchPriority = new ChoiceModelField("monopolyDispatchPriority", "新版动物伙伴 | 派遣优先级", 0, new String[]{"新版优先", "旧版优先"}).setDependsOn("monopolyDispatchAnimal"));
@@ -4502,8 +4504,63 @@ public class AntForestV2 extends ModelTask {
         }
     }
 
-    /* 新版保护地：自动前进（领取首页机会 + 掷骰推进 + 事件确认） */
+    /* 新版保护地：遍历所有已开放的保护地，逐区域巡护（解决多个保护地并行时的覆盖问题） */
     private void monopolyPatrol() {
+        try {
+            JSONObject mapPage = monopolyResponse(AntForestRpcCall.queryMonopolyMapPage());
+            JSONArray regionList = mapPage.optJSONArray("regionList");
+            // 旧版/未返回区域列表时退化为单区域：仅巡护当前所在保护地
+            if (regionList == null || regionList.length() == 0) {
+                patrolMonopolyRegion();
+                return;
+            }
+            // 由 regionList 中 currentRegion=true 确定初始所在保护地；切走后该标记会"过期"，
+            // 故自行跟踪当前已切到的区域，只要与目标不一致就重新切换，避免原地重复巡护
+            String activeRegion = "";
+            for (int i = 0; i < regionList.length(); i++) {
+                JSONObject r = regionList.optJSONObject(i);
+                if (r != null && r.optBoolean("currentRegion", false)) {
+                    activeRegion = r.optString("regionCode");
+                    break;
+                }
+            }
+            for (int i = 0; i < regionList.length(); i++) {
+                JSONObject region = regionList.optJSONObject(i);
+                if (region == null) {
+                    continue;
+                }
+                String regionCode = region.optString("regionCode");
+                // 中文名在顶层 regionName；displayInfo.regionNameText 为兜底
+                String regionName = region.optString("regionName", "");
+                if (regionName.isEmpty()) {
+                    JSONObject displayInfo = region.optJSONObject("displayInfo");
+                    regionName = displayInfo == null ? "" : displayInfo.optString("regionNameText", "");
+                }
+                if (regionName.isEmpty()) {
+                    regionName = regionCode;
+                }
+                // 仅处理已开放的保护地；PREPARING 表示尚未到开放时间
+                if (regionCode.isEmpty() || "PREPARING".equals(region.optString("regionAvailability"))) {
+                    continue;
+                }
+                if (!regionCode.equals(activeRegion)) {
+                    JSONObject sr = new JSONObject(AntForestRpcCall.switchMonopolyRegion(regionCode));
+                    if (!"SUCCESS".equals(sr.optString("resultCode"))) {
+                        Log.record("新版保护地🌲[" + regionName + "]切换失败，跳过该保护地");
+                        continue;
+                    }
+                    activeRegion = regionCode;
+                }
+                Log.record("新版保护地🌲开始巡护[" + regionName + "]");
+                patrolMonopolyRegion();
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "monopolyPatrol err:", t);
+        }
+    }
+
+    /* 新版保护地：自动前进（领取首页机会 + 掷骰推进 + 事件确认），作用于当前所在的保护地 */
+    private void patrolMonopolyRegion() {
         try {
             JSONObject state = new JSONObject(AntForestRpcCall.queryMonopolyEntryInfo());
             if (!MessageUtil.checkResultCode(TAG, state)) {
@@ -4517,7 +4574,7 @@ public class AntForestV2 extends ModelTask {
                 return;
             }
             if (isMonopolyClosed(regionInfo) || isMonopolyClosed(mapInfo)) {
-                Log.forest("新版保护地🌲当前区域或地图不在开放期，停止本轮");
+                Log.record("新版保护地🌲当前区域或地图不在开放期，停止本轮");
                 return;
             }
             String regionCode = regionInfo.optString("regionCode");
@@ -4526,6 +4583,9 @@ public class AntForestV2 extends ModelTask {
             boolean tasksMayHaveChanged = false;
             if (tasksEnabled) {
                 monopolyTask(regionCode);
+            }
+            if (monopolyExchangeCert.getValue()) {
+                exchangeMonopolyCertificate(regionCode);
             }
             // 首次进入地图时服务端要求带引导参数掷骰
             boolean guideRoll = userInfo.optBoolean("firstEnterMonopoly");
@@ -4566,7 +4626,15 @@ public class AntForestV2 extends ModelTask {
                         return;
                     }
                     confirmedEvents.add(eventId);
-                    Log.forest("新版保护地🌲事件[" + eventId + "]已确认");
+                    // 事件标题取 displayInfo.titleText，缺省按类型给出中文，避免输出内部事件 ID
+                    String eventTitle = displayInfo.optString("titleText", "");
+                    if (eventTitle.isEmpty()) {
+                        eventTitle = displayInfo.optString("title", "");
+                    }
+                    if (eventTitle.isEmpty()) {
+                        eventTitle = "CHARITY".equals(eventType) ? "公益事件" : ("SPECIAL".equals(eventType) ? "特殊事件" : "事件");
+                    }
+                    Log.forest("新版保护地🌲" + eventTitle + ("confirm".equals(actionKey) ? "已确认" : "已跳过"));
                     state = new JSONObject(AntForestRpcCall.queryMonopolyEntryInfo());
                     if (!MessageUtil.checkResultCode(TAG, state)) {
                         return;
@@ -4622,8 +4690,99 @@ public class AntForestV2 extends ModelTask {
                 }
             }
         } catch (Throwable t) {
-            Log.err(TAG, "monopolyPatrol err:", t);
+            Log.err(TAG, "patrolMonopolyRegion err:", t);
         }
+    }
+
+    /* 新版保护地：为当前展区兑换解锁证书（消耗 5000g 能量，需开关；每区域每天至多一次） */
+    private void exchangeMonopolyCertificate(String regionCode) {
+        try {
+            JSONObject mapPage = monopolyResponse(AntForestRpcCall.queryMonopolyMapPage());
+            JSONArray mapList = mapPage.optJSONArray("currentRegionMapList");
+            if (mapList == null) {
+                return;
+            }
+            String projectId = "";
+            String mapCode = regionCode;
+            for (int i = 0; i < mapList.length(); i++) {
+                JSONObject map = mapList.optJSONObject(i);
+                if (map == null) {
+                    continue;
+                }
+                // 仅兑换「当前激活」且证书待领取的展区（currentMap=true）。LV2+ 在解锁前
+                // currentMap=false、且多为 LOCKED/PREPARING，避免误兑下一张图的证书
+                if (!"PENDING".equals(map.optString("certificateStatus"))
+                        || !map.optBoolean("currentMap", false)) {
+                    continue;
+                }
+                // 证书兑换入口（projectId%3D<数字>，URL 编码）可能深嵌套，直接对整条地图项
+                // JSON 文本做正则匹配；优先取 mapDisplay.lockedRedirectUrl 字段内的证书链接
+                String pid = parseMonopolyProjectId(map.toString());
+                if (!pid.isEmpty()) {
+                    projectId = pid;
+                    mapCode = map.optString("mapCode", regionCode);
+                    break;
+                }
+            }
+            if (projectId.isEmpty()) {
+                Log.record("新版保护地🌲当前开放展区暂未提供证书兑换入口，跳过");
+                return;
+            }
+            String dayTag = "forest::monopolyCert::" + mapCode;
+            if (Status.hasFlagToday(dayTag)) {
+                return;
+            }
+            JSONObject query = monopolyResponse(AntForestRpcCall.queryMonopolyExchangeTree(projectId));
+            // 所需能量嵌在 exchangeableTree.energy 内，当前能量 currentEnergy 在顶层
+            JSONObject exchangeableTree = query.optJSONObject("exchangeableTree");
+            int need = exchangeableTree == null
+                    ? query.optInt("energy", 0)
+                    : exchangeableTree.optInt("energy", query.optInt("energy", 0));
+            int own = query.optInt("currentEnergy", 0);
+            if (need <= 0 || own < need) {
+                Log.record("新版保护地🌲无法获取证书兑换所需能量(" + own + "/" + need + "g)，跳过");
+                return;
+            }
+            JSONObject exchange = monopolyResponse(AntForestRpcCall.exchangeMonopolyTree(projectId));
+            if ("SUCCESS".equals(exchange.optString("resultCode"))) {
+                Status.flagToday(dayTag);
+                // projectName 在查询响应顶层，兑换响应里可能没有
+                String projectName = query.optString("projectName", "").replace("<br/>", "·");
+                if (projectName.isEmpty()) {
+                    projectName = exchange.optString("projectName", "").replace("<br/>", "·");
+                }
+                Log.forest("新版保护地🌲🎟️已兑换解锁证书[" + projectName + "]，消耗" + need + "g能量");
+            } else {
+                Log.record("新版保护地🌲兑换证书失败：" + exchange.optString("resultDesc"));
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "exchangeMonopolyCertificate err:", t);
+        }
+    }
+
+    /* 从地图条目 JSON 文本中解析证书兑换的 projectId。链接为 URL 编码（projectId%3D<数字>），
+     * 优先从 mapDisplay.lockedRedirectUrl 字段内取（即证书兑换入口），避免误取动物/栖息地等其它 projectId */
+    private static String parseMonopolyProjectId(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        Matcher m = Pattern.compile("lockedRedirectUrl\"\\s*:\\s*\"[^\"]*?projectId%3D(\\d+)").matcher(text);
+        if (m.find()) {
+            return m.group(1);
+        }
+        m = Pattern.compile("redirectUrl\"\\s*:\\s*\"[^\"]*?projectId%3D(\\d+)").matcher(text);
+        if (m.find()) {
+            return m.group(1);
+        }
+        m = Pattern.compile("projectId%3D(\\d+)").matcher(text);
+        if (m.find()) {
+            return m.group(1);
+        }
+        m = Pattern.compile("projectId=(\\d+)").matcher(text);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return "";
     }
 
     /* 新版保护地：区域/地图是否未开放或已结束（缺少日期字段视为一直开放） */
@@ -5485,10 +5644,11 @@ public class AntForestV2 extends ModelTask {
                 return;
             }
 
-            // 以 teamHomeResult 判定当前版本：该字段只有组队主页才下发。
-            // 不能只看 nextAction：个人主页的 nextAction 可能是 WhackMole 等其它值，
-            // 据此判定会漏判成"无法确认"，从而跳过切换、组队浇水永远不执行。
-            if (homeJo.optJSONObject("teamHomeResult") == null) {
+            // 以 teamHomeResult.mainMember 判定当前版本：只有组队主页才把个人数据嵌进合种树页面。
+            // teamHomeResult 本身个人版也有（小队挑战配置），teamBaseInfo 在个人版同样会出现
+            // （已退出/受邀队伍的残留，teamWater 会以 PARAM_ILLEGAL 拒绝），nextAction 也不可靠
+            // （个人版常见 Cultivate）。
+            if (!isTeam(homeJo)) {
                 // 响应连基础字段都没有说明是异常返回，此时不要贸然修改账户设置
                 if (!homeJo.has("userBaseInfo") && !homeJo.has("nextAction") && !homeJo.has("now")) {
                     Log.record("首页响应异常(无主页字段)，跳过组队合种浇水");
@@ -5505,7 +5665,7 @@ public class AntForestV2 extends ModelTask {
                 if (homeJo == null) {
                     return;
                 }
-                if (homeJo.optJSONObject("teamHomeResult") == null) {
+                if (!isTeam(homeJo)) {
                     Log.record("切换后仍未进入组队版(可能未加入队伍)，跳过组队合种浇水");
                     return;
                 }
@@ -5672,35 +5832,16 @@ public class AntForestV2 extends ModelTask {
     }
 
     /**
-     * 按 nextAction 字面量判定：1=组队（Cultivate），0=个人（Team），-1=其它取值/字段缺失。
-     * 仅作 {@link #isTeam} 的兜底（组队主页缺少 mainMember 时用），不单独用于模式切换决策。
+     * 是否处于组队版：只有组队主页的 teamHomeResult 下才带 mainMember（个人数据被嵌进合种树页面）。
+     * <p>teamHomeResult 本身个人版也有（小队挑战配置），nextAction 同样不可靠（个人版常见
+     * Cultivate），故二者都不参与判定。
      */
-    private static int teamState(JSONObject homeObj) {
-        if (homeObj == null || !homeObj.has("nextAction")) {
-            return -1;
-        }
-        String nextAction = homeObj.optString("nextAction", "");
-        if ("Cultivate".equals(nextAction)) {
-            return 1;
-        }
-        if ("Team".equals(nextAction)) {
-            return 0;
-        }
-        return -1;
-    }
-
     private static boolean isTeam(JSONObject homeObj) {
         if (homeObj == null) {
             return false;
         }
-        // 依据 teamHomeResult.mainMember 是否下发判定组队模式：该字段只有组队主页才有，
-        // 且个人能量就在 mainMember 里；缺少时回退 nextAction（后者取值不稳定，容易漏判）。
         JSONObject teamHomeResult = homeObj.optJSONObject("teamHomeResult");
-        JSONObject mainMember = teamHomeResult != null ? teamHomeResult.optJSONObject("mainMember") : null;
-        if (mainMember != null) {
-            return true;
-        }
-        return teamState(homeObj) == 1;
+        return teamHomeResult != null && teamHomeResult.optJSONObject("mainMember") != null;
     }
 
     private static void loveteam(int waterNum) {
