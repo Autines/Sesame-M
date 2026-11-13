@@ -1,0 +1,611 @@
+package io.github.aw1y2z.sesame.model.task.antMember;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.Objects;
+import java.util.Set;
+
+import io.github.aw1y2z.sesame.data.task.ModelTask;
+import io.github.aw1y2z.sesame.model.base.TaskCommon;
+import io.github.aw1y2z.sesame.model.extensions.ExtensionsHandle;
+import io.github.aw1y2z.sesame.util.Log;
+import io.github.aw1y2z.sesame.util.MessageUtil;
+import io.github.aw1y2z.sesame.util.Status;
+import io.github.aw1y2z.sesame.util.StringUtil;
+import io.github.aw1y2z.sesame.util.TimeUtil;
+import io.github.aw1y2z.sesame.util.idMap.AntMemberAdTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.AntMemberTaskListMap;
+import io.github.aw1y2z.sesame.util.idMap.UserIdMap;
+
+/**
+ * 蚂蚁会员任务的公共基类。
+ * <p>会员任务与会员广告任务共用同一套任务列表接口(signPageTaskList / queryAllStatusTaskList)与
+ * 浏览任务处理(doBrowseTask)，区别仅在于「是否只处理广告任务(adTask=true 且无 targetBusiness)」
+ * 以及「非 BROWSE 分类如何上报」。这些差异通过参数(adOnly / blacklist)在调用时传入，
+ * 由同一个 AntMember.run() 先后跑两遍（会员 + 广告），从而成为两个互相隔离的执行路径，
+ * 各自有独立的开关与黑名单配置，但配置页只出现一块「会员任务」。
+ * <p><b>取数去重</b>：两类共用同一次 RPC 取数结果（静态缓存 + 每轮 TTL），避免同一账号同时开启两类时
+ * 每轮重复请求 signPageTaskList / queryAllStatusTaskList 加重风控；列表连续多次取不到时写入
+ * 共享的当日标记，两条路径一同跳过、当日不再重试。
+ */
+public abstract class BaseAntMember extends ModelTask {
+
+    protected final String TAG = getClass().getSimpleName();
+
+    /** 两个类共享的当日失败标记：取数连续失败到上限才置位，之后两条路径一起跳过、不再发 RPC */
+    private static final String FLAG_SIGN_PAGE_TASK_FAILED = "MemberTask::signPageTaskListFailed";
+
+    /** 两个类共享的当日"任务已完成"标记：列表为空(当天无可做任务)即置位，后续轮次跳过，不再发 RPC */
+    private static final String FLAG_SIGN_PAGE_TASK_DONE = "MemberTask::signPageTaskListDone";
+    private static final String FLAG_QUERY_ALL_TASK_DONE = "MemberTask::queryAllStatusTaskListDone";
+    /** 可领任务列表独自的限流标记：与 signPageTaskList 分开，避免一个接口被限流连累另一个 */
+    private static final String FLAG_QUERY_ALL_TASK_FAILED = "MemberTask::queryAllStatusTaskListFailed";
+
+    /** 当日取数失败计数：连续失败到上限才落上面的标记，一次抖动不再废掉整天 */
+    private static final String INT_FLAG_SIGN_PAGE_FETCH_FAIL = "MemberTask::signPageTaskListFetchFail";
+    private static final int MAX_FETCH_FAILURES = 3;
+
+    /** 取数失败后的冷却：1009 属限流，失败后立刻重试只会把风控窗口拉长 */
+    private static final String INT_FLAG_FETCH_COOLDOWN = "MemberTask::fetchCooldownUntilSec";
+    private static final int FETCH_FAIL_COOLDOWN_SEC = 600;
+
+    /** 共享取数缓存：两个接口各自记时间，避免一个接口刷新把另一个的过期缓存变成"新鲜" */
+    private static final long CACHE_TTL = 60_000L;
+    private static JSONObject cachedSignPage;
+    private static JSONObject cachedQueryAll;
+    private static long cacheTime = 0;
+    private static long queryAllCacheTime = 0;
+    private static String cacheUid = "";
+
+    /** 日志标签：adOnly=true 用「会员广告任务」，false 用「会员任务」 */
+    private static String labelFor(boolean adOnly) {
+        return adOnly ? "会员广告任务" : "会员任务";
+    }
+
+    /** 广告任务判定：adTask=true 且无 targetBusiness。运行期过滤与候选项登记共用，避免两处判据漂移。 */
+    static boolean isAdTask(JSONObject task) {
+        if (task == null || !task.optBoolean("adTask")) {
+            return false;
+        }
+        JSONObject cfg = task.optJSONObject("taskConfigInfo");
+        if (cfg == null) {
+            cfg = task.optJSONObject("simpleTaskConfig");
+        }
+        JSONArray tb = cfg == null ? null : cfg.optJSONArray("targetBusiness");
+        if (tb == null || tb.length() == 0) {
+            tb = task.optJSONArray("targetBusiness");
+        }
+        if (tb != null && tb.length() > 0) {
+            return false;
+        }
+        return task.optString("targetBusiness", "").isEmpty();
+    }
+
+    @Override
+    public Boolean check() {
+        if (TaskCommon.IS_ENERGY_TIME) {
+            Log.i(TAG, "任务暂停⏸️" + getName() + ":当前为仅收能量时间");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 跑 signPageTaskList：取数（两类共用）、解析、按职责处理。
+     *
+     * @param adOnly    true=只处理广告任务，false=处理除广告任务外的其它会员任务
+     * @param blacklist 本路径生效的黑名单任务名集合
+     * @return 是否成功取到任务列表；取不到(风控/无列表)返回 false，调用方不应再发起其它任务 RPC
+     */
+    protected boolean runSignPageTaskList(boolean adOnly, Set<String> blacklist) {
+        if (Status.hasFlagToday(FLAG_SIGN_PAGE_TASK_FAILED)) {
+            Log.i(TAG, "今日会员任务列表获取失败(风控)，跳过");
+            return false;
+        }
+        JSONObject jo = fetchSignPageTaskList(false);
+        if (jo == null) {
+            return false;
+        }
+        // 一轮只取一次列表：同一轮内第二次请求必被服务端限流(1009)，复查刷新留给下一轮
+        processSignPageTaskList(jo, adOnly, blacklist);
+        return true;
+    }
+
+    /**
+     * 跑 queryAllStatusTaskList：取数（共用）、解析、按职责处理。
+     * <p>与 signPageTaskList 完全解耦：两个接口各自限流，「可领任务」列表是浏览任务的主要来源，
+     * 不能因为另一个接口取数失败就整体跳过。
+     */
+    protected void runQueryAllStatusTaskList(boolean adOnly, Set<String> blacklist) {
+        JSONObject jo = fetchQueryAllStatusTaskList(false);
+        if (jo == null) {
+            return;
+        }
+        // 与 signPageTaskList 同理：一轮只取一次，复查刷新留到下一轮
+        processQueryAllStatusTaskList(jo, adOnly, blacklist);
+    }
+
+    /**
+     * 取 signPageTaskList（两类共用一次）。
+     *
+     * @param force true=忽略缓存强制重新请求（用于 doubleCheck 后再查一遍）
+     */
+    private JSONObject fetchSignPageTaskList(boolean force) {
+        String uid = UserIdMap.getCurrentUid();
+        long now = System.currentTimeMillis();
+        if (!force && isFetchCoolingDown()) {
+            return null;
+        }
+        if (!force && cachedSignPage != null && Objects.equals(cacheUid, uid) && (now - cacheTime) < CACHE_TTL) {
+            return cachedSignPage;
+        }
+        // 当日已确认取不到列表(风控/1009)：两条路径一起跳过，不再请求
+        if (Status.hasFlagToday(FLAG_SIGN_PAGE_TASK_FAILED)) {
+            Log.i(TAG, "今日任务列表获取失败(风控)，跳过");
+            return null;
+        }
+        // 当日任务已完成(列表为空)：后续轮次跳过，不再请求
+        if (Status.hasFlagToday(FLAG_SIGN_PAGE_TASK_DONE)) {
+            Log.i(TAG, "今日无可做任务列表，跳过");
+            return null;
+        }
+        try {
+            String rawJson = AntMemberRpcCall.signPageTaskList();
+            JSONObject jo = new JSONObject(rawJson);
+            TimeUtil.sleep(500);
+            if (!MessageUtil.checkResultCode(TAG + " signPageTaskList", jo)) {
+                // 复查刷新(force)失败通常是限流 1009：本轮任务已处理过，不该因此累计失败、更不该锁掉当天
+                if (force) {
+                    Log.i(TAG, "会员任务列表复查刷新失败，沿用本轮结果");
+                } else if (isRiskControl(jo)) {
+                    // 1009 是服务端限流：命中后通常持续数小时，重试只会延长风控窗口，当日直接停手
+                    Status.flagToday(FLAG_SIGN_PAGE_TASK_FAILED);
+                    Log.record("会员任务⏭️任务列表被限流(1009)，今日不再重试");
+                } else {
+                    handleFetchFailure("接口返回失败");
+                }
+                return null;
+            }
+            // 成功后清掉计数：只有「连续」失败才按风控处理，零星失败不该累积
+            if (Status.getIntFlagToday(INT_FLAG_SIGN_PAGE_FETCH_FAIL) > 0) {
+                Status.setIntFlagToday(INT_FLAG_SIGN_PAGE_FETCH_FAIL, 0);
+            }
+            // 成功响应即缓存(即使任务列表为空)，确保广告路径复用、不再重复请求；空列表由 process 处理
+            cacheUid = uid;
+            cachedSignPage = jo;
+            cacheTime = now;
+            return jo;
+        } catch (Throwable t) {
+            Log.err(TAG, "signPageTaskList err:", t);
+            if (!force) {
+                handleFetchFailure("请求异常");
+            }
+            return null;
+        }
+    }
+
+    /**
+     * 取数失败的处置。
+     * <p>原实现「取不到列表就置当日标记」，一次网络抖动或服务端繁忙(102)就让会员任务与广告任务
+     * 整天停摆；改为累计到上限才停手，既给临时失败留重试机会，也避免一直撞风控。
+     */
+    private void handleFetchFailure(String reason) {
+        int failures = Status.getIntFlagToday(INT_FLAG_SIGN_PAGE_FETCH_FAIL) + 1;
+        Status.setIntFlagToday(INT_FLAG_SIGN_PAGE_FETCH_FAIL, failures);
+        // 冷却落盘：只约束 signPageTaskList 自身；queryAllStatusTaskList 有独立的限流标记，不再受它牵连
+        Status.setIntFlagToday(INT_FLAG_FETCH_COOLDOWN,
+                (int) (System.currentTimeMillis() / 1000) + FETCH_FAIL_COOLDOWN_SEC);
+        if (failures >= MAX_FETCH_FAILURES) {
+            Status.flagToday(FLAG_SIGN_PAGE_TASK_FAILED);
+            Log.record("会员任务⏭️任务列表连续" + failures + "次获取失败(" + reason + ")，今日不再重试");
+        } else {
+            Log.i(TAG, "任务列表获取失败(" + reason + ")，第" + failures + "/" + MAX_FETCH_FAILURES + "次，冷却"
+                    + (FETCH_FAIL_COOLDOWN_SEC / 60) + "分钟后重试");
+        }
+    }
+
+    /** 服务端限流(1009「人气太旺」)：字段名各接口不统一，逐个兜一遍 */
+    private static boolean isRiskControl(JSONObject jo) {
+        if (jo == null) {
+            return false;
+        }
+        String[] fields = {"error", "errorTip", "code", "resultCode"};
+        for (String field : fields) {
+            if ("1009".equals(jo.optString(field, ""))) {
+                return true;
+            }
+        }
+        String msg = jo.optString("errorMessage", "");
+        return msg.contains("人气太旺");
+    }
+
+    /** 失败冷却期：直接跳过，不再发请求 */
+    private boolean isFetchCoolingDown() {
+        int until = Status.getIntFlagToday(INT_FLAG_FETCH_COOLDOWN);
+        if (until <= 0) {
+            return false;
+        }
+        if (System.currentTimeMillis() / 1000 < until) {
+            Log.i(TAG, "会员任务列表限流冷却中，本轮跳过");
+            return true;
+        }
+        return false;
+    }
+
+    /** 跳过原因每日只记一次：排查「列表里有任务却一个都没做」时够用，又不至于每轮刷屏 */
+    private void logSkipOnce(String flag, String message) {
+        if (Status.hasFlagToday(flag)) {
+            return;
+        }
+        Status.flagToday(flag);
+        Log.i(TAG, message);
+    }
+
+    /**
+     * queryAllStatusTaskList 的成功判定。
+     * <p>该接口成功时只返回 {@code ariverRpcTraceId} + {@code availableTaskList}，没有 {@code success}
+     * 也没有 {@code resultCode}，用通用的 {@link MessageUtil#checkResultCode} 会一律判失败。
+     * 故以业务字段为准：无列表且不符合通用成功响应（如 1009 风控）时才算失败。
+     */
+    private static boolean isQueryAllTaskListOk(JSONObject jo) {
+        return jo.has("availableTaskList") || MessageUtil.checkResultCode(jo);
+    }
+
+    /**
+     * 取 queryAllStatusTaskList（两类共用一次）。
+     */
+    private JSONObject fetchQueryAllStatusTaskList(boolean force) {
+        String uid = UserIdMap.getCurrentUid();
+        long now = System.currentTimeMillis();
+        // 不共用 signPageTaskList 的冷却窗口：那个窗口由它的失败写入，
+        // 共用会把可领任务列表一起拖停，正是解耦要避免的情况。
+        if (Status.hasFlagToday(FLAG_QUERY_ALL_TASK_FAILED)) {
+            Log.i(TAG, "今日可领任务列表被限流，跳过");
+            return null;
+        }
+        if (!force && cachedQueryAll != null && Objects.equals(cacheUid, uid) && (now - queryAllCacheTime) < CACHE_TTL) {
+            return cachedQueryAll;
+        }
+        // 当日可领任务已完成(列表为空)：后续轮次跳过，不再请求
+        if (Status.hasFlagToday(FLAG_QUERY_ALL_TASK_DONE)) {
+            Log.i(TAG, "今日无可做任务列表，跳过");
+            return null;
+        }
+        try {
+            String rawJson = AntMemberRpcCall.queryAllStatusTaskList();
+            JSONObject jo = new JSONObject(rawJson);
+            TimeUtil.sleep(500);
+            if (!isQueryAllTaskListOk(jo)) {
+                if (isRiskControl(jo)) {
+                    Status.flagToday(FLAG_QUERY_ALL_TASK_FAILED);
+                    Log.record("会员任务⏭️可领任务列表被限流(1009)，今日不再重试");
+                } else {
+                    Log.i(TAG, "queryAllStatusTaskList 接口返回失败: "
+                            + StringUtil.truncate(jo.toString(), 160));
+                }
+                return null;
+            }
+            // 成功响应即缓存(即使 availableTaskList 为空)，确保广告路径复用、不再重复请求；空列表由 process 处理
+            cacheUid = uid;
+            cachedQueryAll = jo;
+            queryAllCacheTime = now;
+            return jo;
+        } catch (Throwable t) {
+            Log.err(TAG, "queryAllStatusTaskList err:", t);
+            return null;
+        }
+    }
+
+    /** 解析 signPageTaskList 结果：登记任务名 + 遍历分类，按职责处理 */
+    private boolean processSignPageTaskList(JSONObject jo, boolean adOnly, Set<String> blacklist) {
+        boolean doubleCheck = false;
+        String label = labelFor(adOnly);
+        try {
+            JSONArray categoryTaskList = jo.optJSONArray("categoryTaskList");
+            if (categoryTaskList == null || categoryTaskList.length() == 0) {
+                Status.flagToday(FLAG_SIGN_PAGE_TASK_DONE);
+                Log.i(TAG, labelFor(adOnly) + "无可做任务列表");
+                return false;
+            }
+            for (int i = 0; i < categoryTaskList.length(); i++) {
+                JSONObject category = categoryTaskList.getJSONObject(i);
+                JSONArray taskList = category.optJSONArray("taskList");
+                if (taskList == null || taskList.length() == 0) {
+                    continue;
+                }
+                String type = category.optString("type");
+                // 登记任务名到黑名单候选项：signPageTaskList 的任务(含广告任务)不在其它列表里，否则设置页搜不到
+                for (int j = 0; j < taskList.length(); j++) {
+                    JSONObject task = taskList.optJSONObject(j);
+                    JSONObject cfg = task == null ? null : task.optJSONObject("taskConfigInfo");
+                    if (cfg == null && task != null) {
+                        cfg = task.optJSONObject("simpleTaskConfig");
+                    }
+                    if (cfg == null) {
+                        continue;
+                    }
+                    String taskName = cfg.optString("name", "");
+                    if (taskName.isEmpty()) {
+                        taskName = cfg.optString("title", "");
+                    }
+                    if (!taskName.isEmpty()) {
+                        // 两类黑名单的候选项分开收集
+                        if (isAdTask(task)) {
+                            AntMemberAdTaskListMap.add(taskName, taskName);
+                        } else {
+                            AntMemberTaskListMap.add(taskName, taskName);
+                        }
+                    }
+                }
+                if ("BROWSE".equals(type)) {
+                    doubleCheck = doBrowseTask(taskList, adOnly, blacklist) || doubleCheck;
+                } else {
+                    // 组类型不是 BROWSE，组内仍可能混着浏览类任务：如「做任务赚积分」的 TASK_CONV 组 type=OTHERS，
+                    // 里面的「逛一逛淘宝斗地主/消消乐」targetBusiness 是 BROWSE#UNLIMITED#xxx，按组过滤会整组丢掉。
+                    // 这里按任务自身的 targetBusiness 挑出浏览类交给 doBrowseTask，其余保持原样给扩展处理。
+                    JSONArray browseOnly = pickBrowseTask(taskList);
+                    if (browseOnly.length() > 0) {
+                        doubleCheck = doBrowseTask(browseOnly, adOnly, blacklist) || doubleCheck;
+                    }
+                    // 广告路径只处理 BROWSE 下的广告任务，非 BROWSE 分类的任务不是广告任务，跳过
+                    if (!adOnly) {
+                        ExtensionsHandle.handleAlphaRequest("antMember", "doMoreTask", category);
+                    }
+                }
+            }
+            // 空 map 不落盘，否则会覆盖掉磁盘上已有的任务名
+            if (!AntMemberTaskListMap.getMap().isEmpty()) {
+                AntMemberTaskListMap.save();
+            }
+            if (!AntMemberAdTaskListMap.getMap().isEmpty()) {
+                AntMemberAdTaskListMap.save();
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "processSignPageTaskList err:", t);
+        }
+        return doubleCheck;
+    }
+
+    /** 从任意分类里挑出 targetBusiness 首段为 BROWSE 的任务（分类的 type 不可靠时用） */
+    private static JSONArray pickBrowseTask(JSONArray taskList) {
+        JSONArray picked = new JSONArray();
+        for (int i = 0; i < taskList.length(); i++) {
+            JSONObject task = taskList.optJSONObject(i);
+            if (task == null) {
+                continue;
+            }
+            JSONObject cfg = task.optJSONObject("taskConfigInfo");
+            if (cfg == null) {
+                cfg = task.optJSONObject("simpleTaskConfig");
+            }
+            JSONArray targetBusinessArr = cfg == null ? null : cfg.optJSONArray("targetBusiness");
+            if (targetBusinessArr == null || targetBusinessArr.length() == 0) {
+                targetBusinessArr = task.optJSONArray("targetBusiness");
+            }
+            if (targetBusinessArr == null || targetBusinessArr.length() == 0) {
+                continue;
+            }
+            if (targetBusinessArr.optString(0, "").startsWith("BROWSE#")) {
+                picked.put(task);
+            }
+        }
+        return picked;
+    }
+
+    /** 解析 queryAllStatusTaskList 结果，按职责处理 */
+    private boolean processQueryAllStatusTaskList(JSONObject jo, boolean adOnly, Set<String> blacklist) {
+        boolean doubleCheck = false;
+        try {
+            JSONArray availableTaskList = jo.optJSONArray("availableTaskList");
+            if (availableTaskList == null || availableTaskList.length() == 0) {
+                Log.i(TAG, labelFor(adOnly) + "无可做任务列表");
+                Status.flagToday(FLAG_QUERY_ALL_TASK_DONE);
+                return false;
+            }
+            doubleCheck = doBrowseTask(availableTaskList, adOnly, blacklist);
+        } catch (Throwable t) {
+            Log.err(TAG, "processQueryAllStatusTaskList err:", t);
+        }
+        return doubleCheck;
+    }
+
+    // 浏览任务：会员任务与会员广告任务共用
+    private Boolean doBrowseTask(JSONArray taskList, boolean adOnly, Set<String> blacklist) {
+        boolean doubleCheck = false;
+        try {
+            for (int i = 0; i < taskList.length(); i++) {
+                JSONObject task = taskList.getJSONObject(i);
+                // 必须用 |= ：写成 doubleCheck = doubleCheck || doBrowseTask(...) 时，
+                // 前一个任务成功后右侧被短路，列表里后续任务不再执行
+                if (task.optBoolean("hybrid")) {
+                    int periodCurrentCount = Integer.parseInt(task.getJSONObject("extInfo").getString("PERIOD_CURRENT_COUNT"));
+                    int periodTargetCount = Integer.parseInt(task.getJSONObject("extInfo").getString("PERIOD_TARGET_COUNT"));
+                    int count = periodTargetCount > periodCurrentCount ? periodTargetCount - periodCurrentCount : 0;
+                    if (count > 0) {
+                        doubleCheck |= doBrowseTask(task, periodTargetCount, periodTargetCount, adOnly, blacklist);
+                    }
+                } else {
+                    doubleCheck |= doBrowseTask(task, 1, 1, adOnly, blacklist);
+                }
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "doBrowseTask err:", t);
+        }
+        return doubleCheck;
+    }
+
+    private Boolean doBrowseTask(JSONObject task, int left, int right, boolean adOnly, Set<String> blacklist) {
+        boolean doubleCheck = false;
+        String label = labelFor(adOnly);
+        try {
+            // 旧结构用 taskConfigInfo(name/id/awardParam/targetBusiness)，新结构改用 simpleTaskConfig(title/configId/stageVOList) 且 targetBusiness 提到 task 顶层
+            JSONObject taskConfigInfo = task.optJSONObject("taskConfigInfo");
+            JSONObject simpleTaskConfig = task.optJSONObject("simpleTaskConfig");
+            JSONObject config = taskConfigInfo != null ? taskConfigInfo : simpleTaskConfig;
+            if (config == null) {
+                Log.other(label + "⏭️跳过#缺少任务配置");
+                return false;
+            }
+            String name = config.optString("name", "");
+            if (name.isEmpty()) {
+                name = config.optString("title", "");
+            }
+            //黑名单任务跳过
+            if (blacklist.contains(name)) {
+                logSkipOnce("antmember::skipBlack::" + name, label + "⏭️跳过[" + name + "]#在黑名单");
+                return false;
+            }
+            Long id = config.has("id") ? config.optLong("id") : config.optLong("configId");
+            String awardParamPoint = taskAwardPoint(config);
+            JSONArray targetBusinessArr = config.optJSONArray("targetBusiness");
+            if (targetBusinessArr == null || targetBusinessArr.length() == 0) {
+                targetBusinessArr = task.optJSONArray("targetBusiness");
+            }
+            if (targetBusinessArr == null || targetBusinessArr.length() == 0) {
+                String tb = task.optString("targetBusiness", "");
+                if (!tb.isEmpty()) {
+                    targetBusinessArr = new JSONArray().put(tb);
+                }
+            }
+            boolean isAd = isAdTask(task);
+            if (adOnly) {
+                // 仅处理广告任务的路径：非广告任务直接跳过，交给会员路径
+                if (!isAd) {
+                    return false;
+                }
+            } else {
+                // 会员路径：广告任务交给广告路径处理，这里跳过；广告路径未开启时任务会被静默丢弃，留一条当日痕迹
+                if (isAd) {
+                    logSkipOnce("antmember::skipAdRoute::" + name, label + "⏭️跳过[" + name + "]#属广告任务，交广告路径处理");
+                    return false;
+                }
+            }
+            if (targetBusinessArr == null || targetBusinessArr.length() == 0) {
+                // 走到这里说明是广告任务(仅广告路径会进入)，走广告任务申请->等待->完成流程
+                if (isAd) {
+                    return doAdTask(task, config, name, awardParamPoint);
+                }
+                Log.other(label + "⏭️跳过[" + name + "]#无 targetBusiness 配置");
+                return false;
+            }
+            String targetBusiness = targetBusinessArr.getString(0);
+            // targetBusiness 格式为 bizType#bizSubType#bizParam，第 1 段是 bizType。
+            // 仅处理 BROWSE 类任务：其它类型（如 CALL_APP）与 executeTask 固定的 bizType=BROWSE
+            // 组合不被服务端支持，跳过并打当日标记，避免每轮 applyTask/executeTask 反复失败刷屏
+            String[] targetBusinessArray = targetBusiness.split("#");
+            if (targetBusinessArray.length < 2 || !"BROWSE".equals(targetBusinessArray[0])) {
+                String bizType = targetBusinessArray.length > 0 ? targetBusinessArray[0] : "";
+                if (!Status.hasFlagToday("antmember::skipBizType::" + name)) {
+                    Log.other(label + "⏭️跳过[" + name + "]#非浏览类任务(" + bizType + ")");
+                    Status.flagToday("antmember::skipBizType::" + name);
+                }
+                return false;
+            }
+            for (int i = left; i <= right; i++) {
+                JSONObject jo = new JSONObject(AntMemberRpcCall.applyTask(name, id));
+                TimeUtil.sleep(300);
+                if (!MessageUtil.checkResultCode(TAG, jo)) {
+                    logSkipOnce("antmember::applyFail::" + name, label + "⏭️跳过[" + name + "]#申请失败: "
+                            + StringUtil.truncate(jo.toString(), 160));
+                    //检查并标记黑名单任务
+                    MessageUtil.checkResultCodeAndMarkTaskBlackList("AntMemberTaskList", name, jo);
+                    continue;
+                }
+                String bizParam;
+                String bizSubType;
+                if (targetBusinessArray.length > 2) {
+                    bizParam = targetBusinessArray[2];
+                    bizSubType = targetBusinessArray[1];
+                } else {
+                    bizParam = targetBusinessArray[1];
+                    bizSubType = targetBusinessArray[0];
+                }
+                jo = new JSONObject(AntMemberRpcCall.executeTask(bizParam, bizSubType));
+                TimeUtil.sleep(300);
+                if (!MessageUtil.checkResultCode(TAG, jo)) {
+                    logSkipOnce("antmember::execFail::" + name, label + "⏭️跳过[" + name + "]#上报失败: "
+                            + StringUtil.truncate(jo.toString(), 160));
+                    //检查并标记黑名单任务
+                    MessageUtil.checkResultCodeAndMarkTaskBlackList("AntMemberTaskList", name, jo);
+                    continue;
+                }
+                String ex = left == right && left == 1 ? "" : "(" + (i + 1) + "/" + right + ")";
+                Log.other(label + "🎖️完成[" + name + ex + "]#获得[" + awardParamPoint + "积分]");
+                doubleCheck = true;
+            }
+        } catch (Throwable t) {
+            Log.err(TAG, "doBrowseTask err:", t);
+        }
+        return doubleCheck;
+    }
+
+    // 广告任务: 申请(applyAdTask) -> 等待浏览时长 -> 完成(finishAdTask)
+    private Boolean doAdTask(JSONObject task, JSONObject config, String name, String awardParamPoint) {
+        String label = labelFor(true);
+        try {
+            JSONObject extMap = task.optJSONObject("lightsAdExtMap");
+            if (extMap == null) {
+                Log.record(label + "⏭️跳过[" + name + "]#广告任务缺少扩展参数");
+                // 结构缺参数重试也不会变，按连续确认记账
+                MessageUtil.MarkTaskBlackListConfirm("AntMember", "AntMemberAdTaskList", "会员广告任务", name);
+                return false;
+            }
+            String bizId = extMap.optString("bizId", "");
+            String adId = extMap.optString("adId", "");
+            if (bizId.isEmpty() || adId.isEmpty()) {
+                Log.record(label + "⏭️跳过[" + name + "]#广告任务缺少bizId/adId");
+                MessageUtil.MarkTaskBlackListConfirm("AntMember", "AntMemberAdTaskList", "会员广告任务", name);
+                return false;
+            }
+            int awardNum = 0;
+            try {
+                awardNum = Integer.parseInt(awardParamPoint);
+            } catch (Throwable ignored) {
+            }
+            JSONObject applyJo = new JSONObject(AntMemberRpcCall.applyAdTask(bizId, adId, awardNum, extMap));
+            if (!isAdTaskOk(applyJo)) {
+                Log.record(label + "⏭️跳过[" + name + "]#广告任务申请失败");
+                MessageUtil.checkResultCodeAndMarkTaskBlackList("AntMemberAdTaskList", name, applyJo);
+                return false;
+            }
+            // 广告任务需浏览一段时间(约15秒)后才能完成
+            int browseSeconds = config.optInt("browseSeconds", 15);
+            TimeUtil.sleep(Math.max(browseSeconds, 15) * 1000L);
+            JSONObject finishJo = new JSONObject(AntMemberRpcCall.finishAdTask(bizId));
+            if (!isAdTaskOk(finishJo)) {
+                Log.record(label + "⏭️跳过[" + name + "]#广告任务完成失败");
+                MessageUtil.checkResultCodeAndMarkTaskBlackList("AntMemberAdTaskList", name, finishJo);
+                return false;
+            }
+            Log.other(label + "🎖️完成[" + name + "]#获得[" + awardNum + "积分]");
+            return true;
+        } catch (Throwable t) {
+            Log.err(TAG, "doAdTask err:", t);
+        }
+        return false;
+    }
+
+    private boolean isAdTaskOk(JSONObject jo) {
+        return jo.optBoolean("success") || "SUCCESS".equals(jo.optString("resultCode"));
+    }
+
+    // 任务积分：旧结构 awardParam.awardParamPoint，新结构 stageVOList[0].awardParam.awardParamPoint
+    private String taskAwardPoint(JSONObject config) {
+        JSONObject awardParam = config.optJSONObject("awardParam");
+        if (awardParam != null) {
+            return awardParam.optString("awardParamPoint", "");
+        }
+        JSONArray stageVOList = config.optJSONArray("stageVOList");
+        if (stageVOList != null && stageVOList.length() > 0) {
+            JSONObject stage = stageVOList.optJSONObject(0);
+            if (stage != null) {
+                JSONObject stageAwardParam = stage.optJSONObject("awardParam");
+                if (stageAwardParam != null) {
+                    return stageAwardParam.optString("awardParamPoint", "");
+                }
+            }
+        }
+        return "";
+    }
+}

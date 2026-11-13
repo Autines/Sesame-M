@@ -1,6 +1,5 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
@@ -31,6 +30,7 @@ import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameInputDialog
 import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.ui.theme.sesameGroupHorizontalPadding
+import io.github.aw1y2z.sesame.ui.HostBridge
 import io.github.aw1y2z.sesame.util.ToastUtil
 
 class MiuixExtensionsActivity : MiuixBaseActivity() {
@@ -42,12 +42,19 @@ class MiuixExtensionsActivity : MiuixBaseActivity() {
         }
     }
 
+    /**
+     * 扩展页的受限通道：这里只做「翻译」，白名单在宿主侧（forestQuery 7 个、walkPath 3 个 method），
+     * 传什么都退不成任意 method + data 的旧 rpctest
+     */
     fun sendItemsBroadcast(type: String, method: String, data: String?) {
-        val intent = Intent("com.eg.android.AlipayGphone.sesame.rpctest")
-        intent.putExtra("type", type)
-        intent.putExtra("method", method)
-        intent.putExtra("data", data)
-        sendBroadcast(intent)
+        when (type) {
+            "antForest" -> HostBridge.send(this, "forestQuery", null, method, data, false)
+            "setCustomWalkPathIdList" ->
+                HostBridge.send(this, "walkPath", null, "addCustomWalkPathId", data, false)
+            "setCustomWalkPathIdQueue" ->
+                HostBridge.send(this, "walkPath", null, method, data, false)
+            else -> ToastUtil.show(this, "未知的扩展请求：$type")
+        }
     }
 }
 

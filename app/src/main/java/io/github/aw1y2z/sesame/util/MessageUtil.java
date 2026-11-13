@@ -277,14 +277,15 @@ public class MessageUtil {
      *   <li>业务级「不支持」：同一 tag 累计满 {@link #BIZ_UNSUPPORTED_LOG_LIMIT} 次后静默（本地定制）。</li>
      * </ol>
      * <p>本地定制：失败应答交由 {@link #recordFailure} 按模块 tag 归档到分类文件（上游 v1.2.8 引入）。
-     * <p>另：**400000040「不支持rpc调用」**只写运行日志、不记模块错误——它不代表任务做不了
+     * <p>另：**400000040「不支持rpc调用」**只写异常日志、不记模块错误——它不代表任务做不了
      * （调用方会转另一种实现方案）。
+     * <p>原始响应属异常，统一进异常日志（不进运行日志），运行日志只留过程类。
      */
     public static void printErrorMessage(String tag, JSONObject jo, String errorMessageField) {
         try {
             String memo = jo.getString(errorMessageField);
             if (isUnsupportedRpc(jo)) {
-                Log.i(tag, jo.toString());
+                Log.error(tag + ", " + jo.toString());
                 return;
             }
             if (isServerBusy(jo)) {
@@ -292,7 +293,7 @@ public class MessageUtil {
                     return;
                 }
                 // 102 高频错误：只打一行 JSON（去掉文案行，避免每次都刷两条）
-                Log.i(tag, jo.toString());
+                Log.error(tag + ", " + jo.toString());
                 return;
             }
             if (isRiskControl(jo) && !shouldLogRiskControl(tag)) {
@@ -304,6 +305,9 @@ public class MessageUtil {
             }
             // 失败应答按模块 tag 归档到分类文件（上游 v1.2.8）；归档器内部会同时写一份运行日志。
             recordFailure(tag, memo);
+            // 上游：原始响应属异常，统一进异常日志（不进运行日志），运行日志只留过程类。
+            // 本地原先删了这行——但 recordFailure 只写分类文件，不写异常日志，两者不重复。
+            Log.error(memo + ", " + jo.toString());
         } catch (Throwable t) {
             Log.err(TAG, "printErrorMessage err:", t);
         }
@@ -581,6 +585,7 @@ public class MessageUtil {
         BLACKLIST_LIST_TARGETS.put("MonopolyTaskList", new String[]{"AntForestV2", "新版保护地任务"});
         BLACKLIST_LIST_TARGETS.put("AntFarmDoFarmTaskList", new String[]{"AntFarm", "庄园饲料任务"});
         BLACKLIST_LIST_TARGETS.put("AntFarmDrawMachineTaskList", new String[]{"AntFarm", "庄园装扮抽抽乐任务"});
+        BLACKLIST_LIST_TARGETS.put("AntKitchenTaskList", new String[]{"AntFarm", "小鸡大厨任务"});
         BLACKLIST_LIST_TARGETS.put("AntDodoTaskList", new String[]{"AntDodo", "神奇物种任务"});
         BLACKLIST_LIST_TARGETS.put("AntOceanAntiepTaskList", new String[]{"AntOcean", "神奇海洋普通任务"});
         BLACKLIST_LIST_TARGETS.put("AntOceanFishBlackList", new String[]{"AntOcean", "神奇海洋去摸鱼任务"});
@@ -594,6 +599,7 @@ public class MessageUtil {
         BLACKLIST_LIST_TARGETS.put("AntStallTaskList", new String[]{"AntStall", "新村任务"});
         BLACKLIST_LIST_TARGETS.put("AntSportsTaskList", new String[]{"AntSports", "运动任务"});
         BLACKLIST_LIST_TARGETS.put("AntMemberTaskList", new String[]{"AntMember", "会员任务"});
+        BLACKLIST_LIST_TARGETS.put("AntMemberAdTaskList", new String[]{"AntMember", "会员广告任务"});
         BLACKLIST_LIST_TARGETS.put("MemberCreditSesameTaskList", new String[]{"AntMember", "会员芝麻信用任务芝麻粒"});
         BLACKLIST_LIST_TARGETS.put("SesameAlchemyTaskList", new String[]{"AntMember", "芝麻炼金任务"});
     }
@@ -1026,6 +1032,12 @@ public class MessageUtil {
                         needConfirm = weakHit;
                     }
                     break;
+
+                // 会员广告任务：失败响应无统一文案，也无另一种实现方案可重放，一律按连续确认记账
+                case "AntMemberAdTaskList":
+                    needConfirm = true;
+                    break;
+
                 // 福利金任务：事件规则任务被 10000005「不允许完成事件规则任务」拒绝，文案里没有
                 // 「不支持rpc调用」关键字，须按错误码单独接入连续确认，不能靠 strongHit
                 case "WelfareFundTaskList":

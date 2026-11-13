@@ -12,6 +12,8 @@ import android.provider.Settings
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import io.github.aw1y2z.sesame.ui.HostBridge
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Box
 
 // 液态玻璃（Kyant0/Backdrop 2.0.1，Maven Central）—— 本文件只负责创建「折射源」：
@@ -34,6 +36,8 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -41,15 +45,31 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.R
 import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.Model
+import io.github.aw1y2z.sesame.data.ConfigV2
 import io.github.aw1y2z.sesame.data.RunType
 import io.github.aw1y2z.sesame.data.ViewAppInfo
 import io.github.aw1y2z.sesame.ui.theme.SesameNavBarHeight
@@ -67,6 +87,7 @@ import io.github.aw1y2z.sesame.util.Statistics
 import io.github.aw1y2z.sesame.util.ToastUtil
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -78,6 +99,17 @@ import io.github.aw1y2z.sesame.ui.miuix.tabs.HomeTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.LogsTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.ConfigTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.SettingsTab
+import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import java.io.File
+import kotlin.math.roundToInt
 
 class MiuixMainActivity : MiuixBaseActivity() {
 
@@ -111,10 +143,7 @@ class MiuixMainActivity : MiuixBaseActivity() {
     private lateinit var titleRunner: Runnable
 
     init {
-        /**
-         * 激活探测:仅当真实状态仍为 DISABLE 时才显示未激活,并在超时前周期性重试,
-         * 避免覆盖晚到的 onServiceBind 激活信号,也避免 XposedService 绑定较慢时误报未激活
-         */
+        /** 激活探测:仅当状态仍为 DISABLE 才显示未激活并周期性重试,避免覆盖晚到的 onServiceBind */
         titleRunner = Runnable {
             if (ViewAppInfo.getRunType() == RunType.DISABLE) {
                 runTypeProbeTimes++
@@ -165,10 +194,15 @@ class MiuixMainActivity : MiuixBaseActivity() {
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val action = intent.action
-            Log.i("view broadcast action:" + action + " intent:" + intent)
             if (action != null) {
                 when (action) {
                     "io.github.aw1y2z.sesame.status" -> {
+                        // 回包必须带本机已配对的令牌：缺失或对不上就是别人伪造的探活，忽略
+                        val token = intent.getStringExtra("token")
+                        if (token == null || token != HostBridge.getToken(context)) {
+                            Log.i("status reply without valid token, ignored")
+                            return
+                        }
                         // 模块已被 LSPosed 启用并注入支付宝，标记为已激活
                         ViewAppInfo.setRunTypeByCode(RunType.MODEL.getCode())
                         runTypeProbeTimes = 0
@@ -220,6 +254,8 @@ class MiuixMainActivity : MiuixBaseActivity() {
         // 回到前台就重扫账号列表：删掉/新增账号后，从设置页返回能立刻看到变化，
         // 不必再切到别的 Tab 再切回来（详见 configAccountsVersion 的说明）
         configAccountsVersion++
+        // 上游：回到前台补一次配对（首次启动时宿主多半没在跑，用户开完支付宝再回来就通了）
+        HostBridge.ensurePaired(this)
         // 激活状态探测独立于存储权限：防止 titleRunner 重复累积，先清空再启动
         if (RunType.DISABLE == ViewAppInfo.getRunType()) {
             handler.removeCallbacks(titleRunner)
@@ -283,9 +319,8 @@ class MiuixMainActivity : MiuixBaseActivity() {
     }
 
     /**
-     * 重新从统计文件加载并通知首页表格刷新。
-     * 基于可观察的 statisticsVersion 触发 Compose 重组,解决"首次进入首页统计为 0、
-     * 必须进入配置返回后才刷新"的问题(此前 StatisticsTable 直接读静态单例,单例变化不会重组)。
+     * 重新加载统计并刷新首页。
+     * <p>靠可观察的 statisticsVersion 触发重组:静态单例变化不会重组,首页会一直是 0。
      */
     fun refreshStatistics() {
         if (!hasPermission) return
@@ -313,46 +348,26 @@ class MiuixMainActivity : MiuixBaseActivity() {
     }
 
     fun sendStatus() {
-        try {
-            isClick = true
-            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.status"))
-        } catch (th: Throwable) {
-            Log.i("view sendBroadcast status err:")
-            Log.printStackTrace(th)
-        }
+        isClick = true
+        HostBridge.send(this, "status", null, null, false)
     }
 
     /** 向支付宝进程查询本模块注入状态（不弹 Toast），由 titleRunner 周期性调用 */
     fun sendQueryBroadcast() {
-        try {
-            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.status"))
-        } catch (th: Throwable) {
-            Log.i("view sendBroadcast status err:")
-            Log.printStackTrace(th)
-        }
+        HostBridge.send(this, "status", null, null, false)
+    }
+
+    /**
+     * 让注入进程整体重启（重新初始化并重挂 hook），用于必须重挂的开关如「使用新接口」；
+     * 只重载 AppConfig 的 broadcastReloadConfig() 不够。
+     */
+    fun broadcastRestart() {
+        HostBridge.send(this, "restart", null, null, false)
     }
 
     /** 通知支付宝进程重载共享配置（日志开关等），使开关在注入进程中即时生效 */
-    /**
-     * 让注入进程整体重启（重新初始化并重挂 hook）。
-     * 适用于改完必须重新初始化的开关，比如「使用新接口」要重挂 RPC bridge；
-     * 只是重载 AppConfig 的 broadcastReloadConfig() 不够用。
-     */
-    fun broadcastRestart() {
-        try {
-            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.restart"))
-        } catch (t: Throwable) {
-            Log.printStackTrace(t)
-        }
-    }
-
     fun broadcastReloadConfig() {
-        try {
-            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.reloadConfig"))
-        } catch (th: Throwable) {
-            Log.i("view sendBroadcast reloadConfig err:")
-            Log.printStackTrace(th)
-        }
+        HostBridge.send(this, "reloadConfig", null, null, false)
     }
 
     fun openUrl(url: String) {
