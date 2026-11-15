@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.R
+import io.github.aw1y2z.sesame.data.Agreement
 import io.github.aw1y2z.sesame.data.ViewAppInfo
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
@@ -94,11 +96,23 @@ fun AboutScreen(activity: MiuixAboutActivity) {
                         icon = Icons.Outlined.Code,
                         onClick = { openWebUrl(activity, "https://github.com/aw1y2z/Sesame-M") }
                     )
+                    // 上游 v1.6.1：用户协议入口（同意时间只落在本机，这里回读展示）
+                    SesameClickRow(
+                        title = "用户协议",
+                        summary = "条款版本 ${Agreement.VERSION} · " +
+                                (Agreement.acceptedAtText()?.let { "同意于 $it" } ?: "未记录同意时间"),
+                        icon = Icons.Outlined.Description,
+                        onClick = { openWebUrl(activity, TERMS_URL) }
+                    )
                 }
             }
         }
     }
 }
+
+/** 条款文档地址：路径含中文，用百分号编码，避免个别浏览器或应用解析失败 */
+private const val TERMS_URL =
+    "https://github.com/aw1y2z/Sesame-M/blob/main/docs/%E5%90%88%E8%A7%84%E4%B8%8E%E5%85%8D%E8%B4%A3.md"
 
 private fun openWebUrl(activity: MiuixBaseActivity, url: String) {
     try {

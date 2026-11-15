@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.R
+import io.github.aw1y2z.sesame.data.Agreement
 import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ConfigV2
@@ -118,6 +119,9 @@ class MiuixMainActivity : MiuixBaseActivity() {
     /** 可观察的激活状态：HomeTab 等页面订阅它，onServiceBind/广播更新时自动重组刷新 */
     var uiRunType by mutableStateOf<RunType>(RunType.DISABLE)
     var hasPermission by mutableStateOf(false)
+
+    /** 是否已同意条款：界面与 onResume 共用同一份状态，避免两处判断不一致 */
+    private var agreed by mutableStateOf(Agreement.isAccepted())
 
     /** 统计分页：首项是「全部账号合计」，其后按账号；由 refreshStatistics() 重新读取 */
     var statisticsPages by mutableStateOf<List<StatisticsPage>>(emptyList())
@@ -245,28 +249,53 @@ class MiuixMainActivity : MiuixBaseActivity() {
             registerReceiver(broadcastReceiver, intentFilter)
         }
         setAppContent {
-            MainScreen(this)
+            // 未同意协议只渲染门禁页：此阶段不碰宿主、不读统计，已同意的用户行为完全不变
+            if (agreed) {
+                MainScreen(this)
+            } else {
+                AgreementScreen(
+                    onAgree = {
+                        agreed = true
+                        // onResume 在未同意时提前返回，这里补一次配对、激活探测与统计读取
+                        HostBridge.ensurePaired(this)
+                        probeRunType()
+                        checkPermissionAndRefresh()
+                    },
+                    onExit = { finishAffinity() }
+                )
+            }
         }
     }
 
     override fun onResume() {
         super.onResume()
+        // 上游 v1.6.1：界面与副作用共用同一份判断，未同意协议前不产生任何副作用
+        agreed = Agreement.isAccepted()
+        if (!agreed) {
+            handler.removeCallbacks(titleRunner)
+            return
+        }
         // 回到前台就重扫账号列表：删掉/新增账号后，从设置页返回能立刻看到变化，
         // 不必再切到别的 Tab 再切回来（详见 configAccountsVersion 的说明）
         configAccountsVersion++
-        // 上游：回到前台补一次配对（首次启动时宿主多半没在跑，用户开完支付宝再回来就通了）
+        // 回到前台补一次配对：首次启动时宿主多半没在跑，用户开完支付宝再回来就通了
         HostBridge.ensurePaired(this)
-        // 激活状态探测独立于存储权限：防止 titleRunner 重复累积，先清空再启动
-        if (RunType.DISABLE == ViewAppInfo.getRunType()) {
-            handler.removeCallbacks(titleRunner)
-            runTypeProbeTimes = 0
-            sendQueryBroadcast()
-            handler.postDelayed(titleRunner, 3000)
-        }
+        probeRunType()
         checkPermissionAndRefresh()
     }
 
-    /** 检查文件权限，已授权则刷新统计；无权限时负责（仅一次）自动引导 */
+    /** 激活状态探测独立于存储权限：先清空旧回调，避免 titleRunner 重复累积 */
+    private fun probeRunType() {
+        if (RunType.DISABLE != ViewAppInfo.getRunType()) return
+        handler.removeCallbacks(titleRunner)
+        runTypeProbeTimes = 0
+        sendQueryBroadcast()
+        handler.postDelayed(titleRunner, 3000)
+    }
+
+    /**
+     * 检查文件权限：已授权也要重读统计，否则从配置页或后台返回首页仍是旧值。
+     */
     private fun checkPermissionAndRefresh() {
         if (hasRequestedPermission) {
             hasRequestedPermission = false
