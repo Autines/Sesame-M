@@ -23,7 +23,6 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +54,7 @@ import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.preference.ArrowPreference as MiuixArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference as MiuixSwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.basic.MochiSwitch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -582,7 +582,9 @@ fun SesameSwitchRow(
                         }
                     }
                     Spacer(Modifier.width(12.dp))
-                    Switch(
+                    // MD 风格：用 mochi 的开关（G2 轨道 + 弹簧动效 + 按压高光）。
+                    // 参数与 material3 Switch 一一对应，MIUIX 分支不受影响。
+                    MochiSwitch(
                         checked = checked,
                         onCheckedChange = onCheckedChange,
                         enabled = enabled
@@ -670,7 +672,8 @@ fun SesameSwitchRow(
                     }
                 }
                 Spacer(Modifier.width(12.dp))
-                Switch(
+                // MD 风格：mochi 开关（同 onClick==null 分支，见上方注释）
+                MochiSwitch(
                     checked = checked,
                     onCheckedChange = onCheckedChange,
                     enabled = enabled

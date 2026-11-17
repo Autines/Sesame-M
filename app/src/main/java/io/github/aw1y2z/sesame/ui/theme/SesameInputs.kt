@@ -50,6 +50,13 @@ import top.yukonga.miuix.kmp.preference.CheckboxPreference as MiuixCheckboxPrefe
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference as MiuixRadioButtonPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference as MiuixSliderPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.basic.MochiChip
+import ui.feice.mochi.basic.MochiConfirmationDialog
+import ui.feice.mochi.basic.MochiDialogAction
+import ui.feice.mochi.basic.MochiDialogActionRole
+import ui.feice.mochi.basic.MochiSearchBar
+import ui.feice.mochi.basic.MochiSlider
+import kotlinx.collections.immutable.persistentListOf
 
 /* ───────────────────────── 输入控件 / Chip / 对话框 ─────────────────────────
  * 本文件是「风格无关 UI 组件集」的一部分（整体约定与分层说明见 SesameFoundation.kt 顶部）。
@@ -99,45 +106,12 @@ fun SesameSearchField(
             }
         )
 
-        UiStyle.MATERIAL3 -> OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
+        UiStyle.MATERIAL3 -> MochiSearchBar(
+            query = value,
+            onQueryChange = onValueChange,
             modifier = modifier,
-            singleLine = true,
-            placeholder = {
-                Text(
-                    text = placeholder,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Filled.Search,
-                    contentDescription = "搜索",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            trailingIcon = {
-                if (value.isNotEmpty()) {
-                    IconButton(onClick = { onValueChange("") }) {
-                        Text(
-                            text = "×",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            textStyle = MaterialTheme.typography.bodyLarge,
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = sesameSurfaceContainer(),
-                unfocusedContainerColor = sesameSurfaceContainer(),
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                cursorColor = MaterialTheme.colorScheme.primary
-            )
+            placeholder = placeholder,
+            cancelText = "取消"
         )
     }
 }
@@ -400,7 +374,9 @@ fun SesameSliderRow(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                Slider(
+                // MD 风格：mochi 滑杆（G2 轨道 + 弹簧回弹 + 按压高光）。
+                // 参数与 material3 Slider 一一对应，MIUIX 分支不受影响。
+                MochiSlider(
                     value = value,
                     onValueChange = onValueChange,
                     valueRange = valueRange,
@@ -420,19 +396,23 @@ fun SesameSliderRow(
  */
 @Composable
 fun SesameFilterChip(label: String, count: Int, selected: Boolean, onClick: () -> Unit) {
+    // MD 风格：mochi chip（G2 药丸 + 弹簧按压 + 按压高光 + 选中态）。
+    // mochi chip 没有独立 count 槽，把计数并入文本（观感由 mochi 规范统一）。
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        MochiChip(
+            label = "$label $count",
+            selected = selected,
+            onClick = onClick
+        )
+        return
+    }
+    // MIUIX：保持原有手写药丸（selected 用 primaryContainer）
     val bg: Color
     val fg: Color
-    if (LocalUiStyle.current == UiStyle.MIUIX) {
-        bg = if (selected) MiuixTheme.colorScheme.primaryContainer
-        else MiuixTheme.colorScheme.surfaceContainer
-        fg = if (selected) MiuixTheme.colorScheme.onPrimaryContainer
-        else MiuixTheme.colorScheme.onSurfaceVariantSummary
-    } else {
-        bg = if (selected) MaterialTheme.colorScheme.secondaryContainer
-        else sesameSurfaceContainer()
-        fg = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-        else MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    bg = if (selected) MiuixTheme.colorScheme.primaryContainer
+    else MiuixTheme.colorScheme.surfaceContainer
+    fg = if (selected) MiuixTheme.colorScheme.onPrimaryContainer
+    else MiuixTheme.colorScheme.onSurfaceVariantSummary
     Row(
         Modifier
             .height(32.dp)
@@ -554,38 +534,27 @@ fun SesameConfirmDialog(
             }
         }
 
-        UiStyle.MATERIAL3 -> AlertDialog(
+        UiStyle.MATERIAL3 -> MochiConfirmationDialog(
+            visible = true,
             onDismissRequest = onDismiss,
-            title = {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+            title = title,
+            message = text,
+            actions = persistentListOf(
+                MochiDialogAction(
+                    label = dismissText,
+                    role = MochiDialogActionRole.Cancel,
+                    enabled = true,
+                    holdToConfirm = false,
+                    onClick = onDismiss
+                ),
+                MochiDialogAction(
+                    label = confirmText,
+                    role = if (destructive) MochiDialogActionRole.Destructive else MochiDialogActionRole.Primary,
+                    enabled = true,
+                    holdToConfirm = false,
+                    onClick = onConfirm
                 )
-            },
-            text = {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            confirmButton = {
-                DialogActionButton(
-                    text = confirmText,
-                    onClick = onConfirm,
-                    role = if (destructive) DialogActionRole.Destructive else DialogActionRole.Primary
-                )
-            },
-            dismissButton = {
-                DialogActionButton(
-                    text = dismissText,
-                    onClick = onDismiss,
-                    role = DialogActionRole.Neutral
-                )
-            },
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            )
         )
     }
 }

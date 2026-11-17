@@ -181,4 +181,8 @@ dependencies {
     // 能力分级（读库源码 androidMain/Platform.kt）：模糊/阴影/高光需 API 31+，
     // 折射透镜（AGSL）需 API 33+；低于门槛时对应效果**静默跳过、不崩**（minSdk 26 安全）。
     implementation "io.github.kyant0:backdrop:2.0.1"
+
+    // Mochi Compose（MD 风格重构试点）：G2 连续圆角 / iOS 26 分组行 / 弹簧动效。
+    // ⚠️ 试点阶段仅验证依赖可解析与编译，尚未在任何页面使用。
+    implementation "io.github.feice11:mochi-compose:0.2.0"
 }

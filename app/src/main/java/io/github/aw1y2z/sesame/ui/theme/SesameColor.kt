@@ -2,7 +2,6 @@ package io.github.aw1y2z.sesame.ui.theme
 
 import android.content.Context
 import android.os.Build
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -12,6 +11,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import ui.feice.mochi.shape.MochiRoundedRectangle
 
 /**
  * Material Design 3 色彩 / 字体 / 形状，仅用于 [UiStyle.MATERIAL3]。
@@ -34,25 +34,23 @@ object SesameM3 {
     const val SEED = 0xFF216EEE
 
     /**
-     * 形状阶梯 —— 走 M3 **Expressive** 的「更圆润」一档。
+     * 形状阶梯 —— Mochi Compose 的 **G2 连续曲率**圆角（MD3 Expressive）。
      *
-     * 官方 Expressive 没有独立的 `ExpressiveShapes`，只有 4/8/12/16/28
-     * （material3 1.5.0-alpha22 实测确认，且 `Hct` 仍是库 internal、外部调不到），
-     * 所以「更圆润」只能在项目层做。
+     * 2026-11-17 起 MD 风格接入 mochi：这里不再用普通 `RoundedCornerShape`
+     * （圆弧与直边交接处有一次曲率突变），改成 `MochiRoundedRectangle`
+     * （直边 → 贝塞尔过渡 → 圆弧，曲率连续）。半径按 mochi 形状阶梯映射：
+     * extraSmall 8 / small 12 / medium 20 / large 28 / extraLarge 32。
      *
-     * 每档都往上抬，且**抬升幅度随档位递减**（4→8、8→14、12→20、16→28、28→36）：
-     * 若做成全等差，extraLarge 会变成 44dp 的"药丸"，卡片与底栏就看不出是卡片了；
-     * 现在 36dp 已经足够柔和，又仍能一眼辨出"容器"的形状。
-     *
-     * ⚠️ 别只改这里：`ui/` 下的组件大量**硬编码**圆角（改前统计 16dp×8、10dp×2、12/4dp 各 1），
-     * 那些才是实际观感的来源，必须同步改，否则只有少数组件变圆、观感割裂。
+     * ⚠️ `Shapes` 只有 5 档，mochi 有 9 档；卡片与面板统一取 [MochiBridge.CARD_CORNER]
+     * （28dp），见 `sesameCardShape()`。
+     * ⚠️ MIUIX 分支不走这里 —— 它有自己的圆角，见 `SesameSurfaces`。
      */
     val shapes: Shapes = Shapes(
-        extraSmall = RoundedCornerShape(8.dp),
-        small = RoundedCornerShape(14.dp),
-        medium = RoundedCornerShape(20.dp),
-        large = RoundedCornerShape(28.dp),
-        extraLarge = RoundedCornerShape(36.dp)
+        extraSmall = MochiRoundedRectangle(8.dp),
+        small = MochiRoundedRectangle(12.dp),
+        medium = MochiRoundedRectangle(20.dp),
+        large = MochiRoundedRectangle(28.dp),
+        extraLarge = MochiRoundedRectangle(32.dp)
     )
 
     /**

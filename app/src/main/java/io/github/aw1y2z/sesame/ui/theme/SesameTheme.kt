@@ -20,6 +20,7 @@ import io.github.aw1y2z.sesame.data.AppConfig
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import ui.feice.mochi.theme.MochiTheme
 
 /**
  * 主题模式的**可观察快照**：「跟随系统」与「固定浅/深」合成**一个** state。
@@ -139,7 +140,25 @@ fun SesameTheme(
                 shapes = SesameM3.shapes,
                 typography = SesameM3.typography
             ) {
-                content()
+                // ── Mochi Compose（仅 MD 风格）──────────────────────────────────────
+                // 按 mochi 的接入规范只在**根部**挂一次主题，页面里不写外观分支；
+                // 这里用项目已有的 M3 色板桥接（MochiBridge），不重新取色，
+                // 因此 mochi 只接管形状 / 字阶 / 动效 / 组件，动态取色与层次保持不变。
+                //
+                // systemBarAppearance = false：系统栏图标深浅仍由项目自己的 Activity 控制，
+                // 避免两套主题同时写窗口导致来回抖动。
+                // MIUIX 分支完全不挂 MochiTheme —— HyperOS 观感一行不动。
+                if (style == UiStyle.MATERIAL3) {
+                    MochiTheme(
+                        colors = remember(colorScheme, dark) {
+                            sesameMochiColorScheme(colorScheme, dark)
+                        },
+                        systemBarAppearance = false,
+                        content = content
+                    )
+                } else {
+                    content()
+                }
             }
         }
     }
@@ -225,20 +244,25 @@ fun sesameActivatedColors(): SesameStatusColors = if (sesameIsDark()) {
 }
 
 /**
- * 卡片圆角半径。同 [sesameCardShape]，单独导出是因为「拼接式分组卡」需要裸半径
- * （见 `sesameGroupedShape`），而不是一个成品 Shape。
+ * HyperOS 分支的卡片圆角半径（20dp）。
+ *
+ * ⚠️ MD 风格接入 mochi 后走 [MochiBridge.CARD_CORNER]（28dp）；
+ * 这个常量保留给 `sesameGroupedShape` 拼接式分组卡与 MIUIX 分支，别直接改它。
  */
 val SESAME_CARD_CORNER: Dp = 20.dp
 
 /**
  * 卡片圆角。
  *
- * 比 M3 形状阶梯里的 `large`（16dp）再大一档：同样的 16dp 会让卡片显得方正，
- * 圆润度是这套观感辨识度的一部分。只用于**卡片容器**，
- * 不动 [MaterialTheme.shapes] 阶梯本身（按钮、输入框等仍按 M3 规范取形状）。
+ * - `MATERIAL3`：28dp **G2 连续曲率**（mochi `extraLarge`），见 [sesameShape]；
+ * - `MIUIX`：保持原有的 20dp 普通圆角，视觉零变化。
+ *
+ * 只用于**卡片容器**，不动 [MaterialTheme.shapes] 阶梯本身。
  */
 @Composable
-fun sesameCardShape(): Shape = RoundedCornerShape(SESAME_CARD_CORNER)
+fun sesameCardShape(): Shape = sesameShape(
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) MochiBridge.CARD_CORNER else SESAME_CARD_CORNER
+)
 
 /** 主要文字 */
 @Composable
