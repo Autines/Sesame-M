@@ -1065,6 +1065,11 @@ public class AntMember extends BaseAntMember {
         syncGoldTicketCandidates(todo);
         int pending = 0;
         for (int i = 0; i < todo.length(); i++) {
+            // 本地定制（P0 降噪）：全局风控暂停中就不再逐个任务推送——风控期间每次请求都会被拦
+            if (Status.isGlobalRiskControlActive()) {
+                Log.record("黄金票⏸全局风控暂停中，剩余任务跳过");
+                break;
+            }
             JSONObject task = todo.optJSONObject(i);
             if (task == null) {
                 continue;

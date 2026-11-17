@@ -442,6 +442,16 @@ public class AntSports extends ModelTask {
             }
             JSONArray taskList = jo.getJSONArray("taskList");
             for (int i = 0; i < taskList.length(); i++) {
+                // 本地定制（P0 降噪）：命中风控或全局暂停就立即收工，不再逐个任务重打。
+                // 全局暂停原本只在「每轮启动前」检查，一轮内已起来的模块救不了，这里补轮内检查。
+                if (Status.hasFlagToday(FLAG_RISK_TODAY)) {
+                    Log.record("运动任务🚫本轮已命中风控(1009)，剩余任务跳过");
+                    break;
+                }
+                if (Status.isGlobalRiskControlActive()) {
+                    Log.record("运动任务⏸全局风控暂停中，剩余任务跳过");
+                    break;
+                }
                 jo = taskList.getJSONObject(i);
                 String taskName = jo.getString("taskName");
                 String taskStatus = jo.getString("taskStatus");
@@ -502,6 +512,11 @@ public class AntSports extends ModelTask {
             if (MessageUtil.checkSuccess(TAG, jo)) {
                 return true;
             }
+            // 本地定制：报名也可能撞 1009，命中即当日熔断
+            if (isRisk(jo)) {
+                markIfRisk(jo);
+                return false;
+            }
             //检查并标记黑名单任务
             MessageUtil.checkResultCodeAndMarkTaskBlackList("AntSportsTaskList", taskName, jo);
         } catch (Throwable t) {
@@ -523,6 +538,12 @@ public class AntSports extends ModelTask {
     private Outcome attemptCompleteTask(String taskAction, String taskId, String taskName, String sceneCode) {
         try {
             JSONObject jo = new JSONObject(AntSportsRpcCall.completeTask(taskAction, taskId));
+            // 本地定制：命中 1009 立即置当日熔断。原先进来只判可重试/繁忙/不支持，
+            // 1009 会落到 UNABLE —— 任务层虽不再试，但外层循环仍逐个任务重打，一天刷几十次。
+            if (isRisk(jo)) {
+                markIfRisk(jo);
+                return Outcome.UNABLE;
+            }
             //检查并标记黑名单任务
             MessageUtil.checkResultCodeAndMarkTaskBlackList("AntSportsTaskList", taskName, jo);
             if (MessageUtil.checkSuccess(TAG, jo)) {
@@ -546,6 +567,12 @@ public class AntSports extends ModelTask {
 
     /** 列表状态探针：重拉运动币任务面板，按 taskId 匹配该任务当前状态。 */
     private static TaskAttemptPolicy.ProbeResult probeSportsStatus(String taskId, String sceneCode) {
+        // 本地定制：已命中风控 / 全局暂停时不再拉任务面板。
+        // probe 本身也是一次真实 RPC（queryCoinTaskPanel），风控期间每探一次就多打一次被拦接口；
+        // TaskAttemptPolicy 在 UNABLE 时同样会 probe，这是 38 次面板请求里的一大部分来源。
+        if (Status.hasFlagToday(FLAG_RISK_TODAY) || Status.isGlobalRiskControlActive()) {
+            return TaskAttemptPolicy.ProbeResult.UNKNOWN;
+        }
         // 运动币的状态词组与通用映射不同，这里把映射显式写在探针里
         return TaskAttemptPolicy.probeByNestedList(TAG, AntSportsRpcCall::queryCoinTaskPanel,
                 jo -> MessageUtil.checkSuccess(TAG, jo),

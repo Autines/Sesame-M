@@ -1869,6 +1869,16 @@ public class AntFarm extends ModelTask {
                 if (awardTroughFullThisRun) {
                     break;
                 }
+                // 本地定制（P0 降噪）：本模块已命中风控 / 全局风控暂停中，剩余任务一律不打。
+                // 全局暂停原本只在每轮启动前检查，一轮内并发起来的模块救不了；风控期间逐个请求只会被反复拦。
+                if (Status.hasFlagToday(FLAG_DO_FARM_TASK_RISK_BLOCK)) {
+                    Log.record("庄园🚫本日已命中风控(1009)，剩余饲料任务跳过");
+                    break;
+                }
+                if (Status.isGlobalRiskControlActive()) {
+                    Log.record("庄园⏸全局风控暂停中，剩余饲料任务跳过");
+                    break;
+                }
                 jo = ja.getJSONObject(i);
                 TaskStatus taskStatus = TaskStatus.valueOf(jo.getString("taskStatus"));
                 String title = jo.getString("title");
