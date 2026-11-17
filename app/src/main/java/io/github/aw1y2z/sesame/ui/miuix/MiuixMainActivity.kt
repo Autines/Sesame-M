@@ -29,8 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import io.github.aw1y2z.sesame.ui.theme.SesameTabPager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
@@ -494,27 +493,10 @@ fun MainScreen(activity: MiuixMainActivity) {
     }
     fun scrollOf(page: Int) = pageScrolls.getOrElse(page) { settingsScroll }
 
-    // 底部 Tab 用 HorizontalPager 承载：左右滑动切页带过渡动画，切走再切回各页滚动位置不变。
-    // pagerState 与 selectedTab 双向同步——点底部导航 → 平滑滚到对应页；手指滑动 → 高亮跟随。
-    // ⚠️ 关键修复：点导航用 animateScrollToPage 跨多页滑动时，pagerState.currentPage 会依次经过中间页，
-    // 若直接回写 selectedTab 会反向取消动画、把 pager 卡在半页（"界面卡在一部分"）。
-    // 因此用 isProgrammaticScroll 锁：程序化滑动期间不接受 pager 回灌的页码，避免双向 effect 打架。
-    val pagerState = rememberPagerState(initialPage = selectedTab) { MAIN_TABS.size }
-    var isProgrammaticScroll by remember { mutableStateOf(false) }
-    LaunchedEffect(selectedTab) {
-        if (pagerState.currentPage == selectedTab) return@LaunchedEffect
-        isProgrammaticScroll = true
-        try {
-            pagerState.animateScrollToPage(selectedTab)
-        } finally {
-            isProgrammaticScroll = false
-        }
-    }
-    LaunchedEffect(pagerState.currentPage) {
-        if (!isProgrammaticScroll && selectedTab != pagerState.currentPage) {
-            selectedTab = pagerState.currentPage
-        }
-    }
+    // 底部分页容器改由 SesameTabPager 统一承载：
+    // - MD 风格 → MochiPeerTransition（平级弹簧切换，GitHub demo 首页效果）
+    // - MIUIX → 原 HorizontalPager（整页平滑滑动 + pagerState 双向同步锁，观感零变化）
+    // 分页状态机（含原 isProgrammaticScroll 锁）已随之下沉到桥接层，selectedTab 仍是唯一真源。
 
     // 底栏液态玻璃悬浮效果：玻璃面（navBar 外层 Box）采样「内容层」（HorizontalPager）做折射。
     // 开关存于 AppConfig.liquidGlassNavBar；关闭时回落为普通底栏，保持历史观感不变。
@@ -547,9 +529,9 @@ fun MainScreen(activity: MiuixMainActivity) {
     // 底栏随滚动显隐（参考 iOS/Chrome 的「上滑收起、下滑唤出」）：
     //   手指上滑 = 内容继续往下走 = 当前页 ScrollState.value 增大 → 收起；
     //   手指下滑 = value 减小、或回到顶部(value<=0) → 唤出。
-    // 四个 Tab 各有一份 ScrollState，这里只订阅「当前页签」那份；pagerState.currentPage 变化时
+    // 四个 Tab 各有一份 ScrollState，这里只订阅「当前页签」那份；selectedTab 变化时
     // activeScroll 换对象，LaunchedEffect 以它为 key 自动重订阅，避免跨页残留旧方向的抖动。
-    val activeScroll = scrollOf(pagerState.currentPage)
+    val activeScroll = scrollOf(selectedTab)
     var navBarHidden by remember { mutableStateOf(false) }
     LaunchedEffect(activeScroll) {
         var prev = activeScroll.value
@@ -634,8 +616,10 @@ fun MainScreen(activity: MiuixMainActivity) {
             }
         }
     ) { padding ->
-        HorizontalPager(
-            state = pagerState,
+        SesameTabPager(
+            tabCount = MAIN_TABS.size,
+            selectedTab = selectedTab,
+            onTabChange = { selectedTab = it },
             modifier = Modifier
                 .fillMaxSize()
                 .then(

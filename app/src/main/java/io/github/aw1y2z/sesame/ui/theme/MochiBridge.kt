@@ -1,8 +1,15 @@
 package io.github.aw1y2z.sesame.ui.theme
 
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -15,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.content.MochiMorphIcon
+import ui.feice.mochi.navigation.MochiPeerTransition
+import ui.feice.mochi.navigation.MochiPeerTransitionSpec
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiColorScheme
 
@@ -191,5 +200,56 @@ fun SesameMorphIcon(
             modifier = modifier,
             tint = tint
         )
+    }
+}
+
+/**
+ * 一级 Tab 分页容器：MD 风格用 mochi 的 [MochiPeerTransition] 景深样式
+ * （[MochiPeerTransitionSpec.Depth]：不横移，旧页原地后退缩小淡出、新页从后面放大淡入，
+ * 与 GitHub demo 首页标签切换一致）；
+ * MIUIX 保持原 [HorizontalPager]（整页平滑滑动，老板调过的观感零变化）。
+ *
+ * 两个分支都遵守同一个契约：
+ * - [selectedTab] 是唯一真源（点击底栏 → 外部改它 → 这里跟到对应页；手指切页 → [onTabChange] 回灌）；
+ * - 每页内容由 [content] 提供，页内滚动/状态由调用方持有，切走再回来保持。
+ */
+@Composable
+fun SesameTabPager(
+    tabCount: Int,
+    selectedTab: Int,
+    onTabChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (Int) -> Unit
+) {
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        val pages = remember(tabCount) { (0 until tabCount).toList() }
+        MochiPeerTransition(
+            targetState = selectedTab,
+            modifier = modifier,
+            pages = pages,
+            onPageChange = onTabChange,
+            spec = MochiPeerTransitionSpec.Depth,
+            content = content
+        )
+    } else {
+        val pagerState = rememberPagerState(initialPage = selectedTab) { tabCount }
+        var isProgrammaticScroll by remember { mutableStateOf(false) }
+        LaunchedEffect(selectedTab) {
+            if (pagerState.currentPage == selectedTab) return@LaunchedEffect
+            isProgrammaticScroll = true
+            try {
+                pagerState.animateScrollToPage(selectedTab)
+            } finally {
+                isProgrammaticScroll = false
+            }
+        }
+        LaunchedEffect(pagerState.currentPage) {
+            if (!isProgrammaticScroll && selectedTab != pagerState.currentPage) {
+                onTabChange(pagerState.currentPage)
+            }
+        }
+        HorizontalPager(state = pagerState, modifier = modifier) { page ->
+            content(page)
+        }
     }
 }

@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,8 +51,10 @@ import top.yukonga.miuix.kmp.preference.SliderPreference as MiuixSliderPreferenc
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import ui.feice.mochi.basic.MochiChip
 import ui.feice.mochi.basic.MochiConfirmationDialog
+import ui.feice.mochi.basic.MochiDialog
 import ui.feice.mochi.basic.MochiDialogAction
 import ui.feice.mochi.basic.MochiDialogActionRole
+import ui.feice.mochi.basic.MochiDialogTextField
 import ui.feice.mochi.basic.MochiSearchBar
 import ui.feice.mochi.basic.MochiSlider
 import kotlinx.collections.immutable.persistentListOf
@@ -494,9 +495,9 @@ private fun DialogActionButton(
  * 确认对话框。
  *
  * - `MIUIX`：沿用模块原有的 16dp 圆角卡 + 两个文字按钮；
- * - `MATERIAL3`：换成标准 `AlertDialog`——标题/正文/按钮三层字号阶梯，
- *   确定性动作使用 primary 文字色、取消动作降级为 onSurfaceVariant，
- *   危险动作（[destructive]）使用 error 色，形成明确的视觉优先级。
+ * - `MATERIAL3`：用 mochi `MochiConfirmationDialog`——卡片从 1.12 倍缩放淡入、
+ *   后面的页面压暗，与 GitHub demo 的对话框弹出动画一致；
+ *   危险动作（[destructive]）用 Destructive 角色显示红字。
  */
 @Composable
 fun SesameConfirmDialog(
@@ -562,9 +563,9 @@ fun SesameConfirmDialog(
 /**
  * 带单行输入的对话框（扩展功能页的「自定义走路路径」）。
  *
- * 按钮数量在两套风格下都是动态的：M3 侧把这些动作统一收敛到
- * AlertDialog 的 `confirmButton` 槽位里横向排列，承载 1~2 个动作，
- * 避免为「清空队列」额外造一个自定义布局。
+ * 按钮数量在两套风格下都是动态的：M3 侧用 mochi `MochiDialog` + `MochiDialogTextField`，
+ * 输入框放进对话框的 `content` 槽位，动作（1~2 个）交给 `actions`，
+ * 从而和确认框一样拥有 demo 的弹出动画（1.12 倍缩放淡入 + 图标描绘）。
  */
 @Composable
 fun SesameInputDialog(
@@ -609,42 +610,46 @@ fun SesameInputDialog(
             }
         }
 
-        UiStyle.MATERIAL3 -> AlertDialog(
+        UiStyle.MATERIAL3 -> MochiDialog(
+            visible = true,
             onDismissRequest = onDismiss,
-            title = {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+            title = title,
+            actions = if (secondaryAction != null) {
+                persistentListOf(
+                    MochiDialogAction(
+                        label = secondaryAction.first,
+                        role = MochiDialogActionRole.Cancel,
+                        enabled = true,
+                        holdToConfirm = false,
+                        onClick = secondaryAction.second
+                    ),
+                    MochiDialogAction(
+                        label = primaryAction.first,
+                        role = MochiDialogActionRole.Primary,
+                        enabled = true,
+                        holdToConfirm = false,
+                        onClick = primaryAction.second
+                    )
+                )
+            } else {
+                persistentListOf(
+                    MochiDialogAction(
+                        label = primaryAction.first,
+                        role = MochiDialogActionRole.Primary,
+                        enabled = true,
+                        holdToConfirm = false,
+                        onClick = primaryAction.second
+                    )
                 )
             },
-            text = {
-                OutlinedTextField(
+            content = {
+                MochiDialogTextField(
                     value = value,
                     onValueChange = onValueChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = if (label.isBlank()) null else {
-                        { Text(text = label, style = MaterialTheme.typography.bodySmall) }
-                    },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    shape = MaterialTheme.shapes.small
+                    placeholder = label
                 )
-            },
-            confirmButton = {
-                Row {
-                    if (secondaryAction != null) {
-                        DialogActionButton(
-                            text = secondaryAction.first,
-                            onClick = secondaryAction.second,
-                            role = DialogActionRole.Neutral
-                        )
-                    }
-                    DialogActionButton(text = primaryAction.first, onClick = primaryAction.second)
-                }
-            },
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            }
         )
     }
 }
