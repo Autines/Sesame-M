@@ -503,9 +503,13 @@ fun SesameStatusCard(
                     )
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
+                        // MD：状态文字切换走 mochi 模糊替换；MIUIX 分支在上方，保持静态 Text 不变。
+                        // 原来用 MaterialTheme.typography.titleMedium（16sp/Medium），
+                        // 这里显式等价构造，保持观感不变，只把静态 Text 换成模糊替换。
+                        SesameBlurText(
                             text = statusText,
-                            style = MaterialTheme.typography.titleMedium,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
                             color = label
                         )
                         if (lines.isNotEmpty()) {

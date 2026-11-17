@@ -54,6 +54,7 @@ import io.github.aw1y2z.sesame.ui.miuix.CardColumn
 import io.github.aw1y2z.sesame.ui.miuix.MiuixMainActivity
 import io.github.aw1y2z.sesame.ui.theme.SesameCard
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
+import io.github.aw1y2z.sesame.ui.theme.SesameCounterText
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameExpandRow
 import io.github.aw1y2z.sesame.ui.theme.SesameInfoRow
@@ -221,7 +222,7 @@ private fun StatisticsGrid(statistics: Statistics) {
                 columns.forEach { timeType ->
                     val value = types.sumOf { statistics.dataOf(timeType, it) }
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        SesameText(text = value.toString(), fontSize = 14.sp)
+                        SesameCounterText(value = value.toLong(), fontSize = 14.sp)
                     }
                 }
             }

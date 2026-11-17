@@ -3,10 +3,18 @@ package io.github.aw1y2z.sesame.ui.theme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import ui.feice.mochi.effect.content.MochiBlurText
+import ui.feice.mochi.effect.content.MochiCounterText
+import ui.feice.mochi.effect.content.MochiMorphIcon
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiColorScheme
 
@@ -101,3 +109,87 @@ fun sesameMochiColorScheme(m3: ColorScheme, dark: Boolean): MochiColorScheme = M
     surfaceContainerHigh = m3.surfaceContainerHigh,
     surfaceContainerHighest = m3.surfaceContainerHighest,
 )
+
+/* ─────────────────────── 场景动效桥接（仅 MD 风格生效）───────────────────────
+ *
+ * 这三个包装组件内部按 [LocalUiStyle] 分派：MATERIAL3 用 mochi 的内容变换组件
+ * （数字逐位滚动 / 文字模糊替换 / 图标原位变形），MIUIX 回退到普通静态展示。
+ * 调用点因此可以写在公共 Composable 里而不破坏 HyperOS 观感。
+ *
+ * 严格遵循 mochi《内容变换》规范：只对**变化的状态**做过渡，静止数值用 MochiCounterText
+ * 也与普通 Text 像素重合（库保证 tnum 等宽 + 静止无模糊）。
+ */
+
+/** 数字：MD 用 mochi 逐位滚动计数器；MIUIX 回退静态文本。 */
+@Composable
+fun SesameCounterText(
+    value: Long,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    fontSize: TextUnit = 15.sp,
+    fontWeight: androidx.compose.ui.text.font.FontWeight? = null
+) {
+    val textStyle = TextStyle(fontSize = fontSize, fontWeight = fontWeight)
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        MochiCounterText(
+            value = value,
+            modifier = modifier,
+            color = color,
+            style = textStyle
+        )
+    } else {
+        androidx.compose.material3.Text(
+            text = value.toString(),
+            modifier = modifier,
+            color = color,
+            style = textStyle
+        )
+    }
+}
+
+/** 状态文字：MD 用 mochi 模糊替换（切换时旧字糊化淡出、新字清晰）；MIUIX 回退静态文本。 */
+@Composable
+fun SesameBlurText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    fontSize: TextUnit = 15.sp,
+    fontWeight: androidx.compose.ui.text.font.FontWeight? = null
+) {
+    val textStyle = TextStyle(fontSize = fontSize, fontWeight = fontWeight)
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        MochiBlurText(
+            text = text,
+            modifier = modifier,
+            color = color,
+            style = textStyle
+        )
+    } else {
+        androidx.compose.material3.Text(
+            text = text,
+            modifier = modifier,
+            color = color,
+            style = textStyle
+        )
+    }
+}
+
+/** 图标：MD 用 mochi 原位变形（图标切换时笔画一一对应挪过去）；MIUIX 回退静态图标。 */
+@Composable
+fun SesameMorphIcon(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    tint: Color = androidx.compose.material3.LocalContentColor.current,
+    size: Dp = 24.dp
+) {
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        MochiMorphIcon(icon = icon, modifier = modifier, tint = tint, size = size)
+    } else {
+        androidx.compose.material3.Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = modifier,
+            tint = tint
+        )
+    }
+}
