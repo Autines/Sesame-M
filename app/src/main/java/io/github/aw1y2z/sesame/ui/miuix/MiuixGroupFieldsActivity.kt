@@ -40,8 +40,7 @@ import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.M3_PER_ITEM_CARDS
 import io.github.aw1y2z.sesame.ui.theme.SESAME_CARD_CORNER
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
-import io.github.aw1y2z.sesame.ui.theme.SesameLazyDetailTitleScaffold
-import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
+import io.github.aw1y2z.sesame.ui.theme.SesameLazyCompactTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameText
 import io.github.aw1y2z.sesame.ui.theme.SesameTopBar
 import io.github.aw1y2z.sesame.ui.theme.UiStyle
@@ -239,7 +238,7 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
         list
     }
 
-    SesameLazyDetailTitleScaffold(
+    SesameLazyCompactTitleScaffold(
         title = group.getName(),
         onBack = { activity.saveAndFinish() },
         onExecute = onExecute

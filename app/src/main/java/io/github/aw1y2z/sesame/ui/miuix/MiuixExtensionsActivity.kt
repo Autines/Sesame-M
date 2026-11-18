@@ -20,9 +20,8 @@ import io.github.aw1y2z.sesame.data.TokenConfig
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
-import io.github.aw1y2z.sesame.ui.theme.SesameDetailTitleScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameCompactTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameInputDialog
-import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.ui.theme.sesameGroupHorizontalPadding
 import io.github.aw1y2z.sesame.ui.HostBridge
 import io.github.aw1y2z.sesame.util.ToastUtil
@@ -59,12 +58,11 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
     var inputMode by remember { mutableStateOf<String?>(null) }
     var inputText by remember { mutableStateOf("") }
 
-    SesameDetailTitleScaffold(
+    SesameCompactTitleScaffold(
         title = "扩展功能",
         onBack = { activity.finish() }
     ) {
-            SesameSectionTitle(text = "森林查询")
-            SesameCardGroup {
+            SesameCardGroup(header = "森林查询") {
                 val forestButtons = listOf(
                     "查询浇水列表" to ("antForest" to "getWateredItems"),
                     "查询被浇列表" to ("antForest" to "getWateringItems"),
@@ -85,10 +83,7 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                     )
                 }
             }
-            Spacer(Modifier.height(4.dp))
-
-            SesameSectionTitle(text = "自定义走路路径")
-            SesameCardGroup {
+            SesameCardGroup(header = "自定义走路路径") {
                 SesameClickRow(
                     title = "设置自定义走路路径(list)",
                     icon = Icons.Outlined.DirectionsWalk,
@@ -100,10 +95,7 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                     onClick = { inputMode = "queue"; inputText = "" }
                 )
             }
-            Spacer(Modifier.height(4.dp))
-
-            SesameSectionTitle(text = "其他")
-            SesameCardGroup {
+            SesameCardGroup(header = "其他") {
                 SesameClickRow(
                     title = "清空光盘行动图片",
                     icon = Icons.Outlined.Image,

@@ -37,9 +37,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.basic.SmallTitle as MiuixSmallTitle
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import ui.feice.mochi.list.MochiListCard
+import ui.feice.mochi.list.MochiListSection
 
 /* ───────────────────────── 卡片模型 / 分组容器 / 日志卡片 / 列表卡 / 状态卡 ─────────────────────────
  * 本文件是「风格无关 UI 组件集」的一部分（整体约定与分层说明见 SesameFoundation.kt 顶部）。
@@ -159,18 +161,28 @@ internal fun M3LeadingIcon(icon: ImageVector?, enabled: Boolean = true) {
 @Composable
 fun SesameCardGroup(
     modifier: Modifier = Modifier,
+    /**
+     * 分组小标题（可选）。MD 重构阶段4：有卡片外小标题的页面把它交给本参数，
+     * 由 mochi [MochiListSection] 统一渲染标题（HeaderGap 10dp）并管理组间 28dp；
+     * MIUIX 分支用 [MiuixSmallTitle] 渲染，观感与原先页面里的 SesameSectionTitle 一致。
+     * 不传则两张风格都只渲染卡片本体（无标题）。
+     */
+    header: String? = null,
     // 签名由 ColumnScope.() -> Unit 收窄为普通 lambda：全部调用点的 content 都只是平铺行组件，
     // 无一使用 weight/align 等 ColumnScope 专属能力（已全项目核查）。收窄后 MD 分支可把行
     // 直接平铺进 MochiListCard 的自定义 Layout，分隔线与首末行圆角裁切才能生效。
     content: @Composable () -> Unit
 ) {
     when (LocalUiStyle.current) {
-        UiStyle.MIUIX -> Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(28.dp))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        ) { content() }
+        UiStyle.MIUIX -> Column(modifier = modifier.fillMaxWidth()) {
+            if (header != null) MiuixSmallTitle(text = header)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(28.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) { content() }
+        }
 
         UiStyle.MATERIAL3 -> if (M3_PER_ITEM_CARDS) {
             CompositionLocalProvider(LocalM3RowCarded provides true) {
@@ -179,6 +191,10 @@ fun SesameCardGroup(
                     verticalArrangement = Arrangement.spacedBy(M3CardGap),
                 ) { content() }
             }
+        } else if (header != null) {
+            // mochi 分组卡片 + 规范标题：MochiListSection 内部 =
+            // MochiListSectionHeader(bottom=HeaderGap 10dp) + MochiListCard，间距由库按规范管。
+            MochiListSection(modifier = modifier.fillMaxWidth(), header = header, content = content)
         } else {
             // mochi 分组卡片：G2 连续圆角 26dp、分隔线从文字起始、按压时上下线随高亮淡出。
             // content 直接平铺为卡片子元素 —— 每行是独立 measurable，靠 layoutId(ListItemInfo)

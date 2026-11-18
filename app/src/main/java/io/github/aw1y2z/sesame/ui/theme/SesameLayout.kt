@@ -37,7 +37,9 @@ import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.navigation.MochiCompactTitleScaffold
 import ui.feice.mochi.navigation.MochiLargeTitleScaffold
+import ui.feice.mochi.navigation.MochiLazyCompactTitleScaffold
 import ui.feice.mochi.navigation.MochiLazyLargeTitleScaffold
 
 /* ───────────────────────── 布局骨架 / 页面容器 / 空态与加载 ─────────────────────────
@@ -172,6 +174,68 @@ fun SesameDetailTitleScaffold(
     }
 }
 
+/**
+ * 「分组小标题」页面骨架（MD 全量重构阶段4，仅 MATERIAL3 生效）。
+ *
+ * 依据 mochi 规范：正文由**卡片外分组小标题**组织的页面（如本项目的
+ * 「备份与恢复 / 配置分享」）必须用 **CompactTitle**——只保留顶栏，
+ * 不生成大标题占位/淡出/snap，避免大标题空位把首组标题顶下去。
+ * 参数与 [SesameDetailTitleScaffold] 完全一致，MIUIX 分支逐字复刻原样，观感零变化。
+ *
+ * 🔴 契约与 Large 版相同：mochi 脚手架自带 verticalScroll / statusBarsPadding /
+ * 16dp 水平留白 / barHeight 顶部留白，且 content 各直接子元素间自动 spacedBy(28dp)
+ * （= MochiListDefaults.SectionSpacing，即规范的组间距）。页面不要再自己套
+ * verticalScroll / padding(padding) / 手动组间 Spacer。
+ */
+@Composable
+fun SesameCompactTitleScaffold(
+    title: String,
+    onBack: () -> Unit,
+    onImport: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null,
+    onClear: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
+    onExecute: (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit
+) {
+    when (LocalUiStyle.current) {
+        UiStyle.MATERIAL3 -> MochiCompactTitleScaffold(
+            title = title,
+            background = sesameSurface(),
+            navigationIcon = { SesameTitleBackIcon(onBack) },
+            actions = {
+                SesameTitleActions(
+                    onImport = onImport, onExport = onExport,
+                    onClear = onClear, onShare = onShare,
+                    onExecute = onExecute, actions = actions
+                )
+            },
+            content = content
+        )
+
+        UiStyle.MIUIX -> SesameScaffold(
+            topBar = {
+                SesameTopBar(
+                    title = title, onBack = onBack,
+                    onImport = onImport, onExport = onExport,
+                    onClear = onClear, onShare = onShare,
+                    onExecute = onExecute, actions = actions
+                )
+            }
+        ) { padding ->
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(padding)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                content = content
+            )
+        }
+    }
+}
+
 /** 大标题脚手架的返回按钮（MD 顶栏槽），复用与 SesameTopBar MD 分支一致的图标/配色。 */
 @Composable
 private fun SesameTitleBackIcon(onBack: () -> Unit) {
@@ -246,6 +310,62 @@ fun SesameLazyDetailTitleScaffold(
 ) {
     when (LocalUiStyle.current) {
         UiStyle.MATERIAL3 -> MochiLazyLargeTitleScaffold(
+            title = title,
+            background = sesameSurface(),
+            listState = listState,
+            navigationIcon = { SesameTitleBackIcon(onBack) },
+            actions = {
+                SesameTitleActions(
+                    onImport = onImport, onExport = onExport,
+                    onClear = onClear, onShare = onShare,
+                    onExecute = onExecute, actions = actions
+                )
+            },
+            content = content
+        )
+
+        UiStyle.MIUIX -> SesameScaffold(
+            topBar = {
+                SesameTopBar(
+                    title = title, onBack = onBack,
+                    onImport = onImport, onExport = onExport,
+                    onClear = onClear, onShare = onShare,
+                    onExecute = onExecute, actions = actions
+                )
+            }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                state = listState,
+                contentPadding = contentPadding,
+                flingBehavior = sesameFlingBehavior(),
+                content = content
+            )
+        }
+    }
+}
+
+/**
+ * 「分组小标题」页面骨架的懒加载版（MD 全量重构阶段4，仅 MATERIAL3 生效）。
+ * 对应自带 LazyColumn 的页面（黑名单 / 黑名单列表 / 分组字段），契约同
+ * [SesameCompactTitleScaffold]，只是 [content] 是 [LazyListScope]。
+ */
+@Composable
+fun SesameLazyCompactTitleScaffold(
+    title: String,
+    onBack: () -> Unit,
+    onImport: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null,
+    onClear: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
+    onExecute: (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+    content: LazyListScope.() -> Unit
+) {
+    when (LocalUiStyle.current) {
+        UiStyle.MATERIAL3 -> MochiLazyCompactTitleScaffold(
             title = title,
             background = sesameSurface(),
             listState = listState,

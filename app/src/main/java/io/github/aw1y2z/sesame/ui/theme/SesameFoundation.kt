@@ -127,9 +127,15 @@ internal val M3LeadingIconSize = 24.dp
  */
 internal val M3LeadingIconGap = 16.dp
 
-/** 分组标题上下留白：上方需要与上一张卡拉开，下方贴近自己的卡片 */
-private val M3SectionTitleTopPadding = 24.dp
-private val M3SectionTitleBottomPadding = 8.dp
+/**
+ * 分组标题上下留白（MD 全量重构阶段4）。
+ * 有分组小标题的页面统一走 CompactTitle 脚手架 + SesameCardGroup(header)：
+ * - 组间 28dp 由脚手架 spacedBy(MochiListDefaults.SectionSpacing) 管 → 这里 top 设 0，避免双重叠加；
+ * - 标题→卡片 10dp = mochi 规范 HeaderGap → bottom 设 10dp。
+ * 仅剩的独立使用场景（如搜索空态"无匹配字段"）也落在同一节奏里。
+ */
+private val M3SectionTitleTopPadding = 0.dp
+private val M3SectionTitleBottomPadding = 10.dp
 
 /** 行尾图标尺寸（MD3 的 chevron 视觉尺寸） */
 internal val M3TrailingIconSize = 20.dp

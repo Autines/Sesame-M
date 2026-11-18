@@ -44,7 +44,7 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
-import io.github.aw1y2z.sesame.ui.theme.SesameDetailTitleScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameCompactTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameExpandRow
 import io.github.aw1y2z.sesame.ui.theme.SesameInlineEditor
 import io.github.aw1y2z.sesame.ui.theme.SesameRadioListRow
@@ -259,7 +259,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
     }
 
     // ============ 二级:分组目录 ============
-    SesameDetailTitleScaffold(
+    SesameCompactTitleScaffold(
         title = "配置设置",
         onBack = { activity.saveAndFinish() },
         // 顶栏刻意**不放**导入/导出：它们与下方「备份与恢复」是同一动作的两个入口
@@ -349,11 +349,10 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                 }
                 Spacer(Modifier.height(12.dp))
             }
-            Spacer(Modifier.height(16.dp))
-
             // ============ 备份与恢复（整份搬）============
-            SesameSectionTitle(text = "备份与恢复")
-            SesameCardGroup {
+            // 分组小标题交给 SesameCardGroup(header)：MD 用 mochi ListSection 统一管 10dp/28dp，
+            // MIUIX 仍由内部 SmallTitle 渲染，观感不变。组间留白由 Compact 脚手架 spacedBy(28dp) 管。
+            SesameCardGroup(header = "备份与恢复") {
                 SesameClickRow(
                     title = "完整备份",
                     summary = "导出全部配置为 .zip（含设置项与所有账号）",
@@ -367,11 +366,8 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                     onClick = { restoreLauncher.launch("*/*") }
                 )
             }
-            Spacer(Modifier.height(16.dp))
-
             // ============ 配置分享（单账号）============
-            SesameSectionTitle(text = "配置分享")
-            SesameCardGroup {
+            SesameCardGroup(header = "配置分享") {
                 SesameClickRow(
                     title = "导出当前账号配置",
                     summary = "仅模块配置 .json，用于分享或替换单个账号",

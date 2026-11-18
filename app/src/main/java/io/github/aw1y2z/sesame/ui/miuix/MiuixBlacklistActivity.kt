@@ -22,8 +22,7 @@ import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
-import io.github.aw1y2z.sesame.ui.theme.SesameLazyDetailTitleScaffold
-import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
+import io.github.aw1y2z.sesame.ui.theme.SesameLazyCompactTitleScaffold
 import io.github.aw1y2z.sesame.util.MessageUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
 
@@ -88,7 +87,7 @@ fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
     // groupBy 保持插入顺序，所以这里不再需要自己排序。
     val grouped = remember(entries) { entries.groupBy { it.groupName } }
 
-    SesameLazyDetailTitleScaffold(
+    SesameLazyCompactTitleScaffold(
         title = "任务黑名单",
         onBack = { activity.finish() }
     ) {
@@ -105,14 +104,11 @@ fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
                 }
             }
         } else {
-            // 与「扩展功能」页同一套构造：分组小标题在上，紧跟一张装多行的卡片。
-            // 刻意**不加** spacedBy：分组之间的呼吸感由 SesameSectionTitle 自带的上下留白给。
+            // 分组小标题交给 SesameCardGroup(header)：MD 用 mochi ListSection 统一管 10dp 标题间距，
+            // item 间距由 Compact 脚手架的 LocalMochiListItemSpacing(28dp) 管；MIUIX 观感不变。
                 grouped.forEach { (groupName, group) ->
                     item(key = "group::$groupName") {
-                        SesameSectionTitle(text = groupName)
-                    }
-                    item(key = "card::$groupName") {
-                        SesameCardGroup {
+                        SesameCardGroup(header = groupName) {
                             // 同一模块下按黑名单列表再分一层：一行一个列表，点进去看明细
                             group.groupBy { it.listName }.forEach { (listName, listEntries) ->
                                 SesameClickRow(
@@ -136,12 +132,9 @@ fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
                         }
                     }
                 }
-                item(key = "action-title") {
-                    SesameSectionTitle(text = "操作")
-                }
                 item(key = "action-card") {
                     // 不用顶栏的"清空"位：它渲染的是垃圾桶图标，语义是"删除"，套在"全部解禁"上会误导
-                    SesameCardGroup {
+                    SesameCardGroup(header = "操作") {
                         SesameClickRow(
                             title = "全部解禁",
                             summary = "共 ${entries.size} 项",

@@ -20,8 +20,7 @@ import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
-import io.github.aw1y2z.sesame.ui.theme.SesameLazyDetailTitleScaffold
-import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
+import io.github.aw1y2z.sesame.ui.theme.SesameLazyCompactTitleScaffold
 import io.github.aw1y2z.sesame.util.MessageUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
 
@@ -80,7 +79,7 @@ private fun ListScreen(
     val maxRetry = remember { MessageUtil.getBlacklistMaxRetry() }
     val today = remember { MessageUtil.currentDayIndex() }
 
-    SesameLazyDetailTitleScaffold(
+    SesameLazyCompactTitleScaffold(
         title = listName,
         onBack = { activity.finish() }
     ) {
@@ -109,11 +108,8 @@ private fun ListScreen(
                         }
                     }
                 }
-                item(key = "action-title") {
-                    SesameSectionTitle(text = "操作")
-                }
                 item(key = "action-card") {
-                    SesameCardGroup {
+                    SesameCardGroup(header = "操作") {
                         SesameClickRow(
                             title = "全部解禁",
                             summary = "本列表 ${entries.size} 项",
