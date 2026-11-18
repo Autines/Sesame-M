@@ -57,6 +57,8 @@ import ui.feice.mochi.basic.MochiDialogActionRole
 import ui.feice.mochi.basic.MochiDialogTextField
 import ui.feice.mochi.basic.MochiSearchBar
 import ui.feice.mochi.basic.MochiSlider
+import ui.feice.mochi.list.MochiListLeadingStyle
+import ui.feice.mochi.list.MochiListRow
 import kotlinx.collections.immutable.persistentListOf
 
 /* ───────────────────────── 输入控件 / Chip / 对话框 ─────────────────────────
@@ -205,52 +207,17 @@ fun SesameExpandRow(
             onClick = onClick
         )
 
-        UiStyle.MATERIAL3 -> {
-            val rowModifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = if (summary.isNullOrBlank()) M3RowMinHeight else M3TwoLineRowMinHeight)
-                .padding(
-                    start = M3RowStartPadding,
-                    end = M3RowEndPadding,
-                    top = M3RowVerticalPadding,
-                    bottom = M3RowVerticalPadding
-                )
-            val rowContent: @Composable RowScope.() -> Unit = {
-                M3LeadingIcon(icon)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (!summary.isNullOrBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = summary,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (expandable) {
-                    Spacer(Modifier.width(12.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(M3TrailingIconSize)
-                    )
-                }
-            }
-            // 不可展开的行不给任何点击反馈（只读语义），此时连卡片也不套点击层，
-            // 避免出现「点了没反应」的涟漪。可展开的行用 M3RowCard(onClick) 保证
-            // 涟漪被裁剪在卡片圆角内。
-            M3RowCard(onClick = if (expandable) onClick else null) {
-                Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
-                    rowContent()
-                }
-            }
-        }
+        // mochi 原生行：chevron 跟随 expandable；不可展开时无 onClick（只读语义，不给按压热区）。
+        UiStyle.MATERIAL3 -> MochiListRow(
+            title = title,
+            subtitle = summary,
+            onClick = if (expandable) onClick else null,
+            chevron = expandable,
+            leading = if (icon != null) {
+                { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            } else null,
+            leadingStyle = MochiListLeadingStyle.Symbol
+        )
     }
 }
 

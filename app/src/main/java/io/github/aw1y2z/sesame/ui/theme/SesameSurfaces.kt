@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.list.MochiListCard
 
 /* ───────────────────────── 卡片模型 / 分组容器 / 日志卡片 / 列表卡 / 状态卡 ─────────────────────────
  * 本文件是「风格无关 UI 组件集」的一部分（整体约定与分层说明见 SesameFoundation.kt 顶部）。
@@ -158,7 +159,10 @@ internal fun M3LeadingIcon(icon: ImageVector?, enabled: Boolean = true) {
 @Composable
 fun SesameCardGroup(
     modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
+    // 签名由 ColumnScope.() -> Unit 收窄为普通 lambda：全部调用点的 content 都只是平铺行组件，
+    // 无一使用 weight/align 等 ColumnScope 专属能力（已全项目核查）。收窄后 MD 分支可把行
+    // 直接平铺进 MochiListCard 的自定义 Layout，分隔线与首末行圆角裁切才能生效。
+    content: @Composable () -> Unit
 ) {
     when (LocalUiStyle.current) {
         UiStyle.MIUIX -> Column(
@@ -166,25 +170,20 @@ fun SesameCardGroup(
                 .fillMaxWidth()
                 .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(28.dp))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            content = content
-        )
+        ) { content() }
 
         UiStyle.MATERIAL3 -> if (M3_PER_ITEM_CARDS) {
             CompositionLocalProvider(LocalM3RowCarded provides true) {
                 Column(
                     modifier = modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(M3CardGap),
-                    content = content
-                )
+                ) { content() }
             }
         } else {
-            Column(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .clip(sesameCardShape())
-                    .background(sesameSurfaceContainer()),
-                content = content
-            )
+            // mochi 分组卡片：G2 连续圆角 26dp、分隔线从文字起始、按压时上下线随高亮淡出。
+            // content 直接平铺为卡片子元素 —— 每行是独立 measurable，靠 layoutId(ListItemInfo)
+            // 协作画分隔线。MochiListRow 自动发布该 info；自定义内容用 mochiListDivider 指定起点。
+            MochiListCard(modifier = modifier.fillMaxWidth(), content = content)
         }
     }
 }

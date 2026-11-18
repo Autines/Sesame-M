@@ -55,6 +55,8 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference as MiuixArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference as MiuixSwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import ui.feice.mochi.basic.MochiSwitch
+import ui.feice.mochi.list.MochiListLeadingStyle
+import ui.feice.mochi.list.MochiListRow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -80,36 +82,8 @@ fun SesameInfoRow(label: String, value: String) {
             MiuixText(text = value, fontSize = 15.sp, color = MiuixTheme.colorScheme.primary)
         }
 
-        UiStyle.MATERIAL3 -> M3RowCard {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 只读行由内容自然撑开（≈40dp），不套 56dp 的触摸目标下限。
-                    // 点击区是给手指的，只读行只需要眼睛舒服的呼吸感。
-                    .padding(
-                        start = M3RowStartPadding,
-                        end = M3RowEndPadding,
-                        top = M3InfoRowVerticalPadding,
-                        bottom = M3InfoRowVerticalPadding
-                    ),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodyLarge,
-                    // 取值是这一行的「结论」，用 onSurfaceVariant 略低于标签但仍可读；
-                    // MD3 不用颜色区分信息层级，靠字重与字色明度差。
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        // mochi 原生只读行：value 槽显示取值（灰色、与标题共用基线），无 onClick 不给按压热区。
+        UiStyle.MATERIAL3 -> MochiListRow(title = label, value = value)
     }
 }
 
@@ -138,27 +112,22 @@ fun SesameClickRow(
             MiuixArrowPreference(title = title, summary = summary, onClick = onClick)
         }
 
-        UiStyle.MATERIAL3 -> M3RowCard(onClick = onClick) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(
-                        min = when {
-                            isChild -> M3ChildRowMinHeight
-                            summary.isNullOrBlank() -> M3RowMinHeight
-                            else -> M3TwoLineRowMinHeight
-                        }
-                    )
-                    .padding(
-                        start = M3RowStartPadding,
-                        end = M3RowEndPadding,
-                        top = if (isChild) M3ChildRowVerticalPadding else M3RowVerticalPadding,
-                        bottom = if (isChild) M3ChildRowVerticalPadding else M3RowVerticalPadding
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isChild) {
-                    // 树干引导线：一眼看出「这一行挂在上面那行之下」
+        UiStyle.MATERIAL3 -> if (isChild) {
+            // 层级子项：mochi 行没有「缩进 + 树干引导线」语义，保留原自定义行；
+            // 它是卡片的自定义子元素，mochi 卡片用默认 16dp 分隔线起点，观感仍协调。
+            M3RowCard(onClick = onClick) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = M3ChildRowMinHeight)
+                        .padding(
+                            start = M3RowStartPadding,
+                            end = M3RowEndPadding,
+                            top = M3ChildRowVerticalPadding,
+                            bottom = M3ChildRowVerticalPadding
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .width(M3ChildGuideWidth)
@@ -169,8 +138,6 @@ fun SesameClickRow(
                             )
                     )
                     Spacer(Modifier.width(M3ChildGuideGap))
-                    // 子项保留自己的图标（少了它左侧会空一大块、像占位符），
-                    // 但小一号并压暗，配合整体的内缩形成「轻」的一档
                     if (icon != null) {
                         Icon(
                             imageVector = icon,
@@ -180,34 +147,43 @@ fun SesameClickRow(
                         )
                         Spacer(Modifier.width(M3ChildLeadingIconGap))
                     }
-                } else {
-                    M3LeadingIcon(icon)
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        // 子项降一档字号并转次要色：体量差本身就是最有效的层级信号
-                        style = if (isChild) MaterialTheme.typography.bodyMedium
-                        else MaterialTheme.typography.bodyLarge,
-                        color = if (isChild) MaterialTheme.colorScheme.onSurfaceVariant
-                        else MaterialTheme.colorScheme.onSurface
-                    )
-                    if (!summary.isNullOrBlank()) {
-                        Spacer(Modifier.height(2.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = summary,
+                            text = title,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (!summary.isNullOrBlank()) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = summary,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(M3ChildTrailingIconSize)
+                    )
                 }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(if (isChild) M3ChildTrailingIconSize else M3TrailingIconSize)
-                )
             }
+        } else {
+            // mochi 原生行：整行按压高亮（延迟点亮防滚动闪烁）+ 卡片协作的分隔线淡出 +
+            // 行尾 '›'。图标用现有 ImageVector（mochi 规范建议 MochiIonicon，但本项目整套
+            // 图标都是 Material Icons，全量迁移属另一工程；这里塞进 leading 槽保证观感统一）。
+            MochiListRow(
+                title = title,
+                subtitle = summary,
+                onClick = onClick,
+                chevron = true,
+                leading = if (icon != null) {
+                    { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                } else null,
+                leadingStyle = MochiListLeadingStyle.Symbol
+            )
         }
     }
 }
@@ -545,52 +521,24 @@ fun SesameSwitchRow(
                 enabled = enabled
             )
 
-            UiStyle.MATERIAL3 -> M3RowCard(
-                // 不可用时传 null：既没有水波纹，也不会响应点击
-                onClick = if (enabled) ({ onCheckedChange(!checked) }) else null
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = if (summary.isNullOrBlank()) M3RowMinHeight else M3TwoLineRowMinHeight)
-                        .padding(
-                            start = M3RowStartPadding,
-                            end = 12.dp,
-                            top = M3RowVerticalPadding,
-                            bottom = M3RowVerticalPadding
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    M3LeadingIcon(icon, enabled)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface.let {
-                                if (enabled) it else it.copy(alpha = M3DisabledContentAlpha)
-                            }
-                        )
-                        if (!summary.isNullOrBlank()) {
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = summary,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.let {
-                                    if (enabled) it else it.copy(alpha = M3DisabledContentAlpha)
-                                }
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    // MD 风格：用 mochi 的开关（G2 轨道 + 弹簧动效 + 按压高光）。
-                    // 参数与 material3 Switch 一一对应，MIUIX 分支不受影响。
+            UiStyle.MATERIAL3 -> MochiListRow(
+                title = title,
+                subtitle = summary,
+                onClick = if (enabled) ({ onCheckedChange(!checked) }) else null,
+                enabled = enabled,
+                leading = if (icon != null) {
+                    { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                } else null,
+                leadingStyle = MochiListLeadingStyle.Symbol,
+                // mochi 开关放在行尾 trailing 槽：G2 轨道 + 弹簧动效，与整行按压高亮同一套。
+                trailing = {
                     MochiSwitch(
                         checked = checked,
                         onCheckedChange = onCheckedChange,
                         enabled = enabled
                     )
                 }
-            }
+            )
         }
         return
     }
