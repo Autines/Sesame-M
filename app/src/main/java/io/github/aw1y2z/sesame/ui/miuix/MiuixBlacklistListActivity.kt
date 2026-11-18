@@ -2,10 +2,7 @@ package io.github.aw1y2z.sesame.ui.miuix
 
 import android.os.Bundle
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.runtime.Composable
@@ -16,16 +13,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.data.ConfigPreload
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.entity.AutoBlackTaskEntry
-import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
-import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
+import io.github.aw1y2z.sesame.ui.theme.SesameLazyDetailTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.util.MessageUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
@@ -85,31 +80,23 @@ private fun ListScreen(
     val maxRetry = remember { MessageUtil.getBlacklistMaxRetry() }
     val today = remember { MessageUtil.currentDayIndex() }
 
-    SesameDetailScaffold(
+    SesameLazyDetailTitleScaffold(
         title = listName,
         onBack = { activity.finish() }
-    ) { padding ->
+    ) {
         if (entries.isEmpty()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                SesameEmptyState(
-                    text = "这个列表里没有被拉黑的任务",
-                    hint = "解禁之后条目会消失；模块再次拉黑时会重新出现在这里"
-                )
+            item(key = "empty") {
+                Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SesameEmptyState(
+                        text = "这个列表里没有被拉黑的任务",
+                        hint = "解禁之后条目会消失；模块再次拉黑时会重新出现在这里"
+                    )
+                }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                flingBehavior = sesameFlingBehavior()
-            ) {
                 item(key = "tasks") {
                     // 一张卡片装下整个列表（行间分隔线由库组件自动加），点某行即解禁该任务
                     SesameCardGroup {
@@ -135,7 +122,6 @@ private fun ListScreen(
                         )
                     }
                 }
-            }
         }
     }
 

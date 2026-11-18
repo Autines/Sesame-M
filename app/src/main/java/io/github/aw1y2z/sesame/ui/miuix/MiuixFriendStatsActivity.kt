@@ -8,14 +8,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,8 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.entity.FriendWatch
-import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
-import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
+import io.github.aw1y2z.sesame.ui.theme.SesameLazyDetailTitleScaffold
+import io.github.aw1y2z.sesame.ui.theme.sesameSurface
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
 import io.github.aw1y2z.sesame.ui.theme.SesameListCard
 import io.github.aw1y2z.sesame.ui.theme.SesameText
@@ -140,11 +138,15 @@ fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
             }
     }
 
-    SesameDetailScaffold(
+    SesameLazyDetailTitleScaffold(
         title = "好友统计",
-        onBack = { activity.finish() }
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        onBack = { activity.finish() },
+        listState = listState
+    ) {
+        // 搜索 + 排序放在列表第 0 项：MD 下随大标题一起折叠（符合 demo 的大标题页搜索栏行为），
+        // MIUIX 下作为普通首项滚动。列表本体交给 mochi 折叠。
+        item(key = "filter") {
+            Column(Modifier.fillMaxWidth().background(sesameSurface())) {
             // ── 搜索框 ──────────────────────────────────────────────
             Row(
                 Modifier
@@ -211,8 +213,11 @@ fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
                     }
                 }
             }
+            } // 筛选条 Column
+        } // item(filter)
 
-            if (shown == null || shown.isEmpty()) {
+        if (shown == null || shown.isEmpty()) {
+            item(key = "empty") {
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -232,41 +237,31 @@ fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
                         }
                     )
                 }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp),
-                    flingBehavior = sesameFlingBehavior()
-                ) {
-                    items(items = shown, key = { it.id }) { fw ->
-                        // 上游：点击直接打开该好友主页；本地保留 SesameListCard 视觉风格
-                        SesameListCard(modifier = Modifier.clickable { activity.openFriendProfile(fw.id) }) {
-                            Column(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                            ) {
-                                SesameText(
-                                    text = fw.name,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                SesameText(
-                                    text = "开始统计: ${fw.startTime}",
-                                    fontSize = 12.sp
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                SesameText(
-                                    text = "周收: ${fw.weekGet} g   总收: ${fw.allGet} g",
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
+            }
+        } else {
+            items(items = shown, key = { it.id }) { fw ->
+                // 上游：点击直接打开该好友主页；本地保留 SesameListCard 视觉风格
+                SesameListCard(modifier = Modifier.clickable { activity.openFriendProfile(fw.id) }) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        SesameText(
+                            text = fw.name,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        SesameText(
+                            text = "开始统计: ${fw.startTime}",
+                            fontSize = 12.sp
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        SesameText(
+                            text = "周收: ${fw.weekGet} g   总收: ${fw.allGet} g",
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }

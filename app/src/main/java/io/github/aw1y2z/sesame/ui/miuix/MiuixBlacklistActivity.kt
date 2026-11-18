@@ -3,10 +3,8 @@ package io.github.aw1y2z.sesame.ui.miuix
 import android.content.Intent
 import android.os.Bundle
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.runtime.Composable
@@ -20,12 +18,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.data.ConfigPreload
 import io.github.aw1y2z.sesame.data.Model
-import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
-import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
+import io.github.aw1y2z.sesame.ui.theme.SesameLazyDetailTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.util.MessageUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
@@ -91,33 +88,25 @@ fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
     // groupBy 保持插入顺序，所以这里不再需要自己排序。
     val grouped = remember(entries) { entries.groupBy { it.groupName } }
 
-    SesameDetailScaffold(
+    SesameLazyDetailTitleScaffold(
         title = "任务黑名单",
         onBack = { activity.finish() }
-    ) { padding ->
+    ) {
         if (entries.isEmpty()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                SesameEmptyState(
-                    text = "暂无被自动拉黑的任务",
-                    hint = "模块发现某个任务无法自动完成时会自动把它拉黑，届时会出现在这里"
-                )
+            item(key = "empty") {
+                Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SesameEmptyState(
+                        text = "暂无被自动拉黑的任务",
+                        hint = "模块发现某个任务无法自动完成时会自动把它拉黑，届时会出现在这里"
+                    )
+                }
             }
         } else {
             // 与「扩展功能」页同一套构造：分组小标题在上，紧跟一张装多行的卡片。
             // 刻意**不加** spacedBy：分组之间的呼吸感由 SesameSectionTitle 自带的上下留白给。
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                flingBehavior = sesameFlingBehavior()
-            ) {
                 grouped.forEach { (groupName, group) ->
                     item(key = "group::$groupName") {
                         SesameSectionTitle(text = groupName)
@@ -161,7 +150,6 @@ fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
                         )
                     }
                 }
-            }
         }
     }
 

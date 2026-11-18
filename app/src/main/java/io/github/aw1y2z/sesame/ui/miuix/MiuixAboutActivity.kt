@@ -9,13 +9,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Description
@@ -30,10 +27,9 @@ import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.R
 import io.github.aw1y2z.sesame.data.Agreement
 import io.github.aw1y2z.sesame.data.ViewAppInfo
-import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
-import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameDetailTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameText
 import io.github.aw1y2z.sesame.ui.theme.sesamePrimary
 import io.github.aw1y2z.sesame.util.ToastUtil
@@ -51,18 +47,15 @@ class MiuixAboutActivity : MiuixBaseActivity() {
 
 @Composable
 fun AboutScreen(activity: MiuixAboutActivity) {
-    SesameDetailScaffold(
+    SesameDetailTitleScaffold(
         title = "关于",
         onBack = { activity.finish() }
-    ) { padding ->
+    ) {
+        // mochi 脚手架已自带 verticalScroll / 状态栏 / 16dp 水平留白 / 顶栏高度；
+        // 这里只保留本页特有的居中对齐与顶部呼吸感（底栏留白由脚手架 contentBottomPadding 提供）。
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState(), flingBehavior = sesameFlingBehavior())
-                .padding(padding)
-                // 左右留白与其它页面保持一致，否则卡片会顶到屏幕两边
-                .padding(horizontal = 16.dp)
-                .padding(top = 24.dp, bottom = 16.dp),
+                .padding(top = 16.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(

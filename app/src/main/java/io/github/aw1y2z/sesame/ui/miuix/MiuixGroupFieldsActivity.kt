@@ -40,6 +40,7 @@ import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.M3_PER_ITEM_CARDS
 import io.github.aw1y2z.sesame.ui.theme.SESAME_CARD_CORNER
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
+import io.github.aw1y2z.sesame.ui.theme.SesameLazyDetailTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.ui.theme.SesameText
 import io.github.aw1y2z.sesame.ui.theme.SesameTopBar
@@ -209,50 +210,43 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
         }
     }
 
-    Scaffold(
-        topBar = {
-            SesameTopBar(
-                title = group.getName(),
-                onBack = { activity.saveAndFinish() },
-                onExecute = onExecute
-            )
-        },
-        containerColor = sesameSurface()
-    ) { padding ->
-        // 搜索框：与四级页一致，按字段名/编码/描述过滤，并隐藏无匹配的分区
-        // 带 initialQuery 进来时（二级页搜索结果跳转）直接以它为初始值，进页面即过滤
-        var searchQuery by remember { mutableStateOf(initialQuery ?: "") }
-        // 按分区（Header）归组：一个分组 = 一张 CardColumn（四角 16dp 圆角、行无缝），
-        // 与一级页「一张卡里排多行」完全一致；行作为 Card 的子项，背景/裁剪/按压观感都由它负责。
-        // 注意：必须在这里算（@Composable 上下文），不能放进 LazyColumn 的 content lambda
-        val sections = remember(rows, searchQuery) {
-                val query = searchQuery.trim()
-                val list = ArrayList<Pair<String?, MutableList<GroupFieldsRow.Field>>>()
-                var title: String? = null
-                var fields = ArrayList<GroupFieldsRow.Field>()
-                rows.forEach { row ->
-                    when (row) {
-                        is GroupFieldsRow.Header -> {
-                            if (fields.isNotEmpty()) list.add(title to fields)
-                            title = row.title
-                            fields = ArrayList()
-                        }
-                        is GroupFieldsRow.Field -> {
-                            if (query.isBlank() || fieldMatchesSearch(query, row.field)) {
-                                fields.add(row)
-                            }
+    // 搜索框：与四级页一致，按字段名/编码/描述过滤，并隐藏无匹配的分区
+    // 带 initialQuery 进来时（二级页搜索结果跳转）直接以它为初始值，进页面即过滤
+    var searchQuery by remember { mutableStateOf(initialQuery ?: "") }
+    // 按分区（Header）归组：一个分组 = 一张 CardColumn（四角 16dp 圆角、行无缝），
+    // 与一级页「一张卡里排多行」完全一致；行作为 Card 的子项，背景/裁剪/按压观感都由它负责。
+    // 注意：这些 remember 必须在 scaffold 调用之前（composable context），不能进 LazyListScope lambda。
+    val sections = remember(rows, searchQuery) {
+            val query = searchQuery.trim()
+            val list = ArrayList<Pair<String?, MutableList<GroupFieldsRow.Field>>>()
+            var title: String? = null
+            var fields = ArrayList<GroupFieldsRow.Field>()
+            rows.forEach { row ->
+                when (row) {
+                    is GroupFieldsRow.Header -> {
+                        if (fields.isNotEmpty()) list.add(title to fields)
+                        title = row.title
+                        fields = ArrayList()
+                    }
+                    is GroupFieldsRow.Field -> {
+                        if (query.isBlank() || fieldMatchesSearch(query, row.field)) {
+                            fields.add(row)
                         }
                     }
                 }
-                if (fields.isNotEmpty()) list.add(title to fields)
-            list
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // 搜索框（与四级页 MiuixSelectionEditActivity 一致）
+            }
+            if (fields.isNotEmpty()) list.add(title to fields)
+        list
+    }
+
+    SesameLazyDetailTitleScaffold(
+        title = group.getName(),
+        onBack = { activity.saveAndFinish() },
+        onExecute = onExecute
+    ) {
+        // 搜索框作为列表首项（MD 下随大标题一起折叠，符合 demo）
+        item(key = "filter") {
+            Column(Modifier.fillMaxWidth().background(sesameSurface())) {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -284,20 +278,9 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
                     }
                 )
             }
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                // M3 下每行是一张独立卡，靠行间距分开；Miuix 下多行共享一张连续卡，
-                // 必须零间距，否则卡面会被切成一截一截。
-                verticalArrangement = if (LocalUiStyle.current == UiStyle.MATERIAL3 && M3_PER_ITEM_CARDS) {
-                    Arrangement.spacedBy(8.dp)
-                } else {
-                    Arrangement.Top
-                },
-                flingBehavior = sesameFlingBehavior()
-            ) {
+            } // item(filter) 的 Column
+        } // item(filter)
+
                 if (searchQuery.isNotBlank() && sections.isEmpty()) {
                     item {
                         SmallTitle(text = "无匹配字段")
@@ -323,8 +306,6 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
                         }
                     }
                 }
-            }
-        }
     }
 }
 

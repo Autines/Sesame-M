@@ -10,7 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,8 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Backup
@@ -45,10 +42,9 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.EmptyModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
-import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
-import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameDetailTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameExpandRow
 import io.github.aw1y2z.sesame.ui.theme.SesameInlineEditor
 import io.github.aw1y2z.sesame.ui.theme.SesameRadioListRow
@@ -263,14 +259,14 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
     }
 
     // ============ 二级:分组目录 ============
-    SesameDetailScaffold(
+    SesameDetailTitleScaffold(
         title = "配置设置",
         onBack = { activity.saveAndFinish() },
         // 顶栏刻意**不放**导入/导出：它们与下方「备份与恢复」是同一动作的两个入口
         // （导出=完整备份、导入=zip 恢复），属于历史遗留的重复。已统一收敛到下方
         // 那套带文字说明的入口，顶栏只留「删除」。（2026-10-07 定）
         onClear = { showDeleteDialog = true }
-    ) { padding: PaddingValues ->
+    ) {
         // 上游 0cfb2abb：全局字段搜索 —— 搜到任意分组下的配置项，直接跳到可编辑处，
         // 免去「进分组→进三级页→再搜一次」的来回切换（如清理各模块黑名单）
         var searchQuery by remember { mutableStateOf("") }
@@ -279,20 +275,6 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
         val hits = remember(query) {
             if (query.isEmpty()) emptyList() else buildFieldHits(query)
         }
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState(), flingBehavior = sesameFlingBehavior())
-                // ⚠️ bottom 不在这里吃，改由内容末尾的 Spacer 承担。
-                // 若这里连 bottom 一起 padding(padding)，可滚动内容会被整体抬高，
-                // 滚到底时最后一行下面空出「底栏高度 + 一段空白」——也就是老板说的
-                // 「最后一行离底部太靠上」，滚到底也压不下去。
-                .padding(
-                    top = padding.calculateTopPadding(),
-                    bottom = 0.dp
-                )
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
             // 搜索框：与三级/四级页同款
             Row(
                 Modifier
@@ -407,10 +389,10 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                     onClick = { importLauncher.launch("*/*") }
                 )
             }
-            // 末尾留白：把底栏（bottomBar）的高度补上，让最后一行能贴到屏幕底。
-            // 之所以在这里补、而不在外层 padding 掉，是因为外层 padding 会把整个可滚动
-            // 区域整体抬高 —— 那样内容永远到不了底，只表现为「最后一行离底部太靠上」。
-            Spacer(Modifier.height(padding.calculateBottomPadding() + 16.dp))
+            // 末尾留白：mochi 脚手架自带 contentBottomPadding，这里只补一份呼吸感 16dp。
+            // （原写法 padding.calculateBottomPadding() 是给 bottomBar 让位；本页无 bottomBar，
+            //   该值本来就是 0，换成固定 16dp 两风格等价。）
+            Spacer(Modifier.height(16.dp))
 
             // 恢复确认：把包里有什么、要发生什么一次讲清楚，别让用户凭图标猜
             val info = pendingInfo.value
@@ -471,7 +453,6 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                     onDismiss = { showDeleteDialog = false }
                 )
             }
-        }
     }
 
 }

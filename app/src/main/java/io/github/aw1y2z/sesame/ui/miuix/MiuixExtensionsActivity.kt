@@ -2,14 +2,8 @@ package io.github.aw1y2z.sesame.ui.miuix
 
 import android.os.Bundle
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.Image
@@ -23,11 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.data.TokenConfig
-import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
-import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameDetailTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameInputDialog
 import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.ui.theme.sesameGroupHorizontalPadding
@@ -66,17 +59,10 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
     var inputMode by remember { mutableStateOf<String?>(null) }
     var inputText by remember { mutableStateOf("") }
 
-    SesameDetailScaffold(
+    SesameDetailTitleScaffold(
         title = "扩展功能",
         onBack = { activity.finish() }
-    ) { padding: PaddingValues ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState(), flingBehavior = sesameFlingBehavior())
-                .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
+    ) {
             SesameSectionTitle(text = "森林查询")
             SesameCardGroup {
                 val forestButtons = listOf(
@@ -172,6 +158,5 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                     }
                 )
             }
-        }
     }
 }
