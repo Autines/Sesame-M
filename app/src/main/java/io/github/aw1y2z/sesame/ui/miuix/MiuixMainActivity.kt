@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import io.github.aw1y2z.sesame.ui.theme.SesameTabPager
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
@@ -646,10 +647,10 @@ fun MainScreen(activity: MiuixMainActivity) {
             // 变量取不到 inset 高度（Compose MP 分支无 WindowInsets 查询 API 变通），
             // 故显式写成实测值；换机型/换导航模式时**按真机重新量这一行**。
             val bottomInsetDp = 34
-            Column(
+                Column(
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(scroll)
+                    .verticalScroll(scroll, flingBehavior = sesameFlingBehavior())
                     // 顶部【不留白】：常驻标题栏已经给出「大标题 → 内容」的间距，
                     // 这里再留 12dp 会让第一个分组标题离大标题过远（实测到「主题」有 59dp）。
                     .padding(horizontal = 16.dp)

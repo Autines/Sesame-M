@@ -47,6 +47,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.data.Agreement
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.util.PermissionUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
 import kotlinx.coroutines.delay
@@ -190,7 +191,7 @@ fun AgreementScreen(onAgree: () -> Unit, onExit: () -> Unit) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .verticalScroll(scrollState)
+                    .verticalScroll(scrollState, flingBehavior = sesameFlingBehavior())
                     .padding(horizontal = 16.dp)
             ) {
                 TermsCard()

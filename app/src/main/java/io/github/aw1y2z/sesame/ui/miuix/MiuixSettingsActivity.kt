@@ -45,6 +45,7 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.ChoiceModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.EmptyModelField
 import io.github.aw1y2z.sesame.data.modelFieldExt.IntegerModelField
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
 import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
@@ -281,7 +282,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
         Column(
             Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState(), flingBehavior = sesameFlingBehavior())
                 // ⚠️ bottom 不在这里吃，改由内容末尾的 Spacer 承担。
                 // 若这里连 bottom 一起 padding(padding)，可滚动内容会被整体抬高，
                 // 滚到底时最后一行下面空出「底栏高度 + 一段空白」——也就是老板说的

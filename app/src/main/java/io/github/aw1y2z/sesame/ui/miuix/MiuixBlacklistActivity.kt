@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.data.ConfigPreload
 import io.github.aw1y2z.sesame.data.Model
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
@@ -114,7 +115,8 @@ fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
+                contentPadding = PaddingValues(vertical = 8.dp),
+                flingBehavior = sesameFlingBehavior()
             ) {
                 grouped.forEach { (groupName, group) ->
                     item(key = "group::$groupName") {

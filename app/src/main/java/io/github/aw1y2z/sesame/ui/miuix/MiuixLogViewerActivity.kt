@@ -47,6 +47,7 @@ import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ModelGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameFilterChip
 import io.github.aw1y2z.sesame.ui.theme.SesameLogCard
 import io.github.aw1y2z.sesame.ui.theme.SesameRunCard
@@ -720,7 +721,8 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                     contentPadding = PaddingValues(
                         top = padding.calculateBottomPadding() + 8.dp,
                         bottom = 8.dp
-                    )
+                    ),
+                    flingBehavior = sesameFlingBehavior()
                 ) {
                     // 按轮模式用聚合后的轮次列表，按条模式用原始单条列表
                     val displayList: List<Any> = if (viewMode == LogViewMode.BY_RUN) {

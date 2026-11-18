@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.entity.FriendWatch
 import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
 import io.github.aw1y2z.sesame.ui.theme.SesameListCard
 import io.github.aw1y2z.sesame.ui.theme.SesameText
@@ -238,7 +239,8 @@ fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    flingBehavior = sesameFlingBehavior()
                 ) {
                     items(items = shown, key = { it.id }) { fw ->
                         // 上游：点击直接打开该好友主页；本地保留 SesameListCard 视觉风格

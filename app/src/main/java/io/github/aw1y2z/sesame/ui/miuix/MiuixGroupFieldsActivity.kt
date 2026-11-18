@@ -36,6 +36,7 @@ import io.github.aw1y2z.sesame.data.ModelConfig
 import io.github.aw1y2z.sesame.data.ModelField
 import io.github.aw1y2z.sesame.data.ModelGroup
 import io.github.aw1y2z.sesame.ui.theme.LocalUiStyle
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.M3_PER_ITEM_CARDS
 import io.github.aw1y2z.sesame.ui.theme.SESAME_CARD_CORNER
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
@@ -294,7 +295,8 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
                     Arrangement.spacedBy(8.dp)
                 } else {
                     Arrangement.Top
-                }
+                },
+                flingBehavior = sesameFlingBehavior()
             ) {
                 if (searchQuery.isNotBlank() && sections.isEmpty()) {
                     item {

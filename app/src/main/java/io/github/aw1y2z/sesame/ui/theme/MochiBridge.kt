@@ -1,5 +1,7 @@
 package io.github.aw1y2z.sesame.ui.theme
 
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +24,9 @@ import androidx.compose.ui.unit.sp
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.content.MochiMorphIcon
+import ui.feice.mochi.effect.overscroll.MochiOverscrollSpec
+import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
+import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
 import ui.feice.mochi.navigation.MochiPeerTransition
 import ui.feice.mochi.navigation.MochiPeerTransitionSpec
 import ui.feice.mochi.shape.MochiRoundedRectangle
@@ -253,3 +258,41 @@ fun SesameTabPager(
         }
     }
 }
+
+/* ─────────────────────── 滚动回弹 / 惯性（仅 MD 风格生效）───────────────────────
+ *
+ * mochi 的 ProvideMochiOverscroll 内部替换 Foundation 的 LocalOverscrollFactory，
+ * 因此**包在根部后，子树里所有原生 verticalScroll / LazyColumn 自动获得 Cresto 回弹**，
+ * 不需要逐个滚动容器传 overscrollEffect。MIUIX 分支不包，滚动观感零变化。
+ */
+
+/**
+ * 滚动回弹 Provider：MD 风格包 [ProvideMochiOverscroll]，MIUIX 直出 content。
+ *
+ * 必须包在主题根部（[SesameTheme] 内），且只在 MD 分支包——否则 HyperOS 风格
+ * 也会被迫用 mochi 的回弹引擎，违反「MIUIX 一行不动」。
+ */
+@Composable
+fun SesameOverscroll(content: @Composable () -> Unit) {
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        ProvideMochiOverscroll(spec = MochiOverscrollSpec(), content = content)
+    } else {
+        content()
+    }
+}
+
+/**
+ * 滚动惯性（fling）：MD 用 mochi 的 0.998 慢停曲线（接近静止才结束），
+ * MIUIX 用 Foundation 默认——两者行为一致，保证 HyperOS 观感零变化。
+ *
+ * 用法：在原生 `verticalScroll` / `LazyColumn` 上写
+ * `flingBehavior = sesameFlingBehavior()`。mochi 规范「自定义滚动容器显式传
+ * flingBehavior」，这里按风格分派，避免在页面里写 if (style) 分支。
+ */
+@Composable
+fun sesameFlingBehavior(): FlingBehavior =
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        MochiScrollDefaults.flingBehavior()
+    } else {
+        ScrollableDefaults.flingBehavior()
+    }

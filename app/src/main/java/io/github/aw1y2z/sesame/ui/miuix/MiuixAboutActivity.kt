@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.R
 import io.github.aw1y2z.sesame.data.Agreement
 import io.github.aw1y2z.sesame.data.ViewAppInfo
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameDetailScaffold
@@ -57,7 +58,7 @@ fun AboutScreen(activity: MiuixAboutActivity) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState(), flingBehavior = sesameFlingBehavior())
                 .padding(padding)
                 // 左右留白与其它页面保持一致，否则卡片会顶到屏幕两边
                 .padding(horizontal = 16.dp)

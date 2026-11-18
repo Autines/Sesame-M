@@ -47,6 +47,7 @@ import io.github.aw1y2z.sesame.data.modelFieldExt.SelectOneModelField
 import io.github.aw1y2z.sesame.entity.IdAndName
 import io.github.aw1y2z.sesame.entity.KVNode
 import io.github.aw1y2z.sesame.ui.theme.SesameCheckRow
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
 import io.github.aw1y2z.sesame.ui.theme.SesameInlineEditor
 import io.github.aw1y2z.sesame.ui.theme.SesameListCard
@@ -394,7 +395,8 @@ fun SelectionEditContent(
                 LazyColumn(
                     state = lazyListState,
                     modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 4.dp)
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                    flingBehavior = sesameFlingBehavior()
                 ) {
                     items(count = sortedOptions.size, key = { idx -> sortedOptions[idx].id }) { idx ->
                         val opt = sortedOptions[idx]

@@ -122,6 +122,9 @@ fun SesameTheme(
     val colorScheme = remember(context, dark) { SesameM3.colorScheme(context, dark) }
 
     CompositionLocalProvider(LocalUiStyle provides style) {
+        // 滚动回弹 Provider（规范 Required baseline）：MD 风格用 mochi 的 Cresto 回弹，
+        // 包在根部后子树所有原生 verticalScroll/LazyColumn 自动生效；MIUIX 直出零变化。
+        SesameOverscroll {
         MiuixTheme(controller) {
             // ── Material 3 Expressive ───────────────────────────────────────────────
             // 1.4.0 时 Expressive API（`MaterialExpressiveTheme` / `MotionScheme`）全部是库
@@ -161,6 +164,7 @@ fun SesameTheme(
                 }
             }
         }
+        } // SesameOverscroll
     }
 }
 

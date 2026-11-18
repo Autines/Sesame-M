@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.data.ConfigPreload
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.entity.AutoBlackTaskEntry
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
@@ -106,7 +107,8 @@ private fun ListScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
+                contentPadding = PaddingValues(vertical = 8.dp),
+                flingBehavior = sesameFlingBehavior()
             ) {
                 item(key = "tasks") {
                     // 一张卡片装下整个列表（行间分隔线由库组件自动加），点某行即解禁该任务

@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.data.TokenConfig
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameConfirmDialog
@@ -72,7 +73,7 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
         Column(
             Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState(), flingBehavior = sesameFlingBehavior())
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
