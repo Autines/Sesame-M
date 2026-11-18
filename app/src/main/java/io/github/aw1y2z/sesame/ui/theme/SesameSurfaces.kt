@@ -87,9 +87,12 @@ internal fun M3RowCard(
         if (onClick == null) {
             content()
         } else {
+            // 降级路径（当前 M3_PER_ITEM_CARDS=false 全站走这里）：透明 Surface 仍接按压反馈，
+            // glow 叠在共享卡片底上看得见，形变是图层位移不影响布局。MIUIX 不会进到本函数。
             Surface(
                 onClick = onClick,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
+                    .then(Modifier.sesamePressFeedback(shape = sesameCardShape())),
                 color = Color.Transparent
             ) { content() }
         }
@@ -97,6 +100,9 @@ internal fun M3RowCard(
     }
     val shape = sesameCardShape()
     val container = sesameSurfaceContainer()
+    // 按压反馈（mochi）：MD 风格按「按哪亮哪 + 跟手形变」；MIUIX 分支已在上面 return，零影响。
+    // 形变是 graphicsLayer 位移、不重组不重新布局；glow 被裁剪到行形状内。
+    val press = Modifier.sesamePressFeedback(shape = shape)
     if (onClick == null) {
         Column(
             modifier = Modifier
@@ -107,7 +113,7 @@ internal fun M3RowCard(
     } else {
         Surface(
             onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(press),
             shape = shape,
             color = container,
             tonalElevation = 0.dp
@@ -347,7 +353,9 @@ fun SesameRunCard(
         }
 
         UiStyle.MATERIAL3 -> Surface(
-            modifier = Modifier.fillMaxWidth().clickable { onToggle() },
+            modifier = Modifier.fillMaxWidth()
+                .clickable { onToggle() }
+                .then(Modifier.sesamePressFeedback(shape = MaterialTheme.shapes.medium)),
             shape = MaterialTheme.shapes.medium,
             color = sesameSurfaceContainer(),
             tonalElevation = 0.dp

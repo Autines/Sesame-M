@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.sp
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.content.MochiMorphIcon
+import ui.feice.mochi.effect.elastic.mochiPressDeform
+import ui.feice.mochi.effect.glow.mochiPressGlow
+import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.effect.overscroll.MochiOverscrollSpec
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
@@ -296,3 +299,31 @@ fun sesameFlingBehavior(): FlingBehavior =
     } else {
         ScrollableDefaults.flingBehavior()
     }
+
+/**
+ * 按压反馈（demo 手感的核心之一）：MD 风格按「按哪亮哪」的柔光 + 跟手形变，
+ * MIUIX 直接返回原 Modifier——HyperOS 观感零变化。
+ *
+ * mochi 规范里 [mochiPressGlow] 与 [mochiPressDeform] 共用一套触摸节奏
+ * （滚动容器里先等 90ms、手指没动才反馈，滚动接手就收回），两者都不消费触摸事件，
+ * 可以和 `clickable` / `Surface(onClick)` 叠用；只改绘制图层，不重组、不重新布局。
+ *
+ * 用法：在可点的卡片/按钮 Modifier 链上（clickable 之前）加
+ * `.then(sesamePressFeedback(shape))`。
+ *
+ * @param shape 高光/形变的裁剪形状，传卡片自己的圆角（G2 连续圆角由 [sesameShape] 给）
+ * @param scale 按下时轻微缩小，0.96f 是 mochi 默认
+ * @param follow 朝手指方向的跟手偏移，3.dp 是 mochi 默认
+ */
+@Composable
+fun Modifier.sesamePressFeedback(
+    shape: Shape,
+    scale: Float = 0.96f,
+    follow: Dp = 3.dp
+): Modifier {
+    if (LocalUiStyle.current != UiStyle.MATERIAL3) return this
+    val glow = rememberMochiGlowState()
+    return this
+        .mochiPressGlow(glow, shape)
+        .mochiPressDeform(scale = scale, follow = follow)
+}
