@@ -32,11 +32,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.basic.MochiBarGroup
+import ui.feice.mochi.basic.MochiBarGroupItem
+import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.navigation.MochiCompactTitleScaffold
 import ui.feice.mochi.navigation.MochiLargeTitleScaffold
 import ui.feice.mochi.navigation.MochiLazyCompactTitleScaffold
@@ -249,9 +254,15 @@ private fun SesameTitleBackIcon(onBack: () -> Unit) {
 }
 
 /**
- * 大标题脚手架 MD 顶栏的右侧动作按钮。
- * 阶段2 先复用与 SesameTopBar MD 分支一致的 M3 IconButton（功能/观感连续），
- * mochi 玻璃胶囊按钮放到阶段4「顶栏按钮组」统一替换。
+ * 大标题脚手架 MD 顶栏的右侧动作按钮（阶段4：换 mochi 玻璃胶囊按钮组）。
+ *
+ * mochi 规范：顶栏图标按钮同高同底色；相关的几个共用一个胶囊 [MochiBarGroup]，
+ * 单个按钮用 [MochiBarIconButton]（单项 BarGroup 两端留白会画成椭圆，规范明令禁止）。
+ * 本页按「实际传入的非空动作数」动态成组 —— 各页传参数量不一（1~3 个），不能写死。
+ *
+ * 语义色不能丢：删除=error 红、执行=primary 蓝、其余=onSurfaceVariant。mochi 的
+ * BarGroupItem/BarIconButton 的 content 是 @Composable，把带 tint 的 Material Icon 放进去，
+ * 胶囊材质照旧（玻璃/纯色由主题决定），图标色按原有语义走。
  */
 @Composable
 private fun RowScope.SesameTitleActions(
@@ -262,26 +273,32 @@ private fun RowScope.SesameTitleActions(
     onExecute: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
+    // 透传槽（如 SelectionEdit 的自定义按钮）保持原样，不塞进胶囊
     actions()
-    if (onImport != null) IconButton(onClick = onImport) {
-        Icon(Icons.Filled.Upload, contentDescription = "导入",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+
+    data class BarAction(val icon: ImageVector, val desc: String, val tint: Color, val onClick: () -> Unit)
+    val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val built = buildList {
+        if (onImport != null) add(BarAction(Icons.Filled.Upload, "导入", onSurfaceVariantColor, onImport))
+        if (onExport != null) add(BarAction(Icons.Filled.Upload, "导出", onSurfaceVariantColor, onExport))
+        if (onClear != null) add(BarAction(Icons.Filled.Delete, "删除", MaterialTheme.colorScheme.error, onClear))
+        if (onShare != null) add(BarAction(Icons.Filled.Share, "分享", onSurfaceVariantColor, onShare))
+        if (onExecute != null) add(BarAction(Icons.Filled.PlayArrow, "执行", MaterialTheme.colorScheme.primary, onExecute))
     }
-    if (onExport != null) IconButton(onClick = onExport) {
-        Icon(Icons.Filled.Upload, contentDescription = "导出",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    if (onClear != null) IconButton(onClick = onClear) {
-        Icon(Icons.Filled.Delete, contentDescription = "删除",
-            tint = MaterialTheme.colorScheme.error)
-    }
-    if (onShare != null) IconButton(onClick = onShare) {
-        Icon(Icons.Filled.Share, contentDescription = "分享",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    if (onExecute != null) IconButton(onClick = onExecute) {
-        Icon(Icons.Filled.PlayArrow, contentDescription = "执行",
-            tint = MaterialTheme.colorScheme.primary)
+    when (built.size) {
+        0 -> Unit
+        1 -> built[0].let { a ->
+            MochiBarIconButton(onClick = a.onClick) {
+                Icon(a.icon, contentDescription = a.desc, tint = a.tint)
+            }
+        }
+        else -> MochiBarGroup {
+            built.forEach { a ->
+                MochiBarGroupItem(onClick = a.onClick) {
+                    Icon(a.icon, contentDescription = a.desc, tint = a.tint)
+                }
+            }
+        }
     }
 }
 
