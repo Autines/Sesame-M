@@ -171,10 +171,10 @@ enum class LogType(val displayName: String) {
         /** 一级页跳转时携带的 extra key,值为 LogType.name */
         const val EXTRA_LOG_TYPE = "sesame_log_type"
 
-        fun fromIntent(intent: Intent?): LogType {
-            val name = intent?.getStringExtra(EXTRA_LOG_TYPE)
-            return entries.firstOrNull { it.name == name } ?: RUNTIME
-        }
+        fun fromIntent(intent: Intent?): LogType = fromName(intent?.getStringExtra(EXTRA_LOG_TYPE))
+
+        /** MD 单 Activity 导航下从 route 携带的 LogType.name 解析；未知值回退 RUNTIME。 */
+        fun fromName(name: String?): LogType = entries.firstOrNull { it.name == name } ?: RUNTIME
 
         /**
          * 「分类记录」的展示顺序：**平铺**，顺序对齐 ModelGroup 的声明顺序
@@ -401,7 +401,12 @@ class MiuixLogViewerActivity : MiuixBaseActivity() {
         // 页面退化成"运行日志全量"。用非破坏性初始化，取数前先确保它建好。
         Model.initAllModelIfNeeded()
         setAppContent {
-            LogScreen(this, LogType.fromIntent(intent))
+            LogScreen(
+                logType = LogType.fromIntent(intent),
+                isActive = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) },
+                onBack = { finish() },
+                onShare = { shareIntent -> startActivity(Intent.createChooser(shareIntent, "分享日志")) },
+            )
         }
     }
 }
@@ -414,9 +419,22 @@ class MiuixLogViewerActivity : MiuixBaseActivity() {
  * 所以一打开页面看到的就是最新日志;之后每 [LOG_REFRESH_INTERVAL_MS] 检查一次日志文件,
  * 有新内容就刷新并跟到最新;上滑翻历史时暂停跟随(不会被新日志顶跑),滑回最新后自动恢复。
  */
+/**
+ * 日志详情页内容（与外壳解耦，供旧 Activity 与 MD route 复用）。
+ *
+ * @param isActive 页面是否在前台：旧 Activity 判 RESUMED；route 页由 MochiNavHost 在离开时取消
+ *   LaunchedEffect，故恒 true 即可。
+ * @param onBack 返回：旧 Activity finish()，MD route nav.pop()
+ * @param onShare 分享运行日志（仅 RUNTIME 页有）：两处都拉起 chooser
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
+fun LogScreen(
+    logType: LogType,
+    isActive: () -> Boolean,
+    onBack: () -> Unit,
+    onShare: (Intent) -> Unit,
+) {
     val context = LocalContext.current
     // 取数来源：分组页是「runtime + 四个分类文件」，系统记录页是各自那一个文件
     val sources = remember(logType) { logType.sourceFiles }
@@ -459,7 +477,7 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
         var stamp = logFilesStamp(sources)
         while (true) {
             delay(LOG_REFRESH_INTERVAL_MS)
-            if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            if (!isActive()) {
                 continue
             }
             val newStamp = logFilesStamp(sources)
@@ -573,7 +591,7 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
         topBar = {
             SesameTopBar(
                 title = logType.displayName,
-                onBack = { activity.finish() },
+                onBack = onBack,
                 onExport = {
                     val exported = FileUtil.exportFile(logType.file)
                     if (exported != null) {
@@ -616,7 +634,7 @@ fun LogScreen(activity: MiuixLogViewerActivity, logType: LogType) {
                             putExtra(Intent.EXTRA_SUBJECT, file.name)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
-                        activity.startActivity(Intent.createChooser(shareIntent, "分享日志"))
+                        onShare(shareIntent)
                     }
                 } else null
             )

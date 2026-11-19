@@ -234,7 +234,10 @@ private fun StatisticsGrid(statistics: Statistics) {
 }
 
 @Composable
-fun LogsTab(activity: MiuixMainActivity) {
+fun LogsTab(
+    activity: MiuixMainActivity,
+    onOpenLog: (LogType) -> Unit = { openLog(activity, it) },
+) {
     // ── 分类记录：每个配置分组一个条目
     //    （森林/保护/物种/海洋/庄园/新村/农场/金豆/运动/会员/经营/AI答/其他） ──
     // 全部**平级**展示，每行都有自己的写入开关。
@@ -244,7 +247,7 @@ fun LogsTab(activity: MiuixMainActivity) {
     SesameSectionTitle(text = "分类记录")
     SesameCardGroup {
         for (entry in LogType.displayOrder) {
-            CategoryRow(activity, entry)
+            CategoryRow(activity, entry, onOpenLog)
         }
     }
 
@@ -262,7 +265,7 @@ fun LogsTab(activity: MiuixMainActivity) {
                 activity.broadcastReloadConfig()
                 // 关闭时**不清空** debug 日志：抓到的包是排查证据，要清空请到日志页点「删除」
             },
-            onClick = { openLog(activity, LogType.DEBUG) }
+            onClick = { onOpenLog(LogType.DEBUG) }
         )
         var error by remember { mutableStateOf(AppConfig.INSTANCE.enableViewErrorLog ?: true) }
         SesameSwitchRow(
@@ -276,7 +279,7 @@ fun LogsTab(activity: MiuixMainActivity) {
                 activity.broadcastReloadConfig()
                 if (!it) FileUtil.clearLog("error")
             },
-            onClick = { openLog(activity, LogType.ERROR) }
+            onClick = { onOpenLog(LogType.ERROR) }
         )
         var runtime by remember { mutableStateOf(AppConfig.INSTANCE.enableViewRuntimeLog ?: true) }
         SesameSwitchRow(
@@ -290,7 +293,7 @@ fun LogsTab(activity: MiuixMainActivity) {
                 activity.broadcastReloadConfig()
                 if (!it) FileUtil.clearLog("runtime")
             },
-            onClick = { openLog(activity, LogType.RUNTIME) }
+            onClick = { onOpenLog(LogType.RUNTIME) }
         )
     }
 }
@@ -309,7 +312,11 @@ fun LogsTab(activity: MiuixMainActivity) {
  * 想清掉本分组的历史记录，请到查看页点「删除」（按 `[模块名]` 精确删，见 clearGroupLines）。
  */
 @Composable
-private fun CategoryRow(activity: MiuixMainActivity, entry: LogType) {
+private fun CategoryRow(
+    activity: MiuixMainActivity,
+    entry: LogType,
+    onOpenLog: (LogType) -> Unit,
+) {
     val toggle = categoryToggleOf(entry)
     if (toggle == null) {
         // 没有分类文件、也就没有独立写入开关的分组（目前只有「AI答」：它只调 Log.record，
@@ -320,7 +327,7 @@ private fun CategoryRow(activity: MiuixMainActivity, entry: LogType) {
             title = entry.displayName,
             summary = "日志随「运行日志」写入",
             icon = groupIconOf(entry.groupCode.orEmpty()),
-            onClick = { openLog(activity, entry) }
+            onClick = { onOpenLog(entry) }
         )
         return
     }
@@ -338,7 +345,7 @@ private fun CategoryRow(activity: MiuixMainActivity, entry: LogType) {
             // 刻意不在这里清空文件：本分组的日志与兄弟分组同处一个文件
             // （farm.log / other.log），整文件清空会把它们的日志一并删掉。
         },
-        onClick = { openLog(activity, entry) }
+        onClick = { onOpenLog(entry) }
     )
 }
 

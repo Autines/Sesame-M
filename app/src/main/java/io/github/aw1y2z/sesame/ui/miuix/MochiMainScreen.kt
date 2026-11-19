@@ -77,6 +77,7 @@ private const val ROUTE_FRIEND_STATS = "friendStats"
 private const val ROUTE_EXTENSIONS = "extensions"
 private const val ROUTE_BLACKLIST = "blacklist"
 private const val ROUTE_BLACKLIST_LIST = "blacklistList"
+private const val ROUTE_LOG = "log"
 private const val ROUTE_SEP = "|"
 
 @Composable
@@ -112,12 +113,23 @@ fun MochiMainScreen(activity: MiuixMainActivity) {
                     onBack = { blacklistRefresh++; nav.pop() },
                 )
             }
+            route.startsWith("$ROUTE_LOG$ROUTE_SEP") -> {
+                val name = route.removePrefix("$ROUTE_LOG$ROUTE_SEP")
+                val logType = LogType.fromName(name)
+                LogScreen(
+                    logType = logType,
+                    isActive = { true }, // MochiNavHost 在页面离开时取消 LaunchedEffect，无需手动判前台
+                    onBack = { nav.pop() },
+                    onShare = { shareIntent -> activity.startActivity(Intent.createChooser(shareIntent, "分享日志")) },
+                )
+            }
             else -> MochiHomeRoute(
                 activity,
                 onOpenAbout = { nav.push(ROUTE_ABOUT) },
                 onOpenFriendStats = { nav.push(ROUTE_FRIEND_STATS) },
                 onOpenExtensions = { nav.push(ROUTE_EXTENSIONS) },
                 onOpenBlacklist = { nav.push(ROUTE_BLACKLIST) },
+                onOpenLog = { logType -> nav.push("$ROUTE_LOG$ROUTE_SEP${logType.name}") },
             )
         }
     }
@@ -131,6 +143,7 @@ private fun MochiHomeRoute(
     onOpenFriendStats: () -> Unit,
     onOpenExtensions: () -> Unit,
     onOpenBlacklist: () -> Unit,
+    onOpenLog: (LogType) -> Unit,
 ) {
     val tabs = remember {
         persistentListOf(
@@ -170,7 +183,7 @@ private fun MochiHomeRoute(
                         )
                     }
                 }
-                1 -> LogsTab(activity)
+                1 -> LogsTab(activity, onOpenLog = onOpenLog)
                 2 -> ConfigTab(activity)
                 3 -> SettingsTab(
                     activity = activity,
