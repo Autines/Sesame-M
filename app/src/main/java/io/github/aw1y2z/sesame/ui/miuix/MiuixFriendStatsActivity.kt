@@ -59,40 +59,54 @@ class MiuixFriendStatsActivity : MiuixBaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setAppContent {
-            FriendStatsScreen(this)
-        }
-    }
-
-    /**
-     * 打开好友主页：写待打开标记 + 拉起支付宝，跳转必须由支付宝进程发起。
-     * <p>只能用 launcher intent 拉起，且不能改成从后台直接启动页面：前者保证会话是「自身入口」，
-     * 否则 appSchemeCheck 拦掉后续深链；后者系统会补一个透明中转页。
-     * <p>宿主在 onResume 与 onWindowFocusChanged(true) 两处消费标记：后台被拉起走前者，
-     * 小窗/分屏下本来就是 resumed、只能靠后者。
-     */
-    fun openFriendProfile(userId: String) {
-        try {
-            // 先落标记：宿主一 resume / 拿到窗口焦点就读它跳转
-            FileUtil.write2File(
-                "$userId\n${System.currentTimeMillis()}",
-                File(FileUtil.MAIN_DIRECTORY_FILE, PENDING_PROFILE_FILE)
+            FriendStatsScreen(
+                onBack = { finish() },
+                onOpenProfile = { userId -> openFriendProfile(this, userId) },
             )
-            // 再拉起：只有「自身入口」状态，宿主进程内的深链才不会被 appSchemeCheck 拦掉
-            packageManager.getLaunchIntentForPackage(HOST_PACKAGE)?.let {
-                it.addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK
-                        or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
-                )
-                startActivity(it)
-            }
-        } catch (t: Throwable) {
-            Log.printStackTrace(t)
         }
     }
 }
 
+/**
+ * 打开好友主页：写待打开标记 + 拉起支付宝，跳转必须由支付宝进程发起。
+ * <p>只能用 launcher intent 拉起，且不能改成从后台直接启动页面：前者保证会话是「自身入口」，
+ * 否则 appSchemeCheck 拦掉后续深链；后者系统会补一个透明中转页。
+ * <p>宿主在 onResume 与 onWindowFocusChanged(true) 两处消费标记：后台被拉起走前者，
+ * 小窗/分屏下本来就是 resumed、只能靠后者。
+ *
+ * 抽成顶层函数：MD 单 Activity 导航下 route 页（MiuixMainActivity）与旧 Activity 都调用它。
+ */
+fun openFriendProfile(context: android.content.Context, userId: String) {
+    try {
+        // 先落标记：宿主一 resume / 拿到窗口焦点就读它跳转
+        FileUtil.write2File(
+            "$userId\n${System.currentTimeMillis()}",
+            File(FileUtil.MAIN_DIRECTORY_FILE, PENDING_PROFILE_FILE)
+        )
+        // 再拉起：只有「自身入口」状态，宿主进程内的深链才不会被 appSchemeCheck 拦掉
+        context.packageManager.getLaunchIntentForPackage(HOST_PACKAGE)?.let {
+            it.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK
+                    or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            )
+            context.startActivity(it)
+        }
+    } catch (t: Throwable) {
+        Log.printStackTrace(t)
+    }
+}
+
+/**
+ * 好友统计页内容（与外壳解耦）。
+ *
+ * @param onBack 返回：旧 Activity 传 finish()，MD route 传 nav.pop()
+ * @param onOpenProfile 打开好友支付宝主页：两处都走顶层 [openFriendProfile]
+ */
 @Composable
-fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
+fun FriendStatsScreen(
+    onBack: () -> Unit,
+    onOpenProfile: (String) -> Unit,
+) {
     // 好友表可能有几百条：读盘 + 逐条解析不能压在组合期的主线程上，否则首帧要等整份解析完
     // 才出来（好友多时白屏 1s+）。null 表示还没读完，列表区据此显示"加载中"。
     var friends by remember { mutableStateOf<List<FriendWatch>?>(null) }
@@ -140,7 +154,7 @@ fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
 
     SesameLazyDetailTitleScaffold(
         title = "好友统计",
-        onBack = { activity.finish() },
+        onBack = onBack,
         listState = listState
     ) {
         // 搜索 + 排序放在列表第 0 项：MD 下随大标题一起折叠（符合 demo 的大标题页搜索栏行为），
@@ -241,7 +255,7 @@ fun FriendStatsScreen(activity: MiuixFriendStatsActivity) {
         } else {
             items(items = shown, key = { it.id }) { fw ->
                 // 上游：点击直接打开该好友主页；本地保留 SesameListCard 视觉风格
-                SesameListCard(modifier = Modifier.clickable { activity.openFriendProfile(fw.id) }) {
+                SesameListCard(modifier = Modifier.clickable { onOpenProfile(fw.id) }) {
                     Column(
                         Modifier
                             .fillMaxWidth()

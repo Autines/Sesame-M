@@ -31,28 +31,42 @@ class MiuixExtensionsActivity : MiuixBaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setAppContent {
-            ExtensionsScreen(this)
-        }
-    }
-
-    /**
-     * 扩展页的受限通道：这里只做「翻译」，白名单在宿主侧（forestQuery 7 个、walkPath 3 个 method），
-     * 传什么都退不成任意 method + data 的旧 rpctest
-     */
-    fun sendItemsBroadcast(type: String, method: String, data: String?) {
-        when (type) {
-            "antForest" -> HostBridge.send(this, "forestQuery", null, method, data, false)
-            "setCustomWalkPathIdList" ->
-                HostBridge.send(this, "walkPath", null, "addCustomWalkPathId", data, false)
-            "setCustomWalkPathIdQueue" ->
-                HostBridge.send(this, "walkPath", null, method, data, false)
-            else -> ToastUtil.show(this, "未知的扩展请求：$type")
+            ExtensionsScreen(
+                onBack = { finish() },
+                onSend = { type, method, data -> sendItemsBroadcast(this, type, method, data) },
+            )
         }
     }
 }
 
+/**
+ * 扩展页的受限通道：这里只做「翻译」，白名单在宿主侧（forestQuery 7 个、walkPath 3 个 method），
+ * 传什么都退不成任意 method + data 的旧 rpctest。
+ *
+ * 抽成顶层函数：MD 单 Activity 导航下 route 页（MiuixMainActivity）与旧 Activity 都调用它。
+ */
+fun sendItemsBroadcast(
+    context: android.content.Context,
+    type: String,
+    method: String,
+    data: String?
+) {
+    when (type) {
+        "antForest" -> HostBridge.send(context, "forestQuery", null, method, data, false)
+        "setCustomWalkPathIdList" ->
+            HostBridge.send(context, "walkPath", null, "addCustomWalkPathId", data, false)
+        "setCustomWalkPathIdQueue" ->
+            HostBridge.send(context, "walkPath", null, method, data, false)
+        else -> ToastUtil.show(context, "未知的扩展请求：$type")
+    }
+}
+
+/** 扩展页内容（与外壳解耦，供旧 Activity 与 MD route 复用）。 */
 @Composable
-fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
+fun ExtensionsScreen(
+    onBack: () -> Unit,
+    onSend: (type: String, method: String, data: String?) -> Unit,
+) {
     val context = LocalContext.current
     var showDishDialog by remember { mutableStateOf(false) }
     var inputMode by remember { mutableStateOf<String?>(null) }
@@ -60,7 +74,7 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
 
     SesameCompactTitleScaffold(
         title = "扩展功能",
-        onBack = { activity.finish() }
+        onBack = onBack
     ) {
             SesameCardGroup(header = "森林查询") {
                 val forestButtons = listOf(
@@ -77,7 +91,7 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                         title = label,
                         icon = Icons.Outlined.Search,
                         onClick = {
-                            activity.sendItemsBroadcast(pair.first, pair.second, null)
+                            onSend(pair.first, pair.second, null)
                             ToastUtil.show(context, "已发送查询请求，请在森林日志查看结果！")
                         }
                     )
@@ -131,7 +145,7 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                     onDismiss = { inputMode = null },
                     secondaryAction = if (mode == "queue") {
                         "清空队列" to {
-                            activity.sendItemsBroadcast(
+                            onSend(
                                 "setCustomWalkPathIdQueue",
                                 "clearCustomWalkPathIdQueue",
                                 null
@@ -142,9 +156,9 @@ fun ExtensionsScreen(activity: MiuixExtensionsActivity) {
                     primaryAction = "添加" to {
                         val text = inputText.trim()
                         if (mode == "list") {
-                            activity.sendItemsBroadcast("setCustomWalkPathIdList", "addCustomWalkPathId", text)
+                            onSend("setCustomWalkPathIdList", "addCustomWalkPathId", text)
                         } else {
-                            activity.sendItemsBroadcast("setCustomWalkPathIdQueue", "addCustomWalkPathIdQueue", text)
+                            onSend("setCustomWalkPathIdQueue", "addCustomWalkPathIdQueue", text)
                         }
                         inputMode = null
                     }

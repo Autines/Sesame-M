@@ -40,12 +40,13 @@ import io.github.aw1y2z.sesame.util.ToastUtil
 class MiuixBlacklistActivity : MiuixBaseActivity() {
 
     /**
-     * 回到本页时重新读一次数据。
+     * 回到本页时重新读一次数据（旧 Activity 路径专用）。
      *
      * 从二级页返回走的是 onResume（Activity 没有重建），而列表数据存在 `remember` 里 ——
      * 不刷新的话外层显示的还是进去之前的旧快照：**在明细里解禁了几条，返回后数量不变**。
      *
      * 用自增计数当 key 触发重读即可，不必 `recreate()`（那个会闪一下、还会丢失滚动位置）。
+     * MD 导航路径下由 MochiMainScreen 持有 tick，在二级页 pop 返回时递增，效果等价。
      */
     private val refreshTick = mutableStateOf(0)
 
@@ -69,13 +70,33 @@ class MiuixBlacklistActivity : MiuixBaseActivity() {
         Model.initAllModelIfNeeded()
         ConfigPreload.prepareCurrentUser()
         setAppContent {
-            BlacklistScreen(this, refreshTick.value)
+            BlacklistScreen(
+                refreshTick = refreshTick.value,
+                onBack = { finish() },
+                onOpenList = { fieldCode, listName ->
+                    startActivity(
+                        Intent(this, MiuixBlacklistListActivity::class.java).apply {
+                            putExtra(MiuixBlacklistListActivity.EXTRA_FIELD_CODE, fieldCode)
+                            putExtra(MiuixBlacklistListActivity.EXTRA_LIST_NAME, listName)
+                        }
+                    )
+                },
+            )
         }
     }
 }
 
+/**
+ * 任务黑名单主页内容（与外壳解耦，供旧 Activity 与 MD route 复用）。
+ *
+ * @param onOpenList 点某个黑名单列表进明细：旧 Activity 走 startActivity，MD route 走 nav.push
+ */
 @Composable
-fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
+fun BlacklistScreen(
+    refreshTick: Int,
+    onBack: () -> Unit,
+    onOpenList: (fieldCode: String, listName: String) -> Unit,
+) {
     val context = LocalContext.current
 
     // 列表数据是普通 Java 静态方法的快照（非 Compose state），所以要以 refreshTick 为 key 手动重读：
@@ -89,7 +110,7 @@ fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
 
     SesameLazyCompactTitleScaffold(
         title = "任务黑名单",
-        onBack = { activity.finish() }
+        onBack = onBack
     ) {
         if (entries.isEmpty()) {
             item(key = "empty") {
@@ -113,20 +134,7 @@ fun BlacklistScreen(activity: MiuixBlacklistActivity, refreshTick: Int) {
                             group.groupBy { it.listName }.forEach { (listName, listEntries) ->
                                 SesameClickRow(
                                     title = "$listName（${listEntries.size}）",
-                                    onClick = {
-                                        context.startActivity(
-                                            Intent(context, MiuixBlacklistListActivity::class.java).apply {
-                                                putExtra(
-                                                    MiuixBlacklistListActivity.EXTRA_FIELD_CODE,
-                                                    listEntries.first().fieldCode
-                                                )
-                                                putExtra(
-                                                    MiuixBlacklistListActivity.EXTRA_LIST_NAME,
-                                                    listName
-                                                )
-                                            }
-                                        )
-                                    }
+                                    onClick = { onOpenList(listEntries.first().fieldCode, listName) }
                                 )
                             }
                         }

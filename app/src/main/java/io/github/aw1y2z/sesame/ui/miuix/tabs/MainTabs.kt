@@ -619,7 +619,12 @@ fun SettingsTab(
     glassEnabled: Boolean = AppConfig.INSTANCE.liquidGlassNavBar != false,
     onGlassEnabledChange: ((Boolean) -> Unit)? = null,
     // 方案A：MD 单Activity导航下，关于页作为 route push；MIUIX 不传 → 仍走原 startActivity。
-    onOpenAbout: (() -> Unit)? = null
+    onOpenAbout: (() -> Unit)? = null,
+    // 好友统计：MD 走 route push；MIUIX 不传 → 仍走原 startActivity。
+    onOpenFriendStats: (() -> Unit)? = null,
+    // 扩展功能 / 任务黑名单：MD 走 route push；MIUIX 不传 → 仍走原 startActivity。
+    onOpenExtensions: (() -> Unit)? = null,
+    onOpenBlacklist: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
 
@@ -714,18 +719,27 @@ fun SettingsTab(
         SesameClickRow(
             title = "好友统计",
             icon = Icons.Outlined.Groups,
-            onClick = { context.startActivity(Intent(context, MiuixFriendStatsActivity::class.java)) }
+            onClick = {
+                if (onOpenFriendStats != null) onOpenFriendStats()
+                else context.startActivity(Intent(context, MiuixFriendStatsActivity::class.java))
+            }
         )
         SesameClickRow(
             title = "扩展功能",
             icon = Icons.Outlined.Extension,
-            onClick = { context.startActivity(Intent(context, MiuixExtensionsActivity::class.java)) }
+            onClick = {
+                if (onOpenExtensions != null) onOpenExtensions()
+                else context.startActivity(Intent(context, MiuixExtensionsActivity::class.java))
+            }
         )
         // 任务黑名单：把"模块自己拉黑了哪些任务"摊开给用户看（原先只在日志里，界面完全不可见）
         SesameClickRow(
             title = "任务黑名单",
             icon = Icons.Outlined.Block,
-            onClick = { context.startActivity(Intent(context, MiuixBlacklistActivity::class.java)) }
+            onClick = {
+                if (onOpenBlacklist != null) onOpenBlacklist()
+                else context.startActivity(Intent(context, MiuixBlacklistActivity::class.java))
+            }
         )
     }
 

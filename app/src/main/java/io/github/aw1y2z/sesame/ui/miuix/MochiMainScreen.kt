@@ -21,7 +21,10 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,21 +73,65 @@ import ui.feice.mochi.navigation.rememberMochiTabScaffoldState
 
 private const val ROUTE_MAIN = "main"
 private const val ROUTE_ABOUT = "about"
+private const val ROUTE_FRIEND_STATS = "friendStats"
+private const val ROUTE_EXTENSIONS = "extensions"
+private const val ROUTE_BLACKLIST = "blacklist"
+private const val ROUTE_BLACKLIST_LIST = "blacklistList"
+private const val ROUTE_SEP = "|"
 
 @Composable
 fun MochiMainScreen(activity: MiuixMainActivity) {
     val nav = rememberMochiNavigator(ROUTE_MAIN)
+    // 黑名单主页/明细的数据快照：从明细 pop 返回时递增，让主页重读（等价旧 Activity 的 onResume）。
+    var blacklistRefresh by remember { mutableStateOf(0) }
     MochiNavHost(nav, modifier = Modifier.fillMaxSize()) { route ->
-        when (route) {
-            ROUTE_ABOUT -> MochiAboutRoute(onBack = { nav.pop() })
-            else -> MochiHomeRoute(activity, onOpenAbout = { nav.push(ROUTE_ABOUT) })
+        when {
+            route == ROUTE_ABOUT -> MochiAboutRoute(onBack = { nav.pop() })
+            route == ROUTE_FRIEND_STATS -> FriendStatsScreen(
+                onBack = { nav.pop() },
+                onOpenProfile = { userId -> openFriendProfile(activity, userId) },
+            )
+            route == ROUTE_EXTENSIONS -> ExtensionsScreen(
+                onBack = { nav.pop() },
+                onSend = { type, method, data -> sendItemsBroadcast(activity, type, method, data) },
+            )
+            route == ROUTE_BLACKLIST -> BlacklistScreen(
+                refreshTick = blacklistRefresh,
+                onBack = { nav.pop() },
+                onOpenList = { fieldCode, listName ->
+                    nav.push("$ROUTE_BLACKLIST_LIST$ROUTE_SEP${Uri.encode(fieldCode)}$ROUTE_SEP${Uri.encode(listName)}")
+                },
+            )
+            route.startsWith("$ROUTE_BLACKLIST_LIST$ROUTE_SEP") -> {
+                val parts = route.split(ROUTE_SEP, limit = 3)
+                val fieldCode = parts.getOrNull(1)?.let { Uri.decode(it) }.orEmpty()
+                val listName = parts.getOrNull(2)?.let { Uri.decode(it) }.orEmpty().ifEmpty { "黑名单" }
+                ListScreen(
+                    fieldCode = fieldCode,
+                    listName = listName,
+                    onBack = { blacklistRefresh++; nav.pop() },
+                )
+            }
+            else -> MochiHomeRoute(
+                activity,
+                onOpenAbout = { nav.push(ROUTE_ABOUT) },
+                onOpenFriendStats = { nav.push(ROUTE_FRIEND_STATS) },
+                onOpenExtensions = { nav.push(ROUTE_EXTENSIONS) },
+                onOpenBlacklist = { nav.push(ROUTE_BLACKLIST) },
+            )
         }
     }
 }
 
 /** 根页：4 个一级 Tab，自带底栏 + 景深切换 + 左右滑动。 */
 @Composable
-private fun MochiHomeRoute(activity: MiuixMainActivity, onOpenAbout: () -> Unit) {
+private fun MochiHomeRoute(
+    activity: MiuixMainActivity,
+    onOpenAbout: () -> Unit,
+    onOpenFriendStats: () -> Unit,
+    onOpenExtensions: () -> Unit,
+    onOpenBlacklist: () -> Unit,
+) {
     val tabs = remember {
         persistentListOf(
             mochiTab("首页", Icons.Filled.Home),
@@ -125,7 +172,13 @@ private fun MochiHomeRoute(activity: MiuixMainActivity, onOpenAbout: () -> Unit)
                 }
                 1 -> LogsTab(activity)
                 2 -> ConfigTab(activity)
-                3 -> SettingsTab(activity = activity, onOpenAbout = onOpenAbout)
+                3 -> SettingsTab(
+                    activity = activity,
+                    onOpenAbout = onOpenAbout,
+                    onOpenFriendStats = onOpenFriendStats,
+                    onOpenExtensions = onOpenExtensions,
+                    onOpenBlacklist = onOpenBlacklist,
+                )
             }
         }
     }

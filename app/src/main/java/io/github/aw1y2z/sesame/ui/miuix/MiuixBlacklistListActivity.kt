@@ -37,14 +37,6 @@ class MiuixBlacklistListActivity : MiuixBaseActivity() {
         const val EXTRA_LIST_NAME = "listName"
     }
 
-    /** 与一级页同理：从别处返回走 onResume，列表数据得重读一次（见 MiuixBlacklistActivity 的说明） */
-    private val refreshTick = mutableStateOf(0)
-
-    override fun onResume() {
-        super.onResume()
-        refreshTick.value++
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 同 MiuixBlacklistActivity：本页同样依赖「已灌入配置的字段表」来翻中文名 / 判断是否还在列表里。
@@ -53,21 +45,26 @@ class MiuixBlacklistListActivity : MiuixBaseActivity() {
         val fieldCode = intent.getStringExtra(EXTRA_FIELD_CODE).orEmpty()
         val listName = intent.getStringExtra(EXTRA_LIST_NAME).orEmpty().ifEmpty { "黑名单" }
         setAppContent {
-            ListScreen(this, fieldCode, listName, refreshTick.value)
+            ListScreen(fieldCode, listName, onBack = { finish() })
         }
     }
 }
 
+/**
+ * 黑名单明细页内容（与外壳解耦，供旧 Activity 与 MD route 复用）。
+ *
+ * 列表数据用 fieldCode 作 key：route 每次 push 进来是全新组合，天然读到最新数据；
+ * 旧 Activity 路径下从别处返回仍由外层 finish/重建兜底。页内解禁后会就地重读 entries。
+ */
 @Composable
-private fun ListScreen(
-    activity: MiuixBlacklistListActivity,
+fun ListScreen(
     fieldCode: String,
     listName: String,
-    refreshTick: Int
+    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
 
-    var entries by remember(refreshTick) {
+    var entries by remember(fieldCode) {
         mutableStateOf(MessageUtil.listAutoBlackEntries().filter { it.fieldCode == fieldCode })
     }
     var pendingRelease by remember { mutableStateOf<AutoBlackTaskEntry?>(null) }
@@ -81,7 +78,7 @@ private fun ListScreen(
 
     SesameLazyCompactTitleScaffold(
         title = listName,
-        onBack = { activity.finish() }
+        onBack = onBack
     ) {
         if (entries.isEmpty()) {
             item(key = "empty") {
