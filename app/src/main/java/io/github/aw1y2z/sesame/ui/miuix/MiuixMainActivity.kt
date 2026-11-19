@@ -73,6 +73,7 @@ import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ConfigV2
 import io.github.aw1y2z.sesame.data.RunType
 import io.github.aw1y2z.sesame.data.ViewAppInfo
+import io.github.aw1y2z.sesame.ui.theme.UiStyle
 import io.github.aw1y2z.sesame.ui.theme.SesameNavBarHeight
 import io.github.aw1y2z.sesame.ui.theme.SesameNavBar
 import io.github.aw1y2z.sesame.ui.theme.SesameNavItem
@@ -251,7 +252,13 @@ class MiuixMainActivity : MiuixBaseActivity() {
         setAppContent {
             // 未同意协议只渲染门禁页：此阶段不碰宿主、不读统计，已同意的用户行为完全不变
             if (agreed) {
-                MainScreen(this)
+                // 方案A：MD 走 mochi 单Activity导航（MochiNavHost + MochiTabScaffold）；
+                // MIUIX 仍走原 MainScreen。切换风格会 recreate，这里每次重新读当前风格即可。
+                if (UiStyle.current() == UiStyle.MATERIAL3) {
+                    MochiMainScreen(this)
+                } else {
+                    MainScreen(this)
+                }
             } else {
                 AgreementScreen(
                     onAgree = {

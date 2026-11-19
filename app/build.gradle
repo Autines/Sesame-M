@@ -184,5 +184,5 @@ dependencies {
 
     // Mochi Compose（MD 风格重构试点）：G2 连续圆角 / iOS 26 分组行 / 弹簧动效。
     // ⚠️ 试点阶段仅验证依赖可解析与编译，尚未在任何页面使用。
-    implementation "io.github.feice11:mochi-compose:0.2.0"
+    implementation "io.github.feice11:mochi-compose:0.3.0"
 }

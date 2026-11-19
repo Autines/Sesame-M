@@ -36,8 +36,7 @@ import ui.feice.mochi.effect.glow.rememberMochiGlowState
 import ui.feice.mochi.effect.overscroll.MochiOverscrollSpec
 import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
 import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
-import ui.feice.mochi.navigation.MochiPeerTransition
-import ui.feice.mochi.navigation.MochiPeerTransitionSpec
+import ui.feice.mochi.navigation.rememberMochiNavigator
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiColorScheme
 
@@ -218,14 +217,13 @@ fun SesameMorphIcon(
 }
 
 /**
- * 一级 Tab 分页容器：MD 风格用 mochi 的 [MochiPeerTransition] 景深样式
- * （[MochiPeerTransitionSpec.Depth]：不横移，旧页原地后退缩小淡出、新页从后面放大淡入，
- * 与 GitHub demo 首页标签切换一致）；
- * MIUIX 保持原 [HorizontalPager]（整页平滑滑动，老板调过的观感零变化）。
+ * 一级 Tab 分页容器（原 HorizontalPager 实现，仅供 MIUIX 旧 MainScreen 使用）。
  *
- * 两个分支都遵守同一个契约：
- * - [selectedTab] 是唯一真源（点击底栏 → 外部改它 → 这里跟到对应页；手指切页 → [onTabChange] 回灌）；
- * - 每页内容由 [content] 提供，页内滚动/状态由调用方持有，切走再回来保持。
+ * 方案A 起 MD 主界面走 `MochiMainScreen`（MochiTabScaffold 自带景深切换），
+ * 不再调用本函数；mo chi 0.3.0 已删除 MochiPeerTransition，故这里统一为横滑实现。
+ *
+ * 契约：[selectedTab] 是唯一真源（点击底栏 → 外部改它 → 这里跟到对应页；手指切页 →
+ * [onTabChange] 回灌）；每页内容由 [content] 提供，页内滚动/状态由调用方持有。
  */
 @Composable
 fun SesameTabPager(
@@ -235,36 +233,24 @@ fun SesameTabPager(
     modifier: Modifier = Modifier,
     content: @Composable (Int) -> Unit
 ) {
-    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
-        val pages = remember(tabCount) { (0 until tabCount).toList() }
-        MochiPeerTransition(
-            targetState = selectedTab,
-            modifier = modifier,
-            pages = pages,
-            onPageChange = onTabChange,
-            spec = MochiPeerTransitionSpec.Depth,
-            content = content
-        )
-    } else {
-        val pagerState = rememberPagerState(initialPage = selectedTab) { tabCount }
-        var isProgrammaticScroll by remember { mutableStateOf(false) }
-        LaunchedEffect(selectedTab) {
-            if (pagerState.currentPage == selectedTab) return@LaunchedEffect
-            isProgrammaticScroll = true
-            try {
-                pagerState.animateScrollToPage(selectedTab)
-            } finally {
-                isProgrammaticScroll = false
-            }
+    val pagerState = rememberPagerState(initialPage = selectedTab) { tabCount }
+    var isProgrammaticScroll by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage == selectedTab) return@LaunchedEffect
+        isProgrammaticScroll = true
+        try {
+            pagerState.animateScrollToPage(selectedTab)
+        } finally {
+            isProgrammaticScroll = false
         }
-        LaunchedEffect(pagerState.currentPage) {
-            if (!isProgrammaticScroll && selectedTab != pagerState.currentPage) {
-                onTabChange(pagerState.currentPage)
-            }
+    }
+    LaunchedEffect(pagerState.currentPage) {
+        if (!isProgrammaticScroll && selectedTab != pagerState.currentPage) {
+            onTabChange(pagerState.currentPage)
         }
-        HorizontalPager(state = pagerState, modifier = modifier) { page ->
-            content(page)
-        }
+    }
+    HorizontalPager(state = pagerState, modifier = modifier) { page ->
+        content(page)
     }
 }
 
@@ -339,6 +325,59 @@ fun sesameRevealThemeChange(
     change: () -> Unit
 ) {
     reveal.revealIfShadeChanges(fromDark, toDark, change = change)
+}
+
+/* ───────────────────────── 页面导航（单 Activity 导航栈，仅 MD）─────────────────────────
+ * 方案 A（彻底 mochi 风格）的双轨过渡：
+ * - MATERIAL3：用 mochi 的 MochiNavHost 承载页面栈，支持卡片一镜到底 / 侧推 / 共享顶栏 / 返回手势。
+ * - MIUIX：不挂 NavHost， SesameNavHost 直出 content —— 二级页仍走原 startActivity，
+ *   观感与交互零变化（方案 A 全部页面迁移完、老板确认后才统一删 MIUIX）。
+ *
+ * 用法（MD 根页面）：
+ *   SesameNavHost { route -> when (route) { "main" -> ...; "about" -> ... } }
+ * 子页里拿导航器：val nav = LocalSesameNav.current；返回用 SesameBackButton()，
+ * 打开子页用 nav?.push(route)（MIUIX 下 nav 为 null，调用方回退 startActivity）。
+ */
+
+/** mochi 导航器（MD 根部注入；MIUIX 为 null → 调用方走原 Activity 路径）。 */
+val LocalSesameNav = staticCompositionLocalOf<ui.feice.mochi.navigation.MochiNavigator?> { null }
+
+/**
+ * 页面导航宿主：MD 分支按官方骨架建导航器 + MochiNavHost；MIUIX 直出、零变化。
+ *
+ * @param root 根路由（主界面），必须是 [content] 分派里的一支。
+ * @param content 路由到页面的分派，签名与官方 MochiNavHost 一致。
+ */
+@Composable
+fun SesameNavHost(
+    root: String,
+    modifier: Modifier = Modifier,
+    content: @Composable (route: String) -> Unit
+) {
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        val nav = rememberMochiNavigator(root)
+        CompositionLocalProvider(LocalSesameNav provides nav) {
+            ui.feice.mochi.navigation.MochiNavHost(nav, modifier, content = content)
+        }
+    } else {
+        content(root)
+    }
+}
+
+/**
+ * 导航返回按钮：MD 分支用 mochi 的 MochiBackButton（pop，第一页交系统返回）；
+ * MIUIX 分支直出 [fallback]（调用方给原 Activity 的返回按钮，观感零变化）。
+ */
+@Composable
+fun SesameBackButton(
+    modifier: Modifier = Modifier,
+    fallback: @Composable () -> Unit = {}
+) {
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        ui.feice.mochi.navigation.MochiBackButton(modifier = modifier)
+    } else {
+        fallback()
+    }
 }
 
 /**

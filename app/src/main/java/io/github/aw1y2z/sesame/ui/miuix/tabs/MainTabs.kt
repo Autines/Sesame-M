@@ -617,7 +617,9 @@ private fun themeModeFlags(index: Int, currentDarkMode: Boolean): Pair<Boolean, 
 fun SettingsTab(
     activity: MiuixMainActivity,
     glassEnabled: Boolean = AppConfig.INSTANCE.liquidGlassNavBar != false,
-    onGlassEnabledChange: ((Boolean) -> Unit)? = null
+    onGlassEnabledChange: ((Boolean) -> Unit)? = null,
+    // 方案A：MD 单Activity导航下，关于页作为 route push；MIUIX 不传 → 仍走原 startActivity。
+    onOpenAbout: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -815,7 +817,11 @@ fun SettingsTab(
         SesameClickRow(
             title = "关于应用",
             icon = Icons.Outlined.Info,
-            onClick = { context.startActivity(Intent(context, MiuixAboutActivity::class.java)) }
+            onClick = {
+                // 方案A：MD 单Activity导航下关于页是 route；MIUIX 仍走原 Activity。
+                if (onOpenAbout != null) onOpenAbout()
+                else context.startActivity(Intent(context, MiuixAboutActivity::class.java))
+            }
         )
     }
 }
