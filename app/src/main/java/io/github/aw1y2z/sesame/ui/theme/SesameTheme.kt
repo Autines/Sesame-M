@@ -122,6 +122,10 @@ fun SesameTheme(
     val colorScheme = remember(context, dark) { SesameM3.colorScheme(context, dark) }
 
     CompositionLocalProvider(LocalUiStyle provides style) {
+        // 主题揭开 Host（切明暗时拍照 + 从点击处圆形揭开新配色）：MD 分支挂，
+        // 必须包在内容最外层（mochi 用 PixelCopy 拍整帧、读 LocalView）；MIUIX 直出零变化。
+        // 放在 SesameOverscroll 外层，确保 Host 拍到的是完整最终画面。
+        SesameThemeReveal {
         // 滚动回弹 Provider（规范 Required baseline）：MD 风格用 mochi 的 Cresto 回弹，
         // 包在根部后子树所有原生 verticalScroll/LazyColumn 自动生效；MIUIX 直出零变化。
         SesameOverscroll {
@@ -165,6 +169,7 @@ fun SesameTheme(
             }
         }
         } // SesameOverscroll
+        } // SesameThemeReveal
     }
 }
 

@@ -7,11 +7,13 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -24,6 +26,10 @@ import androidx.compose.ui.unit.sp
 import ui.feice.mochi.effect.content.MochiBlurText
 import ui.feice.mochi.effect.content.MochiCounterText
 import ui.feice.mochi.effect.content.MochiMorphIcon
+import ui.feice.mochi.effect.content.MochiThemeRevealHost
+import ui.feice.mochi.effect.content.MochiThemeRevealState
+import ui.feice.mochi.effect.content.revealIfShadeChanges
+import ui.feice.mochi.effect.content.rememberMochiThemeRevealState
 import ui.feice.mochi.effect.elastic.mochiPressDeform
 import ui.feice.mochi.effect.glow.mochiPressGlow
 import ui.feice.mochi.effect.glow.rememberMochiGlowState
@@ -282,6 +288,57 @@ fun SesameOverscroll(content: @Composable () -> Unit) {
     } else {
         content()
     }
+}
+
+/* ───────────────────────── 主题揭开（切明暗）─────────────────────────
+ * mochi 规范：整套换装（明暗、风格）不要瞬切，用拍照 + 从点击处圆形揭开。
+ * 只在 MD 分支挂 Host；MIUIX 直出 content，观感零变化。
+ *
+ * 结构：根部 SesameTheme 里 remember 一个 state → MochiThemeRevealHost 包住内容
+ * → 用 CompositionLocal 把 state 下发给设置页；设置页切明暗时调
+ * sesameRevealThemeChange(oldDark, newDark) { sesameApplyTheme(...) }，
+ * 由 mochi 先拍屏、执行 change、再揭开新配色。
+ */
+
+/** 当下组合树里的主题揭开状态；MD 根部注入，非 MD / 未接 Host 时为 null（直接切换）。 */
+val LocalThemeReveal = staticCompositionLocalOf<MochiThemeRevealState?> { null }
+
+/**
+ * 主题揭开 Host：MD 分支包 [MochiThemeRevealHost] 并下发 state；MIUIX 直出。
+ * 必须包在主题内容的最外层（mochi 要用 PixelCopy 拍整帧、读 LocalView）。
+ */
+@Composable
+fun SesameThemeReveal(content: @Composable () -> Unit) {
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        val reveal = rememberMochiThemeRevealState()
+        CompositionLocalProvider(LocalThemeReveal provides reveal) {
+            MochiThemeRevealHost(reveal, content = content)
+        }
+    } else {
+        content()
+    }
+}
+
+/**
+ * 切换明暗时调用：MD 分支走 mochi 揭开（深浅真变了才揭，没变直接改），
+ * MIUIX 分支直接执行 [change]（HyperOS 观感零变化）。
+ *
+ * 非 @Composable，可在点击回调里直接调；state 由调用方在 composable 顶部读
+ * [LocalThemeReveal.current] 后传入。revealIfShadeChanges 是定义在可空接收者上的扩展，
+ * state 为 null（MIUIX / 未接 Host）时内部直接执行 change。
+ *
+ * @param reveal 主题揭开状态（MD 根部注入；MIUIX 为 null）
+ * @param fromDark 切换前的明暗（用于判断深浅是否真变了）
+ * @param toDark 切换后的明暗
+ * @param change 真正的主题改动（写 state + 落盘），由 mochi 在拍屏后执行
+ */
+fun sesameRevealThemeChange(
+    reveal: MochiThemeRevealState?,
+    fromDark: Boolean,
+    toDark: Boolean,
+    change: () -> Unit
+) {
+    reveal.revealIfShadeChanges(fromDark, toDark, change = change)
 }
 
 /**

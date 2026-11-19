@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -83,7 +84,9 @@ import io.github.aw1y2z.sesame.ui.miuix.MiuixExtensionsActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixFriendStatsActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixLogViewerActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixSettingsActivity
+import io.github.aw1y2z.sesame.ui.theme.LocalThemeReveal
 import io.github.aw1y2z.sesame.ui.theme.sesameApplyTheme
+import io.github.aw1y2z.sesame.ui.theme.sesameRevealThemeChange
 import io.github.aw1y2z.sesame.ui.theme.SesameTheme
 import io.github.aw1y2z.sesame.ui.miuix.groupIconOf
 
@@ -627,6 +630,12 @@ fun SettingsTab(
     var uiStyle by remember { mutableStateOf(UiStyle.current()) }
     var followSystem by remember { mutableStateOf(AppConfig.INSTANCE.followSystem ?: true) }
     var darkMode by remember { mutableStateOf(AppConfig.INSTANCE.darkMode ?: false) }
+    // 主题揭开的 fromDark/toDark 需要在切换回调里拿到「切换前后的真实明暗」。
+    // 两项都是可观察快照，读一次即可；onSelect lambda 捕获的是重组时的值。
+    val systemDark = isSystemInDarkTheme()
+    val currentDark = if (followSystem) systemDark else darkMode
+    // MD 根部注入的主题揭开状态；MIUIX 下为 null（切换时直接改，零变化）
+    val themeReveal = LocalThemeReveal.current
     SesameCardGroup {
         SesameSelectRow(
             title = "界面风格",
@@ -660,8 +669,13 @@ fun SettingsTab(
                     darkMode = nextDark
                     // ⚠️ 不再 activity.recreate()：明暗已改成可观察 state（见 SesameTheme.DarkOverride），
                     // 写进去即整页重组换配色。原先靠重建 Activity 才生效 → 视觉上"界面闪一下"。
-                    sesameApplyTheme(nextFollow, nextDark)
-                    AppConfig.save()
+                    // MD 风格：包一层 mochi 主题揭开——先拍屏、再改主题，从点击处圆形揭开新配色；
+                    // MIUIX 分支 sesameRevealThemeChange 内部直接执行 change，HyperOS 观感零变化。
+                    val nextResolvedDark = if (nextFollow) systemDark else nextDark
+                    sesameRevealThemeChange(themeReveal, currentDark, nextResolvedDark) {
+                        sesameApplyTheme(nextFollow, nextDark)
+                        AppConfig.save()
+                    }
                 }
             }
         )
