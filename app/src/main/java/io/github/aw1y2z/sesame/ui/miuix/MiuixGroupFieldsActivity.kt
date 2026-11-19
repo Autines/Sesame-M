@@ -89,8 +89,23 @@ class MiuixGroupFieldsActivity : MiuixBaseActivity() {
             groupCode?.let { code ->
                 val group = ModelGroup.entries.find { it.name == code }
                 if (group != null) {
-                    GroupFieldsContent(activity = this, userId = userId, groupCode = code, group = group,
-                            initialQuery = initialQuery)
+                    // MIUIX 旧路径：保存/返回/跳四级都接到本 Activity；MD 由 MochiMainScreen 传 route 版回调。
+                    GroupFieldsContent(
+                        userId = userId, groupCode = code, group = group,
+                        initialQuery = initialQuery,
+                        onBack = { saveAndFinish() },
+                        onSaveRegister = { /* MIUIX 旧路径保存走 saveAndFinish()，此处无需注册 */ },
+                        onOpenSelection = { fCode, mCode ->
+                            startActivity(
+                                Intent(this, MiuixSelectionEditActivity::class.java).apply {
+                                    putExtra(EXTRA_USER_ID, userId)
+                                    putExtra(EXTRA_GROUP_CODE, code)
+                                    putExtra(MiuixSelectionEditActivity.EXTRA_FIELD_CODE, fCode)
+                                    putExtra(MiuixSelectionEditActivity.EXTRA_MODEL_CODE, mCode)
+                                }
+                            )
+                        },
+                    )
                 } else {
                     top.yukonga.miuix.kmp.basic.Text("分组不存在: $code")
                 }
@@ -152,8 +167,16 @@ private sealed interface GroupFieldsRow {
 }
 
 @Composable
-fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, groupCode: String, group: ModelGroup,
-                       initialQuery: String? = null) {
+fun GroupFieldsContent(
+    userId: String?,
+    groupCode: String,
+    group: ModelGroup,
+    initialQuery: String? = null,
+    onBack: () -> Unit,
+    onSaveRegister: (saveHandler: () -> Unit) -> Unit,
+    onOpenSelection: (fieldCode: String, modelCode: String) -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     // 父字段开关/选项变化后，依赖其显示的子字段需重新计算可见性，
     // 用 depVersion 作为 remember 键触发扁平行列表重建。
     var depVersion by remember { mutableStateOf(0) }
@@ -203,10 +226,16 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
      */
     val onExecute = remember {
         {
-            HostBridge.send(activity, "execute", null, group.getCode(), false)
-            ToastUtil.show(activity, "已发送执行请求：${group.getName()}")
+            HostBridge.send(context, "execute", null, group.getCode(), false)
+            ToastUtil.show(context, "已发送执行请求：${group.getName()}")
             Unit
         }
+    }
+
+    // 字段编辑直接写 ConfigV2 单例，保存函数与 Composable 状态无关。
+    // 注册给宿主：旧 Activity 忽略（走 saveAndFinish），MD route 拿它兜住系统返回键/右滑手势。
+    androidx.compose.runtime.SideEffect {
+        onSaveRegister { if (ConfigV2.isModify(userId) && ConfigV2.hasFieldChanges()) ConfigV2.save(userId, true) }
     }
 
     // 搜索框：与四级页一致，按字段名/编码/描述过滤，并隐藏无匹配的分区
@@ -240,7 +269,7 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
 
     SesameLazyCompactTitleScaffold(
         title = group.getName(),
-        onBack = { activity.saveAndFinish() },
+        onBack = onBack,
         onExecute = onExecute
     ) {
         // 搜索框作为列表首项（MD 下随大标题一起折叠，符合 demo）
@@ -294,10 +323,8 @@ fun GroupFieldsContent(activity: MiuixGroupFieldsActivity, userId: String?, grou
                             // 不包 key 会沿用上一行的组合状态（表现为下方开关显示错位）
                             key(fieldRow.key) {
                                 GroupFieldRow(
-                                    activity = activity,
-                                    userId = userId,
-                                    groupCode = groupCode,
                                     row = fieldRow,
+                                    onOpenSelection = onOpenSelection,
                                     onDependencyChanged =
                                         if (dependencyCodes.contains(fieldRow.field.code)) bumpDependency else null
                                 )
@@ -328,10 +355,8 @@ internal fun fieldMatchesSearch(query: String, field: ModelField<*>): Boolean {
  */
 @Composable
 private fun GroupFieldRow(
-    activity: MiuixGroupFieldsActivity,
-    userId: String?,
-    groupCode: String,
     row: GroupFieldsRow.Field,
+    onOpenSelection: (fieldCode: String, modelCode: String) -> Unit,
     onDependencyChanged: (() -> Unit)?
 ) {
     val m3 = LocalUiStyle.current == UiStyle.MATERIAL3
@@ -362,16 +387,7 @@ private fun GroupFieldRow(
                 SesameClickRow(
                     title = field.name ?: "",
                     summary = field.description,
-                    onClick = {
-                        activity.startActivity(
-                            Intent(activity, MiuixSelectionEditActivity::class.java).apply {
-                                putExtra(MiuixGroupFieldsActivity.EXTRA_USER_ID, userId)
-                                putExtra(MiuixGroupFieldsActivity.EXTRA_GROUP_CODE, groupCode)
-                                putExtra(MiuixSelectionEditActivity.EXTRA_FIELD_CODE, field.code)
-                                putExtra(MiuixSelectionEditActivity.EXTRA_MODEL_CODE, row.modelCode)
-                            }
-                        )
-                    }
+                    onClick = { onOpenSelection(field.code, row.modelCode) }
                 )
             }
             else -> {

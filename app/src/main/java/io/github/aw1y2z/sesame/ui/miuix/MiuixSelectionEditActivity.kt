@@ -100,11 +100,13 @@ class MiuixSelectionEditActivity : MiuixBaseActivity() {
                 @Suppress("UNCHECKED_CAST")
                 val field = (ConfigV2.INSTANCE.getModelFields(modelCodeVal) as? ModelFields)?.get(fieldCodeVal) as? ModelField<*>
                 if (field != null) {
+                    // MIUIX 旧路径：把保存/返回接到本 Activity；MD 单Activity导航下由 MochiMainScreen 传 route 版回调。
                     SelectionEditContent(
-                        activity = this,
                         field = field,
                         modelCode = modelCodeVal,
-                        userId = userId
+                        userId = userId,
+                        onBack = { saveAndFinish() },
+                        onSaveRegister = { handler -> saveHandler = handler },
                     )
                 } else {
                     top.yukonga.miuix.kmp.basic.Text("字段不存在: $fieldCodeVal")
@@ -124,11 +126,13 @@ class MiuixSelectionEditActivity : MiuixBaseActivity() {
 
 @Composable
 fun SelectionEditContent(
-    activity: MiuixSelectionEditActivity,
     field: ModelField<*>,
     modelCode: String,
-    userId: String?
+    userId: String?,
+    onBack: () -> Unit,
+    onSaveRegister: (saveHandler: () -> Unit) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     // 始终以 ConfigV2.INSTANCE 中的实时字段读取当前值，
     // 避免传入引用与单例不一致时读不到已保存的勾选。
     val liveField = ConfigV2.INSTANCE.getModelFields(modelCode)?.get(field.code) ?: field
@@ -272,16 +276,17 @@ fun SelectionEditContent(
             // 本页的保存是"退出时隐式落盘"，成功不弹气泡（失败才提示）
             dirty = false
             if (userId != null) {
-                HostBridge.send(activity, "restart", userId, null, false)
+                HostBridge.send(context, "restart", userId, null, false)
             }
         } else {
-            ToastUtil.show(activity, "保存失败")
+            ToastUtil.show(context, "保存失败")
         }
     }
 
-    // 退出前统一先保存：顶部返回按钮与系统返回键（手势/物理键）共用同一逻辑。
+    // 退出前统一先保存：把保存函数注册给宿主（旧 Activity 存到 saveHandler，MD route 存到自己的 holder）。
+    // 顶部返回、系统返回键、右滑手势三条路径最终都会调用这个保存函数。
     androidx.compose.runtime.SideEffect {
-        activity.saveHandler = { if (dirty) applyAndSave() }
+        onSaveRegister { if (dirty) applyAndSave() }
     }
 
     Scaffold(
@@ -289,7 +294,7 @@ fun SelectionEditContent(
             SesameTopBar(
                 title = field.name ?: "",
                 // 无改动时静默退出，不再提示"没有未保存的更改"
-                onBack = { activity.saveAndFinish() },
+                onBack = onBack,
                 actions = {
                     if (!single) {
                         top.yukonga.miuix.kmp.basic.IconButton(onClick = {
@@ -332,7 +337,7 @@ fun SelectionEditContent(
                             sel = selectedIds
                             counts = selectedIds.associateWith { initialCounts[it] ?: defaultCount }
                             dirty = false
-                            activity.saveAndFinish()
+                            onBack()
                         }) {
                             top.yukonga.miuix.kmp.basic.Icon(
                                 imageVector = Icons.Filled.Close,

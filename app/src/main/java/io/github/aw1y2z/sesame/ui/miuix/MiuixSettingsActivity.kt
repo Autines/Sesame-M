@@ -105,7 +105,23 @@ class MiuixSettingsActivity : MiuixBaseActivity() {
             finish()
         }
         setAppContent {
-            SettingsContent(this, userId)
+            // MIUIX 旧路径：所有动作接到本 Activity；MD 单Activity导航下由 MochiMainScreen 传 route 版回调。
+            SettingsContent(
+                userId = userId,
+                onBack = { saveAndFinish() },
+                onSaveRegister = { /* 旧路径保存走 saveAndFinish()，此处无需注册 */ },
+                onOpenFieldHit = { openFieldHit(it) },
+                onOpenGroup = { groupCode ->
+                    startActivity(
+                        Intent(this, MiuixGroupFieldsActivity::class.java).apply {
+                            putExtra(MiuixGroupFieldsActivity.EXTRA_USER_ID, userId)
+                            putExtra(MiuixGroupFieldsActivity.EXTRA_GROUP_CODE, groupCode)
+                        }
+                    )
+                },
+                onReload = { recreate() },
+                onAccountPurged = { finish() },
+            )
         }
     }
 
@@ -160,9 +176,23 @@ class MiuixSettingsActivity : MiuixBaseActivity() {
 }
 
 @Composable
-fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
+internal fun SettingsContent(
+    userId: String?,
+    onBack: () -> Unit,
+    onSaveRegister: (saveHandler: () -> Unit) -> Unit,
+    onOpenFieldHit: (FieldHit) -> Unit,
+    onOpenGroup: (groupCode: String) -> Unit,
+    onReload: () -> Unit,
+    onAccountPurged: () -> Unit,
+) {
     val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // 字段编辑直接写 ConfigV2 单例，保存函数与 Composable 状态无关。
+    // 注册给宿主：旧 Activity 忽略（走 saveAndFinish），MD route 拿它兜住系统返回键/右滑手势。
+    androidx.compose.runtime.SideEffect {
+        onSaveRegister { if (ConfigV2.hasFieldChanges()) ConfigV2.save(userId, true) }
+    }
 
     // 待恢复的备份包与它的清单信息：选完文件先停在"确认"这一步，用户点了才真正覆盖。
     // 用显式 MutableState（而不是 by 委托）是因为 stageZip 这个局部函数要写它。
@@ -249,7 +279,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                 ConfigPreload.prepare(userId)
                 notifyModuleReload(context, userId)
                 ToastUtil.show(context, "已导入当前账号配置")
-                activity.recreate()
+                onReload()
             }
             catch (e: Exception) {
                 Log.printStackTrace(e)
@@ -261,7 +291,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
     // ============ 二级:分组目录 ============
     SesameCompactTitleScaffold(
         title = "配置设置",
-        onBack = { activity.saveAndFinish() },
+        onBack = onBack,
         // 顶栏刻意**不放**导入/导出：它们与下方「备份与恢复」是同一动作的两个入口
         // （导出=完整备份、导入=zip 恢复），属于历史遗留的重复。已统一收敛到下方
         // 那套带文字说明的入口，顶栏只留「删除」。（2026-10-07 定）
@@ -321,7 +351,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                                 title = hit.field.name ?: hit.field.code,
                                 summary = hit.modelName,
                                 icon = groupIconOf(hit.groupCode),
-                                onClick = { activity.openFieldHit(hit) }
+                                onClick = { onOpenFieldHit(hit) }
                             )
                         }
                     }
@@ -335,14 +365,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                             SesameClickRow(
                                 title = g.getName(),
                                 icon = groupIconOf(g.getCode()),
-                                onClick = {
-                                    activity.startActivity(
-                                        Intent(activity, MiuixGroupFieldsActivity::class.java).apply {
-                                            putExtra(MiuixGroupFieldsActivity.EXTRA_USER_ID, userId)
-                                            putExtra(MiuixGroupFieldsActivity.EXTRA_GROUP_CODE, g.name)
-                                        }
-                                    )
-                                }
+                                onClick = { onOpenGroup(g.name) }
                             )
                         }
                     }
@@ -411,7 +434,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                         pendingZip.value = null
                         pendingInfo.value = null
                         if (zip != null) {
-                            performRestore(activity, context, zip, userId)
+                            performRestore(context, zip, userId, onReload)
                         }
                     },
                     onDismiss = {
@@ -444,7 +467,7 @@ fun SettingsContent(activity: MiuixSettingsActivity, userId: String?) {
                         } else {
                             ToastUtil.show(context, "该账号配置本就不存在")
                         }
-                        activity.finish()
+                        onAccountPurged()
                     },
                     onDismiss = { showDeleteDialog = false }
                 )
@@ -516,10 +539,10 @@ private fun fullBackupFileName(): String =
  * `ConfigPreload.prepare()` 末尾的 `ConfigV2.load()` 要从注册表取表，注册表没重建就取不到。
  */
 private fun performRestore(
-    activity: MiuixSettingsActivity,
     context: Context,
     zip: File,
-    userId: String?
+    userId: String?,
+    onReload: () -> Unit,
 ) {
     try {
         val result = BackupUtil.restore(zip)
@@ -533,7 +556,7 @@ private fun performRestore(
         notifyModuleReload(context, null)
         ToastUtil.show(context, "已恢复 ${result.fileCount} 个配置文件")
         // 界面风格 / 深色模式可能整片变了，重建一次让这一页立刻按新设置呈现
-        activity.recreate()
+        onReload()
     } catch (t: Throwable) {
         Log.printStackTrace(t)
         ToastUtil.show(context, "恢复失败！")

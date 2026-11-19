@@ -441,7 +441,10 @@ fun openLog(activity: MiuixMainActivity, logType: LogType) {
 }
 
 @Composable
-fun ConfigTab(activity: MiuixMainActivity) {
+fun ConfigTab(
+    activity: MiuixMainActivity,
+    onOpenSettings: ((userId: String?) -> Unit)? = null,
+) {
     val context = LocalContext.current
     // 🔴 key 不能省：这段要实时反映 config 目录里真实存在的账号，
     // 用「无 key 的 remember」会被缓存死 —— 删掉某个账号后回到本页，那一行仍在，
@@ -489,9 +492,14 @@ fun ConfigTab(activity: MiuixMainActivity) {
                 summary = summary,
                 icon = Icons.Outlined.AccountCircle,
                 onClick = {
-                    val intent = Intent(context, MiuixSettingsActivity::class.java)
-                    if (userId != null) intent.putExtra("userId", userId)
-                    context.startActivity(intent)
+                    // MD 单Activity导航下走 route push；MIUIX 不传回调 → 仍走原 startActivity。
+                    if (onOpenSettings != null) {
+                        onOpenSettings(userId)
+                    } else {
+                        val intent = Intent(context, MiuixSettingsActivity::class.java)
+                        if (userId != null) intent.putExtra("userId", userId)
+                        context.startActivity(intent)
+                    }
                 }
             )
         }
