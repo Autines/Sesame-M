@@ -7,15 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
@@ -55,8 +50,8 @@ import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesamePermissionNotice
 import io.github.aw1y2z.sesame.ui.theme.SesameText
 import io.github.aw1y2z.sesame.util.PermissionUtil
-import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.sesameOnSurfaceVariant
+import io.github.aw1y2z.sesame.ui.theme.sesameSurface
 import io.github.aw1y2z.sesame.ui.theme.sesamePrimary
 import kotlinx.collections.immutable.persistentListOf
 import ui.feice.mochi.basic.MochiTabBarDefaults
@@ -65,7 +60,6 @@ import ui.feice.mochi.navigation.MochiBackButton
 import ui.feice.mochi.navigation.MochiLargeTitleScaffold
 import ui.feice.mochi.navigation.MochiNavHost
 import ui.feice.mochi.navigation.MochiTabScaffold
-import ui.feice.mochi.navigation.MochiTabScaffoldDefaults
 import ui.feice.mochi.navigation.rememberMochiNavigator
 import ui.feice.mochi.navigation.rememberMochiTabScaffoldState
 
@@ -225,11 +219,6 @@ private fun MochiHomeRoute(
         )
     }
     val tabState = rememberMochiTabScaffoldState()
-    // 🔴 MochiTabScaffold 的 content 不自带顶部状态栏留白：库源码里 content(page) 是裸调用的，
-    // 只处理底部导航条 insets。方案A之前旧 MD 主页用 SesamePageTitleBar（自带 statusBarsPadding），
-    // 切到 mochi 后这层丢了 → 第一个分组标题顶到 y=0、被系统状态栏压住（K40 实测标题 bounds [44,0]）。
-    // 照 mochi demo CatalogGrid 的规范补回：top = 状态栏高度 + 12dp 呼吸。
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp
     MochiTabScaffold(
         items = tabs,
         state = tabState,
@@ -238,17 +227,22 @@ private fun MochiHomeRoute(
         // 对齐旧 MainScreen：切回首页时刷新统计（首页 Tab 未被导航栈覆盖时仍会触发）。
         onSelect = { index -> if (index == 0) activity.refreshStatistics() },
     ) { page ->
-        // MochiTabScaffold 的 content 不自带滚动，这里统一包可滚动 Column；
-        // 每个 page 有独立 rememberScrollState，MochiTabScaffold 的 SaveableStateHolder
-        // 会随页面切换保留各自的滚动位置。fling 用项目桥接（MD 走 mochi 慢停曲线）。
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState(), flingBehavior = sesameFlingBehavior())
-                .padding(start = 16.dp, end = 16.dp, top = statusBarTop)
-                // 给悬浮底栏留白，用库提供的标准值（底栏高 + 手势区 + 间隙）。
-                .padding(bottom = MochiTabScaffoldDefaults.contentBottomPadding())
+        // 🔴 页面锚点：每个一级 Tab 用 mochi 的 LargeTitle 脚手架承载——它自带折叠大标题、
+        // 滚动、statusBarsPadding、16dp 水平留白、contentBottomPadding，以及松手吸附/再点回顶。
+        // 这是 demo 里 Tab 页的标准骨架；方案A之前图省事裸用 content Column，把大标题和
+        // 顶部留白都丢了（标题顶到 y=0 压状态栏、四页只能靠底栏图标辨认）。
+        // contentSpacing=0：各 Tab 的分组间距已由 SesameSectionTitle 自己的留白负责，
+        // 不再叠加脚手架的 28dp 组间距，避免间距翻倍。
+        val titles = listOf("首页", "日志", "配置", "设置")
+        MochiLargeTitleScaffold(
+            title = titles[page],
+            background = sesameSurface(),
+            contentSpacing = 0.dp,
         ) {
+            // 大标题 Text 自身没有底边距，contentSpacing=0 时首元素会贴死标题（实测标题底 y=378、
+            // 「主题」标题顶 y=378）。这里补 8dp 呼吸，与 mochi demo header 的 bottom padding 同款。
+            // 只补一次、作用于所有 Tab（脚手架 content 的直接首元素），不动各组已有的间距节奏。
+            Spacer(Modifier.height(8.dp))
             when (page) {
                 0 -> {
                     HomeTab(activity)
