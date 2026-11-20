@@ -7,10 +7,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -222,6 +225,11 @@ private fun MochiHomeRoute(
         )
     }
     val tabState = rememberMochiTabScaffoldState()
+    // 🔴 MochiTabScaffold 的 content 不自带顶部状态栏留白：库源码里 content(page) 是裸调用的，
+    // 只处理底部导航条 insets。方案A之前旧 MD 主页用 SesamePageTitleBar（自带 statusBarsPadding），
+    // 切到 mochi 后这层丢了 → 第一个分组标题顶到 y=0、被系统状态栏压住（K40 实测标题 bounds [44,0]）。
+    // 照 mochi demo CatalogGrid 的规范补回：top = 状态栏高度 + 12dp 呼吸。
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp
     MochiTabScaffold(
         items = tabs,
         state = tabState,
@@ -237,7 +245,7 @@ private fun MochiHomeRoute(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState(), flingBehavior = sesameFlingBehavior())
-                .padding(horizontal = 16.dp)
+                .padding(start = 16.dp, end = 16.dp, top = statusBarTop)
                 // 给悬浮底栏留白，用库提供的标准值（底栏高 + 手势区 + 间隙）。
                 .padding(bottom = MochiTabScaffoldDefaults.contentBottomPadding())
         ) {
