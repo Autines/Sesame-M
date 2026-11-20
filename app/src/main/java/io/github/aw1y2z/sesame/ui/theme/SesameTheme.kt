@@ -23,6 +23,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import ui.feice.mochi.ios.iosMaterials
 import ui.feice.mochi.theme.MochiMaterials
 import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.PaletteStyle
 
 /**
  * 主题模式的**可观察快照**：「跟随系统」与「固定浅/深」合成**一个** state。
@@ -76,6 +77,36 @@ fun sesameGlassEnabled(): Boolean = SesameGlassState
 fun sesameApplyGlass(enabled: Boolean) {
     AppConfig.INSTANCE.liquidGlassNavBar = enabled
     SesameGlassState = enabled
+    AppConfig.save()
+}
+
+/**
+ * 主题色（种子色 + 取色算法）的进程级可观察快照。
+ *
+ * 和 [SesameThemeModeState] 同一套模式：设置页改这里 → 整个 App 重组换色，
+ * 不用重建 Activity。`seed == null` 表示跟随系统壁纸动态取色（历史行为，默认）。
+ */
+private var SesameSeedState: Int? by mutableStateOf(AppConfig.INSTANCE.seedColor)
+
+private var SesamePaletteState: PaletteStyle by mutableStateOf(
+    PaletteStyle.entries.firstOrNull { it.name == AppConfig.INSTANCE.paletteStyle } ?: PaletteStyle.TonalSpot
+)
+
+/** 当前主题色种子；null = 跟随系统壁纸 */
+fun sesameSeedColor(): Int? = SesameSeedState
+
+/** 当前取色算法 */
+fun sesamePaletteStyle(): PaletteStyle = SesamePaletteState
+
+/**
+ * 设置页改主题色：落盘 + 更新快照（不重建 Activity）。
+ * @param seed null 表示恢复「跟随系统壁纸动态取色」
+ */
+fun sesameApplyThemeColor(seed: Int?, palette: PaletteStyle = SesamePaletteState) {
+    AppConfig.INSTANCE.seedColor = seed
+    AppConfig.INSTANCE.paletteStyle = palette.name
+    SesameSeedState = seed
+    SesamePaletteState = palette
     AppConfig.save()
 }
 
@@ -144,7 +175,12 @@ fun SesameTheme(
             }
         )
     }
-    val colorScheme = remember(context, dark) { SesameM3.colorScheme(context, dark) }
+    // 主题色：用户选了种子色就按它生成整份色板，否则继续跟随系统壁纸（Monet）。
+    val seedColor = SesameSeedState
+    val paletteStyle = SesamePaletteState
+    val colorScheme = remember(context, dark, seedColor, paletteStyle) {
+        SesameM3.colorScheme(context, dark, seedColor, paletteStyle)
+    }
 
     CompositionLocalProvider(LocalUiStyle provides style) {
         // 主题揭开 Host（切明暗时拍照 + 从点击处圆形揭开新配色）：MD 分支挂，

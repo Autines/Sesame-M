@@ -12,6 +12,10 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import ui.feice.mochi.shape.MochiRoundedRectangle
+import ui.feice.mochi.theme.MochiColorScheme
+import ui.feice.mochi.theme.PaletteStyle
+import ui.feice.mochi.theme.darkColorScheme as mochiDarkColorScheme
+import ui.feice.mochi.theme.lightColorScheme as mochiLightColorScheme
 
 /**
  * Material Design 3 色彩 / 字体 / 形状，仅用于 [UiStyle.MATERIAL3]。
@@ -158,10 +162,83 @@ object SesameM3 {
      * 见 `SesameTheme.kt` 的 [sesameSurface] / [sesameSurfaceContainer]。
      * 这里保持色板原样，只做兜底与文档。
      */
-    fun colorScheme(context: Context, dark: Boolean): ColorScheme {
+    fun colorScheme(
+        context: Context,
+        dark: Boolean,
+        /** 主题色种子；null = 跟随系统壁纸动态取色（历史行为） */
+        seedColor: Int? = null,
+        /** 取色算法，仅 seedColor 非 null 时生效 */
+        paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
+    ): ColorScheme {
+        // 用户自选了主题色：色板改由种子色生成（MD3 Expressive 规则的 HCT 推导），
+        // 不再读系统壁纸。mochi 配色由本函数的结果反向转换（见 sesameMochiColorScheme），
+        // 所以两套风格必然同色，不会出现「mochi 卡片一个色、M3 开关另一个色」。
+        if (seedColor != null) {
+            val mochi = if (dark) {
+                mochiDarkColorScheme(keyColor = Color(seedColor), style = paletteStyle)
+            } else {
+                mochiLightColorScheme(keyColor = Color(seedColor), style = paletteStyle)
+            }
+            return mochi.toM3ColorScheme()
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         return if (dark) FallbackDark else FallbackLight
+    }
+
+    /**
+     * [MochiColorScheme] → M3 [ColorScheme]。
+     *
+     * 字段名两边一一对应（mochi 的配色本来就是按 MD3 规范生成的），只有
+     * `isDark` 是 mochi 独有、M3 用两个不同的工厂函数区分明暗。
+     */
+    private fun MochiColorScheme.toM3ColorScheme(): ColorScheme {
+        val dark = isDark
+        return if (dark) {
+            darkColorScheme(
+                primary = primary, onPrimary = onPrimary,
+                primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
+                inversePrimary = inversePrimary,
+                secondary = secondary, onSecondary = onSecondary,
+                secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
+                tertiary = tertiary, onTertiary = onTertiary,
+                tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
+                background = background, onBackground = onBackground,
+                surface = surface, onSurface = onSurface,
+                surfaceVariant = surfaceVariant, onSurfaceVariant = onSurfaceVariant,
+                surfaceTint = surfaceTint,
+                inverseSurface = inverseSurface, inverseOnSurface = inverseOnSurface,
+                error = error, onError = onError,
+                errorContainer = errorContainer, onErrorContainer = onErrorContainer,
+                outline = outline, outlineVariant = outlineVariant, scrim = scrim,
+                surfaceBright = surfaceBright, surfaceDim = surfaceDim,
+                surfaceContainerLowest = surfaceContainerLowest, surfaceContainerLow = surfaceContainerLow,
+                surfaceContainer = surfaceContainer, surfaceContainerHigh = surfaceContainerHigh,
+                surfaceContainerHighest = surfaceContainerHighest,
+            )
+        } else {
+            lightColorScheme(
+                primary = primary, onPrimary = onPrimary,
+                primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
+                inversePrimary = inversePrimary,
+                secondary = secondary, onSecondary = onSecondary,
+                secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
+                tertiary = tertiary, onTertiary = onTertiary,
+                tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
+                background = background, onBackground = onBackground,
+                surface = surface, onSurface = onSurface,
+                surfaceVariant = surfaceVariant, onSurfaceVariant = onSurfaceVariant,
+                surfaceTint = surfaceTint,
+                inverseSurface = inverseSurface, inverseOnSurface = inverseOnSurface,
+                error = error, onError = onError,
+                errorContainer = errorContainer, onErrorContainer = onErrorContainer,
+                outline = outline, outlineVariant = outlineVariant, scrim = scrim,
+                surfaceBright = surfaceBright, surfaceDim = surfaceDim,
+                surfaceContainerLowest = surfaceContainerLowest, surfaceContainerLow = surfaceContainerLow,
+                surfaceContainer = surfaceContainer, surfaceContainerHigh = surfaceContainerHigh,
+                surfaceContainerHighest = surfaceContainerHighest,
+            )
+        }
     }
 }

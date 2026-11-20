@@ -43,6 +43,17 @@ public class AppConfig {
     private Boolean darkMode = false;
     private Boolean followSystem = true;
 
+    /**
+     * MD 主题色种子（ARGB）。
+     * <p>null = 跟随系统壁纸动态取色（Material You，历史行为，默认）；
+     * 选了具体颜色后，M3 色板改由「该种子 + paletteStyle」生成，mochi 配色由它转换而来，
+     * 两套风格颜色保持一致。
+     */
+    private Integer seedColor = null;
+
+    /** 取色算法（对应 mochi 的 PaletteStyle 名字）。仅在 seedColor 非 null 时生效，非法值回落 TonalSpot */
+    private String paletteStyle = "TonalSpot";
+
     private Boolean enableForestLog = true;
     private Boolean enableGoldenBeansLog = true;
     private Boolean enableFarmLog = true;
@@ -194,6 +205,23 @@ public class AppConfig {
 
     public void setFollowSystem(Boolean value) {
         followSystem = value;
+    }
+
+    /** 主题色种子；null（或旧配置没有该键）= 跟随系统壁纸动态取色 */
+    public Integer getSeedColor() {
+        return seedColor;
+    }
+
+    public void setSeedColor(Integer value) {
+        seedColor = value;
+    }
+
+    public String getPaletteStyle() {
+        return paletteStyle == null ? "TonalSpot" : paletteStyle;
+    }
+
+    public void setPaletteStyle(String value) {
+        paletteStyle = value;
     }
 
     public Boolean getEnableForestLog() { return enableForestLog; }

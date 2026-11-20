@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WifiTethering
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -64,7 +67,11 @@ import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.ui.theme.SesameSelectRow
 import io.github.aw1y2z.sesame.ui.theme.SesameStatusCard
 import io.github.aw1y2z.sesame.ui.theme.SesameSwitchRow
+import io.github.aw1y2z.sesame.ui.theme.LocalUiStyle
 import io.github.aw1y2z.sesame.ui.theme.SesameText
+import io.github.aw1y2z.sesame.ui.theme.sesameApplyThemeColor
+import io.github.aw1y2z.sesame.ui.theme.sesamePaletteStyle
+import io.github.aw1y2z.sesame.ui.theme.sesameSeedColor
 import io.github.aw1y2z.sesame.ui.theme.UiStyle
 import io.github.aw1y2z.sesame.ui.theme.sesameGroupHorizontalPadding
 import io.github.aw1y2z.sesame.ui.theme.sesameOnSurfaceVariant
@@ -89,6 +96,8 @@ import io.github.aw1y2z.sesame.ui.theme.sesameApplyTheme
 import io.github.aw1y2z.sesame.ui.theme.sesameRevealThemeChange
 import io.github.aw1y2z.sesame.ui.theme.SesameTheme
 import io.github.aw1y2z.sesame.ui.miuix.groupIconOf
+import ui.feice.mochi.picker.MochiSeedPalette
+import ui.feice.mochi.theme.PaletteStyle
 
 /* ───────────────────────── 一级页的四个 Tab 页面实现 ─────────────────────────
  * 这些是**页面实现**（首页 / 日志 / 配置 / 设置），原先和 Activity 本体混在一个文件里。
@@ -600,6 +609,21 @@ fun ConfigTab(
  */
 private val THEME_MODE_LABELS = listOf("跟随系统", "浅色", "深色")
 
+/**
+ * 取色算法（与 mochi PaletteStyle 对应，只暴露 demo 展示的 4 档）。
+ *
+ * ⚠️ 必须用中文短标签：4 个英文词（Tonal/Expressive/Vibrant/Neutral）横向铺满整行后，
+ * `MochiListRow` 的标题位会被压到 0 —— 实测「取色算法」四个字直接消失，只剩一排选项。
+ * 中文每项 2 字后标题才有位置。
+ */
+private val THEME_PALETTE_LABELS = listOf("色调", "表现", "鲜艳", "中性")
+private val THEME_PALETTES = listOf(
+    PaletteStyle.TonalSpot,
+    PaletteStyle.Expressive,
+    PaletteStyle.Vibrant,
+    PaletteStyle.Neutral,
+)
+
 /** 由「跟随系统」+「深色模式」两个既有配置推导出主题样式的下标 */
 private fun themeModeIndex(followSystem: Boolean, darkMode: Boolean): Int = when {
     followSystem -> 0
@@ -728,6 +752,69 @@ fun SettingsTab(
     }
     // 风格说明原本放在卡片下方（「Material You 设计语言…」那一行）：老板要求去掉，
     // 分组内两项各自已带副标题，再补一段容易读成 App 的免责/宣传文案。
+
+    // ── 主题色（仅 MD）──────────────────────────────────────────────────────
+    // MIUIX 走 HyperOS 自己的配色体系，不接 mochi 的种子色生成，所以整块不显示。
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        val seed = sesameSeedColor()
+        val palette = sesamePaletteStyle()
+        // 非 Composable 的 onCheckedChange 里读不到 MaterialTheme，先在组合期取出来
+        val currentPrimary = MaterialTheme.colorScheme.primary.toArgb()
+        var seedState by remember { mutableStateOf(seed) }
+        // 从外面（配置恢复、其它页改）同步回来
+        LaunchedEffect(seed) { seedState = seed }
+
+        SesameSectionTitle(text = "主题色")
+        SesameCardGroup {
+            SesameSwitchRow(
+                title = "跟随系统壁纸取色",
+                summary = if (seedState == null) {
+                    "当前配色由系统壁纸生成（Material You）"
+                } else {
+                    "关闭后使用下方自选色块"
+                },
+                checked = seedState == null,
+                onCheckedChange = { follow ->
+                    if (follow) {
+                        seedState = null
+                        sesameApplyThemeColor(null, palette)
+                    } else {
+                        // 以当前主色为起点，避免一打开就跳到与界面无关的颜色
+                        val start = currentPrimary
+                        seedState = start
+                        sesameApplyThemeColor(start, palette)
+                    }
+                }
+            )
+            SesameSelectRow(
+                title = "取色算法",
+                summary = "仅自选主题色时生效，决定配色的彩度与层次",
+                options = THEME_PALETTE_LABELS,
+                selectedIndex = THEME_PALETTES.indexOf(palette).coerceAtLeast(0),
+                onSelect = { index ->
+                    THEME_PALETTES.getOrNull(index)?.let { sesameApplyThemeColor(seedState, it) }
+                }
+            )
+        }
+        SesameCardGroup {
+            MochiSeedPalette(
+                selected = seedState?.let { Color(it) },
+                onSelect = { color ->
+                    val argb = color.toArgb()
+                    seedState = argb
+                    sesameApplyThemeColor(argb, palette)
+                },
+                style = palette,
+            )
+        }
+        // 下方说明：与 demo 同样的口径，避免用户以为选了色还跟着壁纸变
+        SesameText(
+            text = "选了色块后，「跟随系统壁纸取色」会关闭，改用同样明暗的静态配色。",
+            fontSize = 13.sp,
+            color = sesameOnSurfaceVariant(),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+        )
+    }
 
     SesameSectionTitle(text = "功能设置")
     SesameCardGroup {
