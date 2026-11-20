@@ -52,6 +52,8 @@ import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesamePermissionNotice
 import io.github.aw1y2z.sesame.ui.theme.SesameText
 import io.github.aw1y2z.sesame.util.PermissionUtil
+import io.github.aw1y2z.sesame.ui.theme.sesameApplyGlass
+import io.github.aw1y2z.sesame.ui.theme.sesameGlassEnabled
 import io.github.aw1y2z.sesame.ui.theme.sesameOnSurfaceVariant
 import io.github.aw1y2z.sesame.ui.theme.sesameSurface
 import io.github.aw1y2z.sesame.ui.theme.sesamePrimary
@@ -261,6 +263,11 @@ private fun MochiHomeRoute(
                 3 -> CompositionLocalProvider(LocalSesameHideRowIcon provides true) {
                     SettingsTab(
                         activity = activity,
+                        // 底栏玻璃：从进程级 state 读、切换写回 state —— 底栏就地重组生效。
+                        // 不传的话 SettingsTab 会走 else 分支 activity.recreate()（闪一下 + 跳回首页），
+                        // 而 MD 底栏那时还不认这个配置，等于白重建。
+                        glassEnabled = sesameGlassEnabled(),
+                        onGlassEnabledChange = { sesameApplyGlass(it) },
                         onOpenAbout = onOpenAbout,
                         onOpenFriendStats = onOpenFriendStats,
                         onOpenExtensions = onOpenExtensions,

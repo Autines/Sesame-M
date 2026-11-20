@@ -20,6 +20,8 @@ import io.github.aw1y2z.sesame.data.AppConfig
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import ui.feice.mochi.ios.iosMaterials
+import ui.feice.mochi.theme.MochiMaterials
 import ui.feice.mochi.theme.MochiTheme
 
 /**
@@ -52,6 +54,29 @@ fun sesameApplyTheme(followSystem: Boolean, darkMode: Boolean) {
     AppConfig.INSTANCE.followSystem = followSystem
     AppConfig.INSTANCE.darkMode = darkMode
     SesameThemeModeState = SesameThemeMode(followSystem, darkMode)
+}
+
+/**
+ * 底栏液态玻璃开关（进程级可观察快照）。
+ *
+ * ⚠️ 这个配置原先只在旧 MainScreen（MIUIX 浮动 Dock）里被消费；MD 路径换成
+ * `MochiTabScaffold` 后**没有任何代码读它** —— 开关点了只写配置 + `recreate()`，
+ * 外观零变化（实测「开启和关闭没有区别」）。
+ *
+ * MD 的栏玻璃由 `MochiTheme.materials` 决定（`MochiTabScaffold` 内部读
+ * `glassOn(GlassRole.Bar)`）。所以这里做成可观察 state：切换后主题重组、底栏就地变，
+ * 不再靠 recreate（那会闪一下并跳回首页 Tab）。
+ */
+private var SesameGlassState by mutableStateOf(AppConfig.INSTANCE.liquidGlassNavBar != false)
+
+/** 读当前底栏玻璃开关（在 Composable 里读会订阅重组）。 */
+fun sesameGlassEnabled(): Boolean = SesameGlassState
+
+/** 设置页切换底栏玻璃：落盘 AppConfig + 更新可观察快照（不 recreate）。 */
+fun sesameApplyGlass(enabled: Boolean) {
+    AppConfig.INSTANCE.liquidGlassNavBar = enabled
+    SesameGlassState = enabled
+    AppConfig.save()
 }
 
 /**
@@ -156,10 +181,30 @@ fun SesameTheme(
                 // 避免两套主题同时写窗口导致来回抖动。
                 // MIUIX 分支完全不挂 MochiTheme —— HyperOS 观感一行不动。
                 if (style == UiStyle.MATERIAL3) {
+                    // 底栏液态玻璃：mochi 的栏从 materials 取玻璃，只有 bar 非空时
+                    // MochiTabScaffold 内部的 glassOn(GlassRole.Bar) 才为真、底栏走实时模糊。
+                    // 只给 bar —— 菜单/面板/警告框/清除玻璃全部留空，避免整页观感一起变；
+                    // blur=false 让滚动边缘保持底色渐隐（滚动模糊是另一个概念，我们只有一个开关）。
+                    val glassEnabled = SesameGlassState
+                    val materials = remember(glassEnabled) {
+                        if (!glassEnabled) {
+                            MochiMaterials()
+                        } else {
+                            // 0.3.0 的签名是 iosMaterials(glass, blur, glassMaterial)，玻璃本身
+                            // 自带 light/dark 两套配方、自适应明暗，不需要传 isDark。
+                            iosMaterials(glass = true, blur = false).copy(
+                                control = null,
+                                menu = null,
+                                alert = null,
+                                sheet = null,
+                            )
+                        }
+                    }
                     MochiTheme(
                         colors = remember(colorScheme, dark) {
                             sesameMochiColorScheme(colorScheme, dark)
                         },
+                        materials = materials,
                         systemBarAppearance = false,
                         content = content
                     )

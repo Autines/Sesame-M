@@ -185,4 +185,7 @@ dependencies {
     // Mochi Compose（MD 风格重构试点）：G2 连续圆角 / iOS 26 分组行 / 弹簧动效。
     // ⚠️ 试点阶段仅验证依赖可解析与编译，尚未在任何页面使用。
     implementation "io.github.feice11:mochi-compose:0.3.0"
+    // iOS 25/26 的液态玻璃配方（iosMaterials）：底栏液态玻璃开关用它构造 MochiMaterials.bar，
+    // 手搓 MochiGlassRecipe（blur/refraction/dispersion/…) 既难对齐也难维护。
+    implementation "io.github.feice11:mochi-ios:0.3.0"
 }
