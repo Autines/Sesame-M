@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,7 @@ import io.github.aw1y2z.sesame.ui.miuix.tabs.ConfigTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.HomeTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.LogsTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.SettingsTab
+import io.github.aw1y2z.sesame.ui.theme.LocalSesameHideRowIcon
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesamePermissionNotice
@@ -240,9 +242,10 @@ private fun MochiHomeRoute(
             contentSpacing = 0.dp,
         ) {
             // 大标题 Text 自身没有底边距，contentSpacing=0 时首元素会贴死标题（实测标题底 y=378、
-            // 「主题」标题顶 y=378）。这里补 8dp 呼吸，与 mochi demo header 的 bottom padding 同款。
+            // 「主题」标题顶 y=378）。这里补呼吸间距，与 mochi demo header 的 bottom padding 同款。
+            // 12dp：8dp 实测偏挤（大标题与首个分组标题几乎粘连），按 4K 截图视感上调一档。
             // 只补一次、作用于所有 Tab（脚手架 content 的直接首元素），不动各组已有的间距节奏。
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             when (page) {
                 0 -> {
                     HomeTab(activity)
@@ -255,13 +258,15 @@ private fun MochiHomeRoute(
                 }
                 1 -> LogsTab(activity, onOpenLog = onOpenLog)
                 2 -> ConfigTab(activity, onOpenSettings = onOpenSettings)
-                3 -> SettingsTab(
-                    activity = activity,
-                    onOpenAbout = onOpenAbout,
-                    onOpenFriendStats = onOpenFriendStats,
-                    onOpenExtensions = onOpenExtensions,
-                    onOpenBlacklist = onOpenBlacklist,
-                )
+                3 -> CompositionLocalProvider(LocalSesameHideRowIcon provides true) {
+                    SettingsTab(
+                        activity = activity,
+                        onOpenAbout = onOpenAbout,
+                        onOpenFriendStats = onOpenFriendStats,
+                        onOpenExtensions = onOpenExtensions,
+                        onOpenBlacklist = onOpenBlacklist,
+                    )
+                }
             }
         }
     }
@@ -363,15 +368,18 @@ private fun SettingsRoute(
     DisposableEffect(Unit) {
         onDispose { saveHandler.value() }
     }
-    SettingsContent(
-        userId = userId,
-        onBack = onBack,
-        onSaveRegister = { saveHandler.value = it },
-        onOpenFieldHit = onOpenFieldHit,
-        onOpenGroup = onOpenGroup,
-        onReload = { activity.recreate() },
-        onAccountPurged = { activity.configAccountsVersion++; onBack() },
-    )
+    // 二级设置页与一级「设置」Tab 同一套观感：行内不放图标（纯文字行）。
+    CompositionLocalProvider(LocalSesameHideRowIcon provides true) {
+        SettingsContent(
+            userId = userId,
+            onBack = onBack,
+            onSaveRegister = { saveHandler.value = it },
+            onOpenFieldHit = onOpenFieldHit,
+            onOpenGroup = onOpenGroup,
+            onReload = { activity.recreate() },
+            onAccountPurged = { activity.configAccountsVersion++; onBack() },
+        )
+    }
 }
 
 /** 三级配置字段页 route（MD）。字段编辑写单例，保存靠 onDispose 兜底。 */

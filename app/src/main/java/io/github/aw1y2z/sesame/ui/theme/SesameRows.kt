@@ -54,11 +54,27 @@ import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.preference.ArrowPreference as MiuixArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference as MiuixSwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.basic.MochiSegmentedControl
+import ui.feice.mochi.basic.MochiSegmentedDefaults
 import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.list.MochiListLeadingStyle
 import ui.feice.mochi.list.MochiListRow
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+
+/**
+ * 隐藏行内前导图标（只在 MD 分支生效）。
+ *
+ * iOS / mochi 原生设置页的行是「标题 + 副标题 + 尾部控件」的纯文字结构，左侧不放图形，
+ * 信息层级靠分组小标题和文案表达。设置类页面在根节点 `provides(true)` 即可整页统一，
+ * 默认 false —— 其他页面（配置、扩展、黑名单、关于）观感零变化。
+ *
+ * MIUIX 分支本来就不渲染图标（`MiuixSwitchPreference` / `MiuixArrowPreference` 无图标位），
+ * 所以这个开关对 HyperOS 风格完全无影响。
+ */
+val LocalSesameHideRowIcon = staticCompositionLocalOf { false }
 
 /* ───────────────────────── 列表行 ─────────────────────────
  * 本文件是「风格无关 UI 组件集」的一部分（整体约定与分层说明见 SesameFoundation.kt 顶部）。
@@ -179,7 +195,7 @@ fun SesameClickRow(
                 subtitle = summary,
                 onClick = onClick,
                 chevron = true,
-                leading = if (icon != null) {
+                leading = if (!LocalSesameHideRowIcon.current && icon != null) {
                     { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 } else null,
                 leadingStyle = MochiListLeadingStyle.Symbol
@@ -290,69 +306,27 @@ fun SesameSelectRow(
             )
         }
 
-        UiStyle.MATERIAL3 -> M3RowCard(onClick = { expanded = true }) {
-            // 同 MIUIX 分支：pointerInput 挂在 Box（Popup 锚点）上，坐标与 Popup offset 同系
-            Box(
-                modifier = Modifier.pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            if (event.type == PointerEventType.Press) {
-                                pressOffset = event.changes.first().position
-                            }
-                        }
-                    }
-                }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = if (summary.isNullOrBlank()) M3RowMinHeight else M3TwoLineRowMinHeight)
-                        .padding(
-                            start = M3RowStartPadding,
-                            end = M3RowEndPadding,
-                            top = M3RowVerticalPadding,
-                            bottom = M3RowVerticalPadding
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    M3LeadingIcon(icon)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        if (!summary.isNullOrBlank()) {
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = summary,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    // 当前取值是这一行的「结论」：用主题强调色标出，与只读信息行的次要色区分开，
-                    // 一眼能看出「这一行是可以改的，现在选的是它」
-                    Text(
-                        text = selectedLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                // 浮层以点击点为锚：作为 Box 子项，由 Popup 的 TopStart 对齐 + offset 定位到点击处
-                SesameSelectMenu(
-                    expanded = expanded,
-                    options = options,
+        // MD：改成**行内分段选择器**（与 mochi demo 主题页同款）—— 选项常驻可见、点一下即切，
+        // 不必先展开浮层。行本身是 mochi 原生行，能参与卡片的按压高亮与分隔线协作
+        // （原实现用 M3RowCard，在「一组一张卡」模式下会退化成裸行，拿不到这两项）。
+        // 不传 onClick：点击由分段控件自己处理，与 demo 的 Toggles 一致。
+        UiStyle.MATERIAL3 -> MochiListRow(
+            title = title,
+            // MD 不显示副标题：分段控件本身要占掉大半个行宽，再塞副标题会被挤成两行并截断
+            // （实测「跟随系统，或固定浅…」）。mochi demo 的分段行也是「标题 + 控件」，无副标题。
+            // MIUIX 分支照旧显示 summary（那边是下拉，不占行宽）。
+            subtitle = null,
+            // 分段宽度由「最长的一段文字」决定（库内部按内容测量），这里不写死；
+            // 若长文案把标题挤得过窄，再按 demo 的 settingsControlWidth 方案收紧上限。
+            trailing = {
+                MochiSegmentedControl(
                     selectedIndex = selectedIndex,
-                    width = menuWidth,
-                    onDismiss = dismiss,
                     onSelect = onSelect,
-                    anchorPx = pressOffset
+                    items = persistentListOf(*options.toTypedArray()),
+                    behavior = MochiSegmentedDefaults.behavior(height = 32.dp, segmentPadding = 12.dp),
                 )
             }
-        }
+        )
     }
 }
 
@@ -526,7 +500,7 @@ fun SesameSwitchRow(
                 subtitle = summary,
                 onClick = if (enabled) ({ onCheckedChange(!checked) }) else null,
                 enabled = enabled,
-                leading = if (icon != null) {
+                leading = if (!LocalSesameHideRowIcon.current && icon != null) {
                     { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 } else null,
                 leadingStyle = MochiListLeadingStyle.Symbol,
@@ -598,7 +572,7 @@ fun SesameSwitchRow(
                         ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    M3LeadingIcon(icon, enabled)
+                    if (!LocalSesameHideRowIcon.current) M3LeadingIcon(icon, enabled)
                     Column {
                         Text(
                             text = title,
