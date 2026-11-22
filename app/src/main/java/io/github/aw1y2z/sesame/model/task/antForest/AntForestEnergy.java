@@ -217,9 +217,12 @@ final class AntForestEnergy {
             long start = System.currentTimeMillis();
             userHomeObject = new JSONObject(AntForestRpcCall.queryHomePage());
             long end = System.currentTimeMillis();
-            long serverTime = userHomeObject.getLong("now");
-            // 对时偏差只反映本机时钟，喂给 offsetTimeMath 即可，不写日志
-            AntForestV2.offsetTimeMath.nextInteger((int) ((start + end) / 2 - serverTime));
+            // 网络异常应答可能不含 now，跳过本次对时即可，避免抛出 No value for now 堆栈
+            if (userHomeObject.has("now")) {
+                long serverTime = userHomeObject.getLong("now");
+                // 对时偏差只反映本机时钟，喂给 offsetTimeMath 即可，不写日志
+                AntForestV2.offsetTimeMath.nextInteger((int) ((start + end) / 2 - serverTime));
+            }
             //兼容组队模式
             if (AntForestTeam.isTeam(userHomeObject)) {
                 JSONObject teamHomeResult = userHomeObject.optJSONObject("teamHomeResult");
@@ -250,8 +253,11 @@ final class AntForestEnergy {
             long start = System.currentTimeMillis();
             userHomeObject = new JSONObject(AntForestRpcCall.queryFriendHomePage(userId));
             long end = System.currentTimeMillis();
-            long serverTime = userHomeObject.getLong("now");
-            AntForestV2.offsetTimeMath.nextInteger((int) ((start + end) / 2 - serverTime));
+            // 网络异常应答可能不含 now，跳过本次对时即可，避免抛出 No value for now 堆栈
+            if (userHomeObject.has("now")) {
+                long serverTime = userHomeObject.getLong("now");
+                AntForestV2.offsetTimeMath.nextInteger((int) ((start + end) / 2 - serverTime));
+            }
             // 对时偏差喂给 offsetTimeMath 即可，不写日志
         } catch (Throwable t) {
             Log.printStackTrace(t);
@@ -306,6 +312,10 @@ final class AntForestEnergy {
     JSONObject collectUserEnergy(String userId, JSONObject userHomeObject, String getType) {
         try {
             if (!MessageUtil.checkResultCode(TAG, userHomeObject)) {
+                return userHomeObject;
+            }
+            // 成功应答理论上必带 now；缺则视为异常应答直接跳过，避免抛堆栈或用错时间蹲点
+            if (!userHomeObject.has("now")) {
                 return userHomeObject;
             }
 

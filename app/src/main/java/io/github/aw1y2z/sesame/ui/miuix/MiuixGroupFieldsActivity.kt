@@ -6,7 +6,6 @@ import android.os.Bundle
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,9 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -29,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.data.ConfigV2
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ModelConfig
@@ -41,6 +36,8 @@ import io.github.aw1y2z.sesame.ui.theme.M3_PER_ITEM_CARDS
 import io.github.aw1y2z.sesame.ui.theme.SESAME_CARD_CORNER
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
 import io.github.aw1y2z.sesame.ui.theme.SesameLazyCompactTitleScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameSearchField
+import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.ui.theme.SesameText
 import io.github.aw1y2z.sesame.ui.theme.SesameTopBar
 import io.github.aw1y2z.sesame.ui.theme.UiStyle
@@ -51,12 +48,7 @@ import io.github.aw1y2z.sesame.ui.theme.sesameSurfaceContainer
 import io.github.aw1y2z.sesame.util.Log
 import io.github.aw1y2z.sesame.util.StringUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** 配置字段页（三级）：某分组下的全部配置字段，Intent 传入 userId 与 groupCode */
 class MiuixGroupFieldsActivity : MiuixBaseActivity() {
@@ -278,32 +270,13 @@ fun GroupFieldsContent(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextField(
+                SesameSearchField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = "",
-                    modifier = Modifier.weight(1f),
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = "搜索",
-                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(start = 12.dp)
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            Text(
-                                "×",
-                                fontSize = 16.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier.padding(end = 12.dp).clickable { searchQuery = "" }
-                            )
-                        }
-                    }
+                    modifier = Modifier.weight(1f)
                 )
             }
             } // item(filter) 的 Column
@@ -311,12 +284,12 @@ fun GroupFieldsContent(
 
                 if (searchQuery.isNotBlank() && sections.isEmpty()) {
                     item {
-                        SmallTitle(text = "无匹配字段")
+                        SesameSectionTitle(text = "无匹配字段")
                     }
                 }
                 items(sections.size) { index ->
                     val (title, fields) = sections[index]
-                    title?.let { SmallTitle(text = it) }
+                    title?.let { SesameSectionTitle(text = it) }
                     CardColumn {
                         fields.forEach { fieldRow ->
                             // 按行唯一 key 分组：依赖子行增删后下方行会重排，

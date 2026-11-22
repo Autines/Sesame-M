@@ -1,5 +1,7 @@
 package io.github.aw1y2z.sesame.ui.theme
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,14 +19,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -241,16 +236,19 @@ fun SesameCompactTitleScaffold(
     }
 }
 
-/** 大标题脚手架的返回按钮（MD 顶栏槽），复用与 SesameTopBar MD 分支一致的图标/配色。 */
+/**
+ * 大标题脚手架的返回按钮（MD 顶栏槽）。
+ *
+ * 按 mochi 官方规范（`MochiLargeTitle.kt` 注释）：大标题页顶栏放 `MochiBackButton`——
+ * 44dp 圆形胶囊 + 描边 ‹ 箭头，左右离屏 16dp 与卡片外边对齐。原本这里自绘 Material
+ * 实心箭头 + 普通 IconButton，是方案A前的遗留，与关于页（已用 MochiBackButton）观感不一致。
+ *
+ * 🔴 必须传 `onClick = onBack`：MochiBackButton 内部 back() 优先调 onClick，
+ * 传了就不再自己 pop / 不再触发系统返回 → 沿用调用方既有的返回行为，不会双重返回。
+ */
 @Composable
 private fun SesameTitleBackIcon(onBack: () -> Unit) {
-    IconButton(onClick = onBack) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "返回",
-            tint = MaterialTheme.colorScheme.onSurface
-        )
-    }
+    ui.feice.mochi.navigation.MochiBackButton(onClick = onBack)
 }
 
 /**
@@ -279,11 +277,11 @@ private fun RowScope.SesameTitleActions(
     data class BarAction(val icon: ImageVector, val desc: String, val tint: Color, val onClick: () -> Unit)
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
     val built = buildList {
-        if (onImport != null) add(BarAction(Icons.Filled.Upload, "导入", onSurfaceVariantColor, onImport))
-        if (onExport != null) add(BarAction(Icons.Filled.Upload, "导出", onSurfaceVariantColor, onExport))
-        if (onClear != null) add(BarAction(Icons.Filled.Delete, "删除", MaterialTheme.colorScheme.error, onClear))
-        if (onShare != null) add(BarAction(Icons.Filled.Share, "分享", onSurfaceVariantColor, onShare))
-        if (onExecute != null) add(BarAction(Icons.Filled.PlayArrow, "执行", MaterialTheme.colorScheme.primary, onExecute))
+        if (onImport != null) add(BarAction(sesameIconHere(SesameIcons.Upload), "导入", onSurfaceVariantColor, onImport))
+        if (onExport != null) add(BarAction(sesameIconHere(SesameIcons.Upload), "导出", onSurfaceVariantColor, onExport))
+        if (onClear != null) add(BarAction(sesameIconHere(SesameIcons.Trash), "删除", MaterialTheme.colorScheme.error, onClear))
+        if (onShare != null) add(BarAction(sesameIconHere(SesameIcons.Share), "分享", onSurfaceVariantColor, onShare))
+        if (onExecute != null) add(BarAction(sesameIconHere(SesameIcons.Play), "执行", MaterialTheme.colorScheme.primary, onExecute))
     }
     when (built.size) {
         0 -> Unit

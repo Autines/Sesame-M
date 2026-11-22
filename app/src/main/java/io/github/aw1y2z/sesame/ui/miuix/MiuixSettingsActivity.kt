@@ -1,5 +1,7 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import android.content.Context
 import android.content.Intent
 import io.github.aw1y2z.sesame.ui.HostBridge
@@ -17,11 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Backup
-import androidx.compose.material.icons.outlined.Restore
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +45,7 @@ import io.github.aw1y2z.sesame.ui.theme.SesameCompactTitleScaffold
 import io.github.aw1y2z.sesame.ui.theme.SesameExpandRow
 import io.github.aw1y2z.sesame.ui.theme.SesameInlineEditor
 import io.github.aw1y2z.sesame.ui.theme.SesameRadioListRow
+import io.github.aw1y2z.sesame.ui.theme.SesameSearchField
 import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.ui.theme.SesameSwitchRow
 import io.github.aw1y2z.sesame.ui.theme.SesameText
@@ -70,13 +68,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MiuixSettingsActivity : MiuixBaseActivity() {
 
@@ -305,36 +299,17 @@ internal fun SettingsContent(
         val hits = remember(query) {
             if (query.isEmpty()) emptyList() else buildFieldHits(query)
         }
-            // 搜索框：与三级/四级页同款
+            // 搜索框：与三级/四级页同款（SesameSearchField，MD 下= mochi 规范胶囊搜索栏）
             Row(
                 Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextField(
+                SesameSearchField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = "",
-                    modifier = Modifier.weight(1f),
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = "搜索",
-                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(start = 12.dp)
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            Text(
-                                "×",
-                                fontSize = 16.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier.padding(end = 12.dp).clickable { searchQuery = "" }
-                            )
-                        }
-                    }
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -350,7 +325,7 @@ internal fun SettingsContent(
                             SesameClickRow(
                                 title = hit.field.name ?: hit.field.code,
                                 summary = hit.modelName,
-                                icon = groupIconOf(hit.groupCode),
+                                icon = groupIconOf(context, hit.groupCode),
                                 onClick = { onOpenFieldHit(hit) }
                             )
                         }
@@ -364,7 +339,7 @@ internal fun SettingsContent(
                         if (Model.getGroupModelConfig(g).isNotEmpty()) {
                             SesameClickRow(
                                 title = g.getName(),
-                                icon = groupIconOf(g.getCode()),
+                                icon = groupIconOf(context, g.getCode()),
                                 onClick = { onOpenGroup(g.name) }
                             )
                         }
@@ -379,13 +354,13 @@ internal fun SettingsContent(
                 SesameClickRow(
                     title = "完整备份",
                     summary = "导出全部配置为 .zip（含设置项与所有账号）",
-                    icon = Icons.Outlined.Backup,
+                    icon = sesameIconHere(SesameIcons.Archive),
                     onClick = { exportBackupLauncher.launch(fullBackupFileName()) }
                 )
                 SesameClickRow(
                     title = "从备份恢复",
                     summary = "选择之前导出的 .zip，覆盖还原全部配置",
-                    icon = Icons.Outlined.Restore,
+                    icon = sesameIconHere(SesameIcons.Refresh),
                     onClick = { restoreLauncher.launch("*/*") }
                 )
             }
@@ -394,7 +369,7 @@ internal fun SettingsContent(
                 SesameClickRow(
                     title = "导出当前账号配置",
                     summary = "仅模块配置 .json，用于分享或替换单个账号",
-                    icon = Icons.Outlined.Share,
+                    icon = sesameIconHere(SesameIcons.Share),
                     onClick = {
                         exportConfigLauncher.launch("[" + (userId ?: "默认") + "]-config_v2.json")
                     }
@@ -404,7 +379,7 @@ internal fun SettingsContent(
                 SesameClickRow(
                     title = "导入当前账号配置",
                     summary = "选择 .json，覆盖当前账号的模块配置",
-                    icon = Icons.Outlined.Restore,
+                    icon = sesameIconHere(SesameIcons.Refresh),
                     onClick = { importLauncher.launch("*/*") }
                 )
             }

@@ -1,13 +1,11 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DirectionsWalk
-import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,7 +87,7 @@ fun ExtensionsScreen(
                 forestButtons.forEach { (label, pair) ->
                     SesameClickRow(
                         title = label,
-                        icon = Icons.Outlined.Search,
+                        icon = sesameIconHere(SesameIcons.Search),
                         onClick = {
                             onSend(pair.first, pair.second, null)
                             ToastUtil.show(context, "已发送查询请求，请在森林日志查看结果！")
@@ -100,19 +98,19 @@ fun ExtensionsScreen(
             SesameCardGroup(header = "自定义走路路径") {
                 SesameClickRow(
                     title = "设置自定义走路路径(list)",
-                    icon = Icons.Outlined.DirectionsWalk,
+                    icon = sesameIconHere(SesameIcons.Walk),
                     onClick = { inputMode = "list"; inputText = "" }
                 )
                 SesameClickRow(
                     title = "设置自定义走路路径(queue)",
-                    icon = Icons.Outlined.DirectionsWalk,
+                    icon = sesameIconHere(SesameIcons.Walk),
                     onClick = { inputMode = "queue"; inputText = "" }
                 )
             }
             SesameCardGroup(header = "其他") {
                 SesameClickRow(
                     title = "清空光盘行动图片",
-                    icon = Icons.Outlined.Image,
+                    icon = sesameIconHere(SesameIcons.Image),
                     onClick = { showDishDialog = true }
                 )
             }

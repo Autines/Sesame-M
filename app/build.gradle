@@ -188,4 +188,7 @@ dependencies {
     // iOS 25/26 的液态玻璃配方（iosMaterials）：底栏液态玻璃开关用它构造 MochiMaterials.bar，
     // 手搓 MochiGlassRecipe（blur/refraction/dispersion/…) 既难对齐也难维护。
     implementation "io.github.feice11:mochi-ios:0.3.0"
+    // 内置 Ionicons 图标集（515 个图标，Outline/Filled/Sharp 三种画法）。
+    // mochi 官方规范要求图标一律用 MochiIonicon，不要用 Material Icons。
+    implementation "io.github.feice11:mochi-icons:0.3.0"
 }

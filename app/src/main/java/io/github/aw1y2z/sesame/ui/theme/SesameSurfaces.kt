@@ -536,12 +536,16 @@ fun SesameStatusCard(
                             color = label
                         )
                         if (lines.isNotEmpty()) {
+                            // 每条独立成行 —— 不用 " · " 把多条事实粘成一行
+                            // （mochi 规范明令：不要用 "·" 粘合两个事实）。
                             Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = lines.joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = secondary
-                            )
+                            lines.forEach { line ->
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = secondary
+                                )
+                            }
                         }
                     }
                     if (activated && icon != null) {

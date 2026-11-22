@@ -1,15 +1,5 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
-import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
-import androidx.core.content.FileProvider
-import androidx.lifecycle.Lifecycle
-import java.io.RandomAccessFile
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.withContext
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -25,13 +15,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Upload
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,21 +26,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
 import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.Model
 import io.github.aw1y2z.sesame.data.ModelGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
-import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.SesameFilterChip
 import io.github.aw1y2z.sesame.ui.theme.SesameLogCard
 import io.github.aw1y2z.sesame.ui.theme.SesameRunCard
 import io.github.aw1y2z.sesame.ui.theme.SesameSearchField
 import io.github.aw1y2z.sesame.ui.theme.SesameTopBar
+import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
 import io.github.aw1y2z.sesame.ui.theme.sesameSurface
 import io.github.aw1y2z.sesame.util.FileUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Scaffold
 import java.io.File
+import java.io.RandomAccessFile
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
 
 /**
  * 二级日志页支持的日志类型。
@@ -648,9 +641,9 @@ fun LogScreen(
         // 改由 LazyColumn 的 contentPadding 承担（内容因此能滚进空白区）。
         Column(
             Modifier.fillMaxSize().padding(
-                top = padding.calculateTopPadding(),
-                bottom = 0.dp
-            )
+                    top = padding.calculateTopPadding(),
+                    bottom = 0.dp
+                )
         ) {
             // ── 搜索框 ──────────────────────────────────────────────────
             Row(

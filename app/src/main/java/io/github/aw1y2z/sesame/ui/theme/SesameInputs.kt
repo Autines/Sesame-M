@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,13 +30,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
+import kotlinx.collections.immutable.persistentListOf
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
@@ -59,7 +59,7 @@ import ui.feice.mochi.basic.MochiSearchBar
 import ui.feice.mochi.basic.MochiSlider
 import ui.feice.mochi.list.MochiListLeadingStyle
 import ui.feice.mochi.list.MochiListRow
-import kotlinx.collections.immutable.persistentListOf
+
 
 /* ───────────────────────── 输入控件 / Chip / 对话框 ─────────────────────────
  * 本文件是「风格无关 UI 组件集」的一部分（整体约定与分层说明见 SesameFoundation.kt 顶部）。
@@ -89,7 +89,7 @@ fun SesameSearchField(
             modifier = modifier,
             leadingIcon = {
                 MiuixIcon(
-                    imageVector = Icons.Filled.Search,
+                    imageVector = sesameIconHere(SesameIcons.Search),
                     contentDescription = "搜索",
                     tint = sesameOnSurfaceVariant(),
                     modifier = Modifier.padding(start = 12.dp)

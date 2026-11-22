@@ -11,24 +11,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.ui.semantics.Role
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,24 +32,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
 import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem as MiuixNavigationBarItem
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
-
-// 悬浮玻璃 dock（液态玻璃底栏）：库 API 见 https://github.com/Kyant0/AndroidLiquidGlass
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.unit.Dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.BackdropEffectScope
 import com.kyant.backdrop.drawBackdrop
@@ -65,6 +58,11 @@ import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import ui.feice.mochi.icons.MochiIconStyle
+import ui.feice.mochi.icons.MochiIonicon
+
+
+// 悬浮玻璃 dock（液态玻璃底栏）：库 API 见 https://github.com/Kyant0/AndroidLiquidGlass
 
 /* ───────────────────────── 底部导航 / 顶部栏 ─────────────────────────
  * 本文件是「风格无关 UI 组件集」的一部分（整体约定与分层说明见 SesameFoundation.kt 顶部）。
@@ -73,8 +71,19 @@ import com.kyant.backdrop.highlight.Highlight
  */
 /* ───────────────────────── 底部导航 ───────────────────────── */
 
-/** 底部导航项 */
-data class SesameNavItem(val icon: ImageVector, val label: String)
+/**
+ * 底部导航项。
+ *
+ * - [icon]：MIUIX 分支用 —— `MiuixNavigationBarItem` 的图标参数是非空 `ImageVector`，
+ *   库内部直接画这个矢量，没法换成 composable 插槽。
+ * - [iconName]：MD 分支用 —— Ionicons 图标名，由 [ui.feice.mochi.icons.MochiIonicon] 画。
+ *   MD 侧刻意走 composable 插槽：描边粗细能跟着主题的符号字重变，且不必预先解析矢量。
+ */
+data class SesameNavItem(
+    val icon: ImageVector,
+    val label: String,
+    val iconName: String = ""
+)
 
 /**
  * 底部导航栏。
@@ -170,12 +179,25 @@ fun SesameNavBar(
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = item.icon,
-                                    contentDescription = item.label,
-                                    tint = contentColor,
-                                    modifier = Modifier.size(M3NavBarIconSize)
-                                )
+                                // MD 分支用 Ionicons（mochi 官方图标集）；iconName 缺省时
+                                // 回落到预解析的矢量，保证老调用点不空。
+                                if (item.iconName.isNotEmpty()) {
+                                    MochiIonicon(
+                                        name = item.iconName,
+                                        tint = contentColor,
+                                        size = M3NavBarIconSize,
+                                        contentDescription = item.label,
+                                        style = if (isSelected) MochiIconStyle.Filled
+                                                else MochiIconStyle.Outline
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = item.icon,
+                                        contentDescription = item.label,
+                                        tint = contentColor,
+                                        modifier = Modifier.size(M3NavBarIconSize)
+                                    )
+                                }
                             }
                             // 图标与文字贴紧：间距 0 + 文字行高压到等于字号。
                             // ⚠️ 这两样必须**一起**做 ——
@@ -258,12 +280,22 @@ private fun CompactNavBar(
                         .clip(RoundedCornerShape(CompactNavIndicatorHeight / 2)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label,
-                        tint = contentColor,
-                        modifier = Modifier.size(M3NavBarIconSize)
-                    )
+                    if (item.iconName.isNotEmpty()) {
+                        MochiIonicon(
+                            name = item.iconName,
+                            tint = contentColor,
+                            size = M3NavBarIconSize,
+                            contentDescription = item.label,
+                            style = if (isSelected) MochiIconStyle.Filled else MochiIconStyle.Outline
+                        )
+                    } else {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.label,
+                            tint = contentColor,
+                            modifier = Modifier.size(M3NavBarIconSize)
+                        )
+                    }
                 }
                 Spacer(Modifier.height(CompactNavIconLabelGap))
                 Text(
@@ -468,7 +500,7 @@ fun SesameTopBar(
             ) {
                 MiuixIconButton(onClick = onBack) {
                     MiuixIcon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = sesameIconHere(SesameIcons.ArrowBack),
                         contentDescription = "返回",
                         tint = sesameOnSurface()
                     )
@@ -487,7 +519,7 @@ fun SesameTopBar(
                 if (onImport != null) {
                     MiuixIconButton(onClick = onImport) {
                         MiuixIcon(
-                            imageVector = Icons.Filled.Upload,
+                            imageVector = sesameIconHere(SesameIcons.Upload),
                             contentDescription = "导入",
                             tint = sesameOnSurface(),
                             modifier = Modifier.rotate(180f)
@@ -497,7 +529,7 @@ fun SesameTopBar(
                 if (onExport != null) {
                     MiuixIconButton(onClick = onExport) {
                         MiuixIcon(
-                            imageVector = Icons.Filled.Upload,
+                            imageVector = sesameIconHere(SesameIcons.Upload),
                             contentDescription = "导出",
                             tint = sesameOnSurface()
                         )
@@ -506,7 +538,7 @@ fun SesameTopBar(
                 if (onClear != null) {
                     MiuixIconButton(onClick = onClear) {
                         MiuixIcon(
-                            imageVector = Icons.Filled.Delete,
+                            imageVector = sesameIconHere(SesameIcons.Trash),
                             contentDescription = "删除",
                             tint = sesameOnSurface()
                         )
@@ -515,7 +547,7 @@ fun SesameTopBar(
                 if (onShare != null) {
                     MiuixIconButton(onClick = onShare) {
                         MiuixIcon(
-                            imageVector = Icons.Filled.Share,
+                            imageVector = sesameIconHere(SesameIcons.Share),
                             contentDescription = "分享",
                             tint = sesameOnSurface()
                         )
@@ -524,7 +556,7 @@ fun SesameTopBar(
                 if (onExecute != null) {
                     MiuixIconButton(onClick = onExecute) {
                         MiuixIcon(
-                            imageVector = Icons.Filled.PlayArrow,
+                            imageVector = sesameIconHere(SesameIcons.Play),
                             contentDescription = "执行",
                             tint = sesameOnSurface()
                         )
@@ -548,9 +580,12 @@ fun SesameTopBar(
                         .padding(start = 4.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // 裸 Scaffold 页面（日志页等）的返回按钮：用普通 IconButton + Ionicons 箭头。
+                    // 不要在这里用 MochiBackButton / 注入 backdrop —— 裸页面缺 mochi 脚手架的
+                    // 玻璃 backdrop 环境，实测会在 RenderThread 触发 libhwui SIGSEGV 闪退（2026-11-20）。
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = sesameIconHere(SesameIcons.ArrowBack),
                             contentDescription = "返回",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
@@ -568,7 +603,7 @@ fun SesameTopBar(
                     if (onImport != null) {
                         IconButton(onClick = onImport) {
                             Icon(
-                                imageVector = Icons.Filled.Upload,
+                                imageVector = sesameIconHere(SesameIcons.Upload),
                                 contentDescription = "导入",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.rotate(180f)
@@ -578,7 +613,7 @@ fun SesameTopBar(
                     if (onExport != null) {
                         IconButton(onClick = onExport) {
                             Icon(
-                                imageVector = Icons.Filled.Upload,
+                                imageVector = sesameIconHere(SesameIcons.Upload),
                                 contentDescription = "导出",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -587,7 +622,7 @@ fun SesameTopBar(
                     if (onClear != null) {
                         IconButton(onClick = onClear) {
                             Icon(
-                                imageVector = Icons.Filled.Delete,
+                                imageVector = sesameIconHere(SesameIcons.Trash),
                                 contentDescription = "删除",
                                 tint = MaterialTheme.colorScheme.error
                             )
@@ -596,7 +631,7 @@ fun SesameTopBar(
                     if (onShare != null) {
                         IconButton(onClick = onShare) {
                             Icon(
-                                imageVector = Icons.Filled.Share,
+                                imageVector = sesameIconHere(SesameIcons.Share),
                                 contentDescription = "分享",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -605,7 +640,7 @@ fun SesameTopBar(
                     if (onExecute != null) {
                         IconButton(onClick = onExecute) {
                             Icon(
-                                imageVector = Icons.Filled.PlayArrow,
+                                imageVector = sesameIconHere(SesameIcons.Play),
                                 contentDescription = "执行",
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -613,6 +648,43 @@ fun SesameTopBar(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 顶栏 `actions` 槽里的单个图标按钮（风格无关）。
+ *
+ * [SesameTopBar] 的 actions 是调用方原样塞进来的 composable，不会被顶层按风格包装；
+ * 因此页面若要往里放图标按钮，必须用本组件，否则 MIUIX 页面在 MD 风格下会露出
+ * miuix 的按钮（波纹/尺寸/取色都不同），表现为「顶栏里混进一个异类按钮」。
+ *
+ * - MIUIX：miuix `IconButton` + `onBackground`；
+ * - MATERIAL3：material3 `IconButton` + `onSurface`（与顶栏内置按钮同款）。
+ *
+ * 图标统一走 Ionicons，与顶栏其余按钮同源。
+ */
+@Composable
+fun SesameActionIconButton(
+    iconName: String,
+    contentDescription: String?,
+    onClick: () -> Unit
+) {
+    if (LocalUiStyle.current == UiStyle.MIUIX) {
+        MiuixIconButton(onClick = onClick) {
+            MiuixIcon(
+                imageVector = sesameIconHere(iconName),
+                contentDescription = contentDescription,
+                tint = sesameOnSurface()
+            )
+        }
+    } else {
+        IconButton(onClick = onClick) {
+            Icon(
+                imageVector = sesameIconHere(iconName),
+                contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
@@ -658,7 +730,7 @@ fun SesamePermissionNotice(onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Filled.WarningAmber,
+                imageVector = sesameIconHere(SesameIcons.Warning),
                 contentDescription = null,
                 tint = accent,
                 modifier = Modifier.size(20.dp)

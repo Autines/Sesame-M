@@ -1,5 +1,7 @@
 package io.github.aw1y2z.sesame.ui.theme
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -12,14 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -136,6 +137,18 @@ internal val M3LeadingIconGap = 16.dp
  */
 private val M3SectionTitleTopPadding = 0.dp
 private val M3SectionTitleBottomPadding = 10.dp
+
+/**
+ * 一级 Tab（首页/日志/配置/设置）的小标题顶部额外留白。
+ *
+ * 一级 Tab 的脚手架显式设了 `contentSpacing = 0.dp`（关掉 mochi 默认 28dp 组间距），
+ * 组间距全靠小标题自己的 padding 兜；而 [M3SectionTitleTopPadding] 为 0（原本假设脚手架
+ * 会给 28dp），两处叠加导致小标题直接贴死上方卡片。二级页用脚手架默认 28dp，不受影响。
+ *
+ * 默认值 0 → 所有页面行为不变；只有 MD 一级 Tab 通过 CompositionLocalProvider 下发正值。
+ * MIUIX 分支渲染 MiuixSmallTitle，根本不读这个值，天然不受影响。
+ */
+val LocalSectionTitleTopGap = compositionLocalOf { 0.dp }
 
 /** 行尾图标尺寸（MD3 的 chevron 视觉尺寸） */
 internal val M3TrailingIconSize = 20.dp
@@ -354,7 +367,8 @@ fun SesameSectionTitle(text: String) {
         UiStyle.MATERIAL3 -> Box(
             Modifier.padding(
                 start = 0.dp,
-                top = M3SectionTitleTopPadding,
+                // 一级 Tab 注入额外顶部留白，避免小标题贴死上方卡片；其它页面默认 0 不变。
+                top = M3SectionTitleTopPadding + LocalSectionTitleTopGap.current,
                 bottom = M3SectionTitleBottomPadding
             )
         ) {
@@ -420,14 +434,14 @@ fun SesameExpandableSectionTitle(text: String, expanded: Boolean, onToggle: () -
             // 与 SesameRows 的惯例一致：MIUIX 走库图标、M3 走 material3 图标，
             // 避免在 Miuix 主题下依赖 MaterialTheme 是否可用
             UiStyle.MIUIX -> MiuixIcon(
-                imageVector = Icons.Outlined.ExpandMore,
+                imageVector = sesameIconHere(SesameIcons.ChevronDown),
                 contentDescription = desc,
                 tint = tint,
                 modifier = arrow
             )
 
             UiStyle.MATERIAL3 -> Icon(
-                imageVector = Icons.Outlined.ExpandMore,
+                imageVector = sesameIconHere(SesameIcons.ChevronDown),
                 contentDescription = desc,
                 tint = tint,
                 modifier = arrow

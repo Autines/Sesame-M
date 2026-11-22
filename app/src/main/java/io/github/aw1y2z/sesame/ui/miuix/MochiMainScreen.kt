@@ -1,5 +1,7 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -12,11 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -46,6 +43,7 @@ import io.github.aw1y2z.sesame.ui.miuix.tabs.ConfigTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.HomeTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.LogsTab
 import io.github.aw1y2z.sesame.ui.miuix.tabs.SettingsTab
+import io.github.aw1y2z.sesame.ui.theme.LocalSectionTitleTopGap
 import io.github.aw1y2z.sesame.ui.theme.LocalSesameHideRowIcon
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
@@ -60,6 +58,8 @@ import io.github.aw1y2z.sesame.ui.theme.sesamePrimary
 import kotlinx.collections.immutable.persistentListOf
 import ui.feice.mochi.basic.MochiTabBarDefaults
 import ui.feice.mochi.basic.MochiTabItem
+import ui.feice.mochi.icons.MochiIconStyle
+import ui.feice.mochi.icons.MochiIonicon
 import ui.feice.mochi.navigation.MochiBackButton
 import ui.feice.mochi.navigation.MochiLargeTitleScaffold
 import ui.feice.mochi.navigation.MochiNavHost
@@ -214,12 +214,14 @@ private fun MochiHomeRoute(
     onOpenLog: (LogType) -> Unit,
     onOpenSettings: (userId: String?) -> Unit,
 ) {
+    // 图标槽本身就是 composable（见 mochiTab），这里只给 Ionicons 图标名即可，
+    // 不需要预先解析成 ImageVector —— 也就没有可空性和 remember 作用域的问题。
     val tabs = remember {
         persistentListOf(
-            mochiTab("首页", Icons.Filled.Home),
-            mochiTab("日志", Icons.Filled.Description),
-            mochiTab("配置", Icons.Filled.Tune),
-            mochiTab("设置", Icons.Filled.Settings),
+            mochiTab("首页", SesameIcons.Home),
+            mochiTab("日志", SesameIcons.Document),
+            mochiTab("配置", SesameIcons.Options),
+            mochiTab("设置", SesameIcons.Settings),
         )
     }
     val tabState = rememberMochiTabScaffoldState()
@@ -248,6 +250,11 @@ private fun MochiHomeRoute(
             // 12dp：8dp 实测偏挤（大标题与首个分组标题几乎粘连），按 4K 截图视感上调一档。
             // 只补一次、作用于所有 Tab（脚手架 content 的直接首元素），不动各组已有的间距节奏。
             Spacer(Modifier.height(12.dp))
+            // contentSpacing=0 关掉了 mochi 默认 28dp 组间距，小标题上方只能靠自己的 padding 兜；
+            // 而小标题 M3SectionTitleTopPadding=0（原假设脚手架会给 28dp）→ 贴死上方卡片。
+            // 这里给一级 Tab 的小标题补 20dp 顶部留白（约等于 mochi HeaderGap 的两档），
+            // 二级页走脚手架默认 28dp、不进这个 Provider，不会叠加翻倍。
+            CompositionLocalProvider(LocalSectionTitleTopGap provides 20.dp) {
             when (page) {
                 0 -> {
                     HomeTab(activity)
@@ -275,14 +282,37 @@ private fun MochiHomeRoute(
                     )
                 }
             }
+            }
         }
     }
 }
 
-private fun mochiTab(label: String, icon: ImageVector) = MochiTabItem(
+/**
+ * 底栏 Tab 项：图标用 mochi 官方的 Ionicons（`MochiIonicon`）。
+ *
+ * `MochiTabItem` 的图标槽本身就是 composable lambda，所以**不用**先把图标解析成
+ * `ImageVector` 再传进来 —— 直接在槽里画，既省一次解析，也让描边粗细能跟着
+ * 主题的符号字重走。
+ */
+private fun mochiTab(label: String, iconName: String) = MochiTabItem(
     label = label,
-    icon = { tint -> Icon(icon, contentDescription = label, tint = tint) },
-    selectedIcon = { tint -> Icon(icon, contentDescription = label, tint = tint) },
+    icon = { tint ->
+        MochiIonicon(
+            name = iconName,
+            tint = tint,
+            size = 24.dp,
+            contentDescription = label
+        )
+    },
+    selectedIcon = { tint ->
+        MochiIonicon(
+            name = iconName,
+            tint = tint,
+            size = 24.dp,
+            contentDescription = label,
+            style = MochiIconStyle.Filled
+        )
+    },
 )
 
 /** 关于页（mochi route 版）：用 MochiBackButton 返回，不依赖 Activity.finish()。 */
@@ -323,7 +353,8 @@ private fun MochiAboutRoute(onBack: () -> Unit) {
                     )
                     SesameClickRow(
                         title = "用户协议",
-                        summary = "条款版本 ${Agreement.VERSION} · " +
+                        // 两个事实各自一行，不用 "·" 粘在一起（mochi 规范明令禁止）
+                        summary = "条款版本 ${Agreement.VERSION}\n" +
                             (Agreement.acceptedAtText()?.let { "同意于 $it" } ?: "未记录同意时间"),
                         onClick = { openWebUrl(context, TERMS_URL) },
                     )

@@ -1,5 +1,7 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconOf
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -31,11 +33,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import io.github.aw1y2z.sesame.ui.theme.SesameTabPager
 import io.github.aw1y2z.sesame.ui.theme.sesameFlingBehavior
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -465,15 +462,45 @@ class MiuixMainActivity : MiuixBaseActivity() {
  * （顶栏标题的 `pageTitles`、导航项的 `SesameNavItem` 列表、两处 `when (page)` 的滚动状态映射、
  * 以及 `rememberPagerState { 4 }` 里的硬编码页数），全部靠"顺序对上"隐式维持；
  * 将来插一页、换一次顺序，漏改任何一处都会静默错位。
+ *
+ * ⚠️ 这里存的是 **Ionicons 图标名**而不是 `ImageVector`：图标矢量要读 assets 里的
+ * 图标资源、必须靠 `Context` 解析，因此顶层常量不能直接持有它；
+ * 真正取矢量交给 [mainTabs]，在 composable 里用 `remember` 缓存。
  */
-private data class MainTab(val title: String, val label: String, val icon: ImageVector)
-
-private val MAIN_TABS = listOf(
-    MainTab(title = "Sesame-M", label = "首页", icon = Icons.Filled.Home),
-    MainTab(title = "日志", label = "日志", icon = Icons.Filled.Description),
-    MainTab(title = "配置", label = "配置", icon = Icons.Filled.Tune),
-    MainTab(title = "设置", label = "设置", icon = Icons.Filled.Settings)
+private data class MainTab(
+    val title: String,
+    val label: String,
+    val iconName: String,
+    /** 预解析的 Ionicons 矢量（MIUIX 分支用；解析失败时由 [mainTabs] 兜底，不会为 null） */
+    val icon: ImageVector? = null
 )
+private val MAIN_TABS = listOf(
+    MainTab(title = "Sesame-M", label = "首页", iconName = SesameIcons.Home),
+    MainTab(title = "日志", label = "日志", iconName = SesameIcons.Document),
+    MainTab(title = "配置", label = "配置", iconName = SesameIcons.Options),
+    MainTab(title = "设置", label = "设置", iconName = SesameIcons.Settings)
+)
+
+/**
+ * 一级页元数据 → 底部导航项。图标矢量在 composable 里解析并缓存
+ * （`MochiIonicons.vector` 内部有 LRU 缓存，同一图标不会重复解析路径）。
+ *
+ * MIUIX 的 `MiuixNavigationBarItem` 要的是**非空** `ImageVector`，所以解析失败时
+ * 不能给 null —— 依次退回备选图标（都是已校验存在的名字），实在不行才给空白矢量，
+ * 免得整条底栏出现一个没有图标的空槽。
+ */
+@Composable
+private fun mainTabs(): List<Pair<MainTab, ImageVector>> {
+    val context = LocalContext.current
+    return remember(context) {
+        MAIN_TABS.map { tab ->
+            val icon = sesameIconOf(context, tab.iconName)
+                ?: sesameIconOf(context, SesameIcons.Menu)
+                ?: ImageVector.Builder("fallback", 24.dp, 24.dp, 24f, 24f).build()
+            tab to icon
+        }
+    }
+}
 
 /**
  * 一级页面骨架：底部导航 + 可滚动内容区。
@@ -481,6 +508,9 @@ private val MAIN_TABS = listOf(
  */
 @Composable
 fun MainScreen(activity: MiuixMainActivity) {
+    // 一级页元数据（图标矢量在这里解析并缓存，见 mainTabs 注释）
+    val tabs = mainTabs()
+
     // 用 rememberSaveable：切换界面风格会 recreate() 重建整个页面，
     // 若用普通 remember，重建后这里会退回 0，用户刚点开的设置页又被弹回首页。
     // rememberSaveable 会随 Activity 的实例状态一起恢复，滚动位置同理（rememberScrollState 自带）。
@@ -577,8 +607,8 @@ fun MainScreen(activity: MiuixMainActivity) {
         topBar = {
             Column {
                 SesamePageTitleBar(
-                    // 标题与底部导航项同源（MAIN_TABS），不再各维护一份、靠顺序隐式对齐
-                    title = MAIN_TABS.getOrElse(selectedTab) { MAIN_TABS.first() }.title,
+                    // 标题与底部导航项同源（mainTabs），不再各维护一份、靠顺序隐式对齐
+                    title = tabs.getOrElse(selectedTab) { tabs.first() }.first.title,
                     scrolled = titleBarScrolled
                 )
                 // 没拿到存储权限时，任何设置都存不下来（界面还会回弹）——这是**功能不可用**级别的状态。
@@ -594,8 +624,11 @@ fun MainScreen(activity: MiuixMainActivity) {
         bottomBar = {
             val navBar: @Composable () -> Unit = {
                 SesameNavBar(
-                    // 图标 + 文案与顶栏标题同源，顺序即页码索引（见 MAIN_TABS 注释）
-                    items = MAIN_TABS.map { SesameNavItem(it.icon, it.label) },
+                    // 图标 + 文案与顶栏标题同源，顺序即页码索引（见 mainTabs 注释）
+                    // iconName 一起带上：MD 分支用 Ionicons 画，MIUIX 分支用预解析的矢量。
+                    items = tabs.map { (tab, icon) ->
+                        SesameNavItem(icon, tab.label, tab.iconName)
+                    },
                     // 选中态绑 selectedTab（点击即定为目标页，不会经过中间页闪烁）；
                     // 手指滑动时第二个 LaunchedEffect 会把 selectedTab 跟到当前页，高亮仍跟随手指。
                     selected = selectedTab,

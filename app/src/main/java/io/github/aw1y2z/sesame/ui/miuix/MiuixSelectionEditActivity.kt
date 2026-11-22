@@ -1,11 +1,12 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.SesameActionIconButton
 import android.content.Intent
 import io.github.aw1y2z.sesame.ui.HostBridge
 import android.os.Bundle
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
@@ -16,13 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.aw1y2z.sesame.data.ConfigV2
@@ -60,7 +54,6 @@ import io.github.aw1y2z.sesame.util.Log
 import io.github.aw1y2z.sesame.util.MessageUtil
 import io.github.aw1y2z.sesame.util.ToastUtil
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
 /** 选填编辑页（四级）：编辑 SELECT* 类型字段，Intent 传入 userId/groupCode/fieldCode/modelCode */
@@ -297,54 +290,48 @@ fun SelectionEditContent(
                 onBack = onBack,
                 actions = {
                     if (!single) {
-                        top.yukonga.miuix.kmp.basic.IconButton(onClick = {
-                            val added = filteredOptions.map { it.id }.filter { it !in sel }
-                            sel = sel + added
-                            var nc = counts
-                            added.forEach { id -> if (id !in nc) nc = nc + (id to (initialCounts[id] ?: defaultCount)) }
-                            counts = nc
-                            dirty = true
-                        }) {
-                            top.yukonga.miuix.kmp.basic.Icon(
-                                imageVector = Icons.Filled.SelectAll,
-                                contentDescription = "全选",
-                                tint = MiuixTheme.colorScheme.onBackground
-                            )
-                        }
-                        top.yukonga.miuix.kmp.basic.IconButton(onClick = {
-                            var ns = sel
-                            var nc = counts
-                            filteredOptions.forEach { opt ->
-                                if (opt.id in ns) {
-                                    ns = ns - opt.id
-                                } else {
-                                    ns = ns + opt.id
-                                    if (opt.id !in nc) nc = nc + (opt.id to (initialCounts[opt.id] ?: defaultCount))
-                                }
+                        SesameActionIconButton(
+                            iconName = SesameIcons.CheckAll,
+                            contentDescription = "全选",
+                            onClick = {
+                                val added = filteredOptions.map { it.id }.filter { it !in sel }
+                                sel = sel + added
+                                var nc = counts
+                                added.forEach { id -> if (id !in nc) nc = nc + (id to (initialCounts[id] ?: defaultCount)) }
+                                counts = nc
+                                dirty = true
                             }
-                            sel = ns
-                            counts = nc
-                            dirty = true
-                        }) {
-                            top.yukonga.miuix.kmp.basic.Icon(
-                                imageVector = Icons.Filled.FlipToBack,
-                                contentDescription = "反选",
-                                tint = MiuixTheme.colorScheme.onBackground
-                            )
-                        }
-                        top.yukonga.miuix.kmp.basic.IconButton(onClick = {
-                            // 取消本次操作：恢复进入时的勾选快照，不写盘并退出
-                            sel = selectedIds
-                            counts = selectedIds.associateWith { initialCounts[it] ?: defaultCount }
-                            dirty = false
-                            onBack()
-                        }) {
-                            top.yukonga.miuix.kmp.basic.Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = "取消",
-                                tint = MiuixTheme.colorScheme.onBackground
-                            )
-                        }
+                        )
+                        SesameActionIconButton(
+                            iconName = SesameIcons.SwapHorizontal,
+                            contentDescription = "反选",
+                            onClick = {
+                                var ns = sel
+                                var nc = counts
+                                filteredOptions.forEach { opt ->
+                                    if (opt.id in ns) {
+                                        ns = ns - opt.id
+                                    } else {
+                                        ns = ns + opt.id
+                                        if (opt.id !in nc) nc = nc + (opt.id to (initialCounts[opt.id] ?: defaultCount))
+                                    }
+                                }
+                                sel = ns
+                                counts = nc
+                                dirty = true
+                            }
+                        )
+                        SesameActionIconButton(
+                            iconName = SesameIcons.Close,
+                            contentDescription = "取消",
+                            onClick = {
+                                // 取消本次操作：恢复进入时的勾选快照，不写盘并退出
+                                sel = selectedIds
+                                counts = selectedIds.associateWith { initialCounts[it] ?: defaultCount }
+                                dirty = false
+                                onBack()
+                            }
+                        )
                     }
                 }
             )
@@ -391,11 +378,9 @@ fun SelectionEditContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false)
-                    // 先裁到圆角再画底；并且**不在这里加左右内边距**：
-                    // 行的文字缩进由行自身的 insideMargin 提供，行顶满卡片宽度后
-                    // 条目的按压效果才是通栏色带，否则会露出方框
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(28.dp))
+                    // 底色与圆角由 SesameListCard 自己按风格取（MIUIX=miuix surfaceContainer，
+                    // MD=M3 surfaceContainerHigh）。这里不再叠 miuix 色 background——
+                    // 那层在 MD 下会盖掉正确的 M3 卡片色，导致颜色与同页其它卡片不一致。
             ) {
                 LazyColumn(
                     state = lazyListState,

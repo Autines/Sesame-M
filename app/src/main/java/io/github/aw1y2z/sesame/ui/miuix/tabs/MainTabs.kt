@@ -1,10 +1,5 @@
 package io.github.aw1y2z.sesame.ui.miuix.tabs
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,30 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.BatteryAlert
-import androidx.compose.material.icons.outlined.BatterySaver
-import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.BugReport
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.Security
-import androidx.compose.material.icons.outlined.SwapVert
-import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material.icons.outlined.WifiTethering
-import androidx.compose.runtime.Composable
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,26 +28,40 @@ import io.github.aw1y2z.sesame.data.AppConfig
 import io.github.aw1y2z.sesame.data.RunType
 import io.github.aw1y2z.sesame.data.ViewAppInfo
 import io.github.aw1y2z.sesame.ui.miuix.CardColumn
+import io.github.aw1y2z.sesame.ui.miuix.LogType
+import io.github.aw1y2z.sesame.ui.miuix.MiuixAboutActivity
+import io.github.aw1y2z.sesame.ui.miuix.MiuixBlacklistActivity
+import io.github.aw1y2z.sesame.ui.miuix.MiuixExtensionsActivity
+import io.github.aw1y2z.sesame.ui.miuix.MiuixFriendStatsActivity
+import io.github.aw1y2z.sesame.ui.miuix.MiuixLogViewerActivity
 import io.github.aw1y2z.sesame.ui.miuix.MiuixMainActivity
+import io.github.aw1y2z.sesame.ui.miuix.MiuixSettingsActivity
+import io.github.aw1y2z.sesame.ui.miuix.groupIconOf
+import io.github.aw1y2z.sesame.ui.theme.LocalThemeReveal
+import io.github.aw1y2z.sesame.ui.theme.LocalUiStyle
 import io.github.aw1y2z.sesame.ui.theme.SesameCard
 import io.github.aw1y2z.sesame.ui.theme.SesameCardGroup
-import io.github.aw1y2z.sesame.ui.theme.SesameCounterText
 import io.github.aw1y2z.sesame.ui.theme.SesameClickRow
+import io.github.aw1y2z.sesame.ui.theme.SesameCounterText
 import io.github.aw1y2z.sesame.ui.theme.SesameExpandRow
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
 import io.github.aw1y2z.sesame.ui.theme.SesameInfoRow
 import io.github.aw1y2z.sesame.ui.theme.SesameInlineEditor
 import io.github.aw1y2z.sesame.ui.theme.SesameSectionTitle
 import io.github.aw1y2z.sesame.ui.theme.SesameSelectRow
 import io.github.aw1y2z.sesame.ui.theme.SesameStatusCard
 import io.github.aw1y2z.sesame.ui.theme.SesameSwitchRow
-import io.github.aw1y2z.sesame.ui.theme.LocalUiStyle
 import io.github.aw1y2z.sesame.ui.theme.SesameText
-import io.github.aw1y2z.sesame.ui.theme.sesameApplyThemeColor
-import io.github.aw1y2z.sesame.ui.theme.sesamePaletteStyle
-import io.github.aw1y2z.sesame.ui.theme.sesameSeedColor
+import io.github.aw1y2z.sesame.ui.theme.SesameTheme
 import io.github.aw1y2z.sesame.ui.theme.UiStyle
+import io.github.aw1y2z.sesame.ui.theme.sesameApplyTheme
+import io.github.aw1y2z.sesame.ui.theme.sesameApplyThemeColor
 import io.github.aw1y2z.sesame.ui.theme.sesameGroupHorizontalPadding
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import io.github.aw1y2z.sesame.ui.theme.sesameOnSurfaceVariant
+import io.github.aw1y2z.sesame.ui.theme.sesamePaletteStyle
+import io.github.aw1y2z.sesame.ui.theme.sesameRevealThemeChange
+import io.github.aw1y2z.sesame.ui.theme.sesameSeedColor
 import io.github.aw1y2z.sesame.util.FileUtil
 import io.github.aw1y2z.sesame.util.Log
 import io.github.aw1y2z.sesame.util.PermissionUtil
@@ -84,20 +71,14 @@ import io.github.aw1y2z.sesame.util.Statistics.TimeType
 import io.github.aw1y2z.sesame.util.ToastUtil
 import io.github.aw1y2z.sesame.util.idMap.UserIdMap
 import kotlinx.coroutines.delay
-import io.github.aw1y2z.sesame.ui.miuix.LogType
-import io.github.aw1y2z.sesame.ui.miuix.MiuixAboutActivity
-import io.github.aw1y2z.sesame.ui.miuix.MiuixBlacklistActivity
-import io.github.aw1y2z.sesame.ui.miuix.MiuixExtensionsActivity
-import io.github.aw1y2z.sesame.ui.miuix.MiuixFriendStatsActivity
-import io.github.aw1y2z.sesame.ui.miuix.MiuixLogViewerActivity
-import io.github.aw1y2z.sesame.ui.miuix.MiuixSettingsActivity
-import io.github.aw1y2z.sesame.ui.theme.LocalThemeReveal
-import io.github.aw1y2z.sesame.ui.theme.sesameApplyTheme
-import io.github.aw1y2z.sesame.ui.theme.sesameRevealThemeChange
-import io.github.aw1y2z.sesame.ui.theme.SesameTheme
-import io.github.aw1y2z.sesame.ui.miuix.groupIconOf
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import ui.feice.mochi.picker.MochiSeedPalette
 import ui.feice.mochi.theme.PaletteStyle
+
 
 /* ───────────────────────── 一级页的四个 Tab 页面实现 ─────────────────────────
  * 这些是**页面实现**（首页 / 日志 / 配置 / 设置），原先和 Activity 本体混在一个文件里。
@@ -117,7 +98,7 @@ fun HomeTab(activity: MiuixMainActivity) {
             "$version (${io.github.aw1y2z.sesame.BuildConfig.VERSION_CODE})",
             "API 102"
         ),
-        icon = Icons.Filled.CheckCircle
+        icon = sesameIconHere(SesameIcons.CheckCircle)
     )
 
     // 分组之间的垂直节奏由 SesameSectionTitle 自带的上下留白负责，
@@ -178,12 +159,21 @@ fun StatisticsTable(activity: MiuixMainActivity) {
             SesameText(text = pages[current].label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.weight(1f))
             if (pages.size > 1) {
-                // 明示这一块可以左右滑动，否则用户不知道还有别的账号
-                SesameText(
-                    text = "${current + 1}/${pages.size}  左右滑动",
-                    fontSize = 12.sp,
-                    color = sesameOnSurfaceVariant()
-                )
+                // 明示这一块可以左右滑动，否则用户不知道还有别的账号。
+                // 「当前第几个」和「操作提示」是两个事实，各占一行 ——
+                // 不用 "·"/空格把它们粘成一行（mochi 规范明令禁止）。
+                Column(horizontalAlignment = Alignment.End) {
+                    SesameText(
+                        text = "${current + 1}/${pages.size}",
+                        fontSize = 12.sp,
+                        color = sesameOnSurfaceVariant()
+                    )
+                    SesameText(
+                        text = "左右滑动切换账号",
+                        fontSize = 12.sp,
+                        color = sesameOnSurfaceVariant()
+                    )
+                }
             }
         }
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth()) { page ->
@@ -265,7 +255,7 @@ fun LogsTab(
         var debug by remember { mutableStateOf(AppConfig.INSTANCE.enableDebugLog ?: false) }
         SesameSwitchRow(
             title = "抓包记录",
-            icon = Icons.Outlined.WifiTethering,
+            icon = sesameIconHere(SesameIcons.Wifi),
             checked = debug,
             onCheckedChange = {
                 debug = it
@@ -279,7 +269,7 @@ fun LogsTab(
         var error by remember { mutableStateOf(AppConfig.INSTANCE.enableViewErrorLog ?: true) }
         SesameSwitchRow(
             title = "查看异常日志",
-            icon = Icons.Outlined.BugReport,
+            icon = sesameIconHere(SesameIcons.Bug),
             checked = error,
             onCheckedChange = {
                 error = it
@@ -293,7 +283,7 @@ fun LogsTab(
         var runtime by remember { mutableStateOf(AppConfig.INSTANCE.enableViewRuntimeLog ?: true) }
         SesameSwitchRow(
             title = "查看运行日志",
-            icon = Icons.Outlined.Terminal,
+            icon = sesameIconHere(SesameIcons.Terminal),
             checked = runtime,
             onCheckedChange = {
                 runtime = it
@@ -327,6 +317,8 @@ private fun CategoryRow(
     onOpenLog: (LogType) -> Unit,
 ) {
     val toggle = categoryToggleOf(entry)
+    // 分组图标从 Ionicons 资源解析，需要 Context（见 groupIconOf）
+    val context = LocalContext.current
     if (toggle == null) {
         // 没有分类文件、也就没有独立写入开关的分组（目前只有「AI答」：它只调 Log.record，
         // 日志落在运行日志里）。这里刻意**不放开关** —— 它唯一能配的是「查看运行日志」，
@@ -335,7 +327,7 @@ private fun CategoryRow(
         SesameClickRow(
             title = entry.displayName,
             summary = "日志随「运行日志」写入",
-            icon = groupIconOf(entry.groupCode.orEmpty()),
+            icon = groupIconOf(context, entry.groupCode.orEmpty()),
             onClick = { onOpenLog(entry) }
         )
         return
@@ -343,7 +335,7 @@ private fun CategoryRow(
     var enabled by remember { mutableStateOf(toggle.getValue()) }
     SesameSwitchRow(
         title = entry.displayName,
-        icon = groupIconOf(entry.groupCode.orEmpty()),
+        icon = groupIconOf(context, entry.groupCode.orEmpty()),
         checked = enabled,
         showArrow = false,
         onCheckedChange = {
@@ -499,7 +491,7 @@ fun ConfigTab(
             SesameClickRow(
                 title = title,
                 summary = summary,
-                icon = Icons.Outlined.AccountCircle,
+                icon = sesameIconHere(SesameIcons.Account),
                 onClick = {
                     // MD 单Activity导航下走 route push；MIUIX 不传回调 → 仍走原 startActivity。
                     if (onOpenSettings != null) {
@@ -522,7 +514,7 @@ fun ConfigTab(
         SesameSwitchRow(
             title = "使用新接口",
             summary = "最低支持 v10.3.96.8100",
-            icon = Icons.Outlined.Sync,
+            icon = sesameIconHere(SesameIcons.Sync),
             checked = newRpc,
             onCheckedChange = {
                 AppConfig.INSTANCE.newRpc = it
@@ -535,7 +527,7 @@ fun ConfigTab(
         var showToast by remember { mutableStateOf(AppConfig.INSTANCE.showToast ?: true) }
         SesameSwitchRow(
             title = "气泡提示",
-            icon = Icons.Outlined.ChatBubbleOutline,
+            icon = sesameIconHere(SesameIcons.Chat),
             checked = showToast,
             onCheckedChange = {
                 AppConfig.INSTANCE.showToast = it
@@ -551,7 +543,7 @@ fun ConfigTab(
             title = "气泡纵向偏移",
             summary = "${if (toastOffsetY.isEmpty()) "0" else toastOffsetY} px（正数向下）",
             expandable = true,
-            icon = Icons.Outlined.SwapVert,
+            icon = sesameIconHere(SesameIcons.SwapVertical),
             onClick = { offsetExpanded = !offsetExpanded }
         )
         if (offsetExpanded) {
@@ -579,7 +571,7 @@ fun ConfigTab(
         var enableOnGoing by remember { mutableStateOf(AppConfig.INSTANCE.enableOnGoing ?: false) }
         SesameSwitchRow(
             title = "开启状态栏禁删",
-            icon = Icons.Outlined.Security,
+            icon = sesameIconHere(SesameIcons.Security),
             checked = enableOnGoing,
             onCheckedChange = {
                 AppConfig.INSTANCE.enableOnGoing = it
@@ -591,7 +583,7 @@ fun ConfigTab(
         var closeCaptchaDialog by remember { mutableStateOf(AppConfig.INSTANCE.closeCaptchaDialog ?: true) }
         SesameSwitchRow(
             title = "屏蔽部分弹窗",
-            icon = Icons.Outlined.Block,
+            icon = sesameIconHere(SesameIcons.Ban),
             checked = closeCaptchaDialog,
             onCheckedChange = {
                 AppConfig.INSTANCE.closeCaptchaDialog = it
@@ -686,7 +678,7 @@ fun SettingsTab(
         SesameSelectRow(
             title = "界面风格",
             summary = "选择应用的界面风格",
-            icon = Icons.Outlined.Palette,
+            icon = sesameIconHere(SesameIcons.Palette),
             options = UiStyle.entries.map { it.shortLabel },
             selectedIndex = UiStyle.entries.indexOf(uiStyle),
             onSelect = { index ->
@@ -703,7 +695,7 @@ fun SettingsTab(
         SesameSelectRow(
             title = "主题样式",
             summary = "跟随系统，或固定浅色 / 深色",
-            icon = Icons.Outlined.DarkMode,
+            icon = sesameIconHere(SesameIcons.Moon),
             // 三态由「跟随系统」+「深色模式」两个既有配置**组合**表达，不新增配置项：
             // 取色入口 SesameTheme.sesameIsDark 就是按这两个布尔算的，改数据模型只会徒增不兼容。
             options = THEME_MODE_LABELS,
@@ -734,7 +726,7 @@ fun SettingsTab(
         // onGlassEnabledChange 为空（例如被别处单独调用）时才退回 recreate 兜底。
         SesameSwitchRow(
             title = "底栏液态玻璃",
-            icon = Icons.Outlined.AutoAwesome,
+            icon = sesameIconHere(SesameIcons.Sparkles),
             // 不带副标题：原先写「iOS 26 风折射悬浮底栏（实验）」，
             // 既是实现细节（折射怎么做的）、又带"实验"字样容易让人不敢开，
             // 对用户没有决策价值 —— 开关叫什么、开了什么效果，看开关本身即可。
@@ -798,6 +790,9 @@ fun SettingsTab(
         }
         SesameCardGroup {
             MochiSeedPalette(
+                // 色板按卡片可用宽度等距铺满，首列/取色轮会贴到卡片边缘甚至视觉溢出；
+                // 补水平内缩进，与卡片内其它行的文字左边距对齐。
+                modifier = Modifier.padding(horizontal = 16.dp),
                 selected = seedState?.let { Color(it) },
                 onSelect = { color ->
                     val argb = color.toArgb()
@@ -820,7 +815,7 @@ fun SettingsTab(
     SesameCardGroup {
         SesameClickRow(
             title = "好友统计",
-            icon = Icons.Outlined.Groups,
+            icon = sesameIconHere(SesameIcons.People),
             onClick = {
                 if (onOpenFriendStats != null) onOpenFriendStats()
                 else context.startActivity(Intent(context, MiuixFriendStatsActivity::class.java))
@@ -828,7 +823,7 @@ fun SettingsTab(
         )
         SesameClickRow(
             title = "扩展功能",
-            icon = Icons.Outlined.Extension,
+            icon = sesameIconHere(SesameIcons.Extension),
             onClick = {
                 if (onOpenExtensions != null) onOpenExtensions()
                 else context.startActivity(Intent(context, MiuixExtensionsActivity::class.java))
@@ -837,7 +832,7 @@ fun SettingsTab(
         // 任务黑名单：把"模块自己拉黑了哪些任务"摊开给用户看（原先只在日志里，界面完全不可见）
         SesameClickRow(
             title = "任务黑名单",
-            icon = Icons.Outlined.Block,
+            icon = sesameIconHere(SesameIcons.Ban),
             onClick = {
                 if (onOpenBlacklist != null) onOpenBlacklist()
                 else context.startActivity(Intent(context, MiuixBlacklistActivity::class.java))
@@ -853,7 +848,7 @@ fun SettingsTab(
             SesameClickRow(
                 title = "申请文件权限",
                 summary = "模块需要文件权限才能正常运行",
-                icon = Icons.Outlined.FolderOpen,
+                icon = sesameIconHere(SesameIcons.Folder),
                 onClick = {
                     try {
                         PermissionUtil.checkOrRequestFilePermissions(activity)
@@ -867,7 +862,7 @@ fun SettingsTab(
         var iconHidden by remember { mutableStateOf(activity.isIconHidden()) }
         SesameSwitchRow(
             title = "隐藏图标",
-            icon = Icons.Outlined.VisibilityOff,
+            icon = sesameIconHere(SesameIcons.EyeOff),
             checked = iconHidden,
             onCheckedChange = {
                 activity.toggleHideIcon()
@@ -877,7 +872,7 @@ fun SettingsTab(
         var logViewByRun by remember { mutableStateOf(AppConfig.INSTANCE.logViewByRun ?: false) }
         SesameSwitchRow(
             title = "日志按轮次查看",
-            icon = Icons.Outlined.Terminal,
+            icon = sesameIconHere(SesameIcons.Terminal),
             checked = logViewByRun,
             summary = "按每轮「开始执行」把日志聚成一页，重进日志页生效",
             onCheckedChange = {
@@ -893,7 +888,7 @@ fun SettingsTab(
         var batteryPerm by remember { mutableStateOf(AppConfig.INSTANCE.batteryPerm ?: true) }
         SesameSwitchRow(
             title = "为支付宝申请后台运行权限",
-            icon = Icons.Outlined.BatterySaver,
+            icon = sesameIconHere(SesameIcons.BatteryCharging),
             checked = batteryPerm,
             onCheckedChange = {
                 AppConfig.INSTANCE.batteryPerm = it
@@ -911,7 +906,7 @@ fun SettingsTab(
             if (!hasPerm) {
                 SesameClickRow(
                     title = "立即申请权限",
-                    icon = Icons.Outlined.BatteryAlert,
+                    icon = sesameIconHere(SesameIcons.BatteryHalf),
                     onClick = {
                         try {
                             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -932,7 +927,7 @@ fun SettingsTab(
     SesameCardGroup {
         SesameClickRow(
             title = "关于应用",
-            icon = Icons.Outlined.Info,
+            icon = sesameIconHere(SesameIcons.Info),
             onClick = {
                 // 方案A：MD 单Activity导航下关于页是 route；MIUIX 仍走原 Activity。
                 if (onOpenAbout != null) onOpenAbout()

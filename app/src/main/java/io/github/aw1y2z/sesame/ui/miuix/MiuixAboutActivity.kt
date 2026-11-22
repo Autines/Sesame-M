@@ -1,5 +1,7 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -13,9 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Description
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,15 +86,16 @@ fun AboutScreen(activity: MiuixAboutActivity) {
                 SesameCardGroup {
                     SesameClickRow(
                         title = "在 GitHub 查看源码",
-                        icon = Icons.Outlined.Code,
+                        icon = sesameIconHere(SesameIcons.Code),
                         onClick = { openWebUrl(activity, "https://github.com/aw1y2z/Sesame-M") }
                     )
                     // 上游 v1.6.1：用户协议入口（同意时间只落在本机，这里回读展示）
                     SesameClickRow(
                         title = "用户协议",
-                        summary = "条款版本 ${Agreement.VERSION} · " +
+                        // 两个事实各自一行，不用 "·" 粘在一起（mochi 规范明令禁止）
+                        summary = "条款版本 ${Agreement.VERSION}\n" +
                                 (Agreement.acceptedAtText()?.let { "同意于 $it" } ?: "未记录同意时间"),
-                        icon = Icons.Outlined.Description,
+                        icon = sesameIconHere(SesameIcons.Document),
                         onClick = { openWebUrl(activity, TERMS_URL) }
                     )
                 }

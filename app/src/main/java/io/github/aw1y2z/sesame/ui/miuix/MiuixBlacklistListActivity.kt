@@ -1,10 +1,10 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import android.os.Bundle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -110,7 +110,7 @@ fun ListScreen(
                         SesameClickRow(
                             title = "全部解禁",
                             summary = "本列表 ${entries.size} 项",
-                            icon = Icons.Outlined.LockOpen,
+                            icon = sesameIconHere(SesameIcons.LockOpen),
                             onClick = { pendingReleaseAll = true }
                         )
                     }

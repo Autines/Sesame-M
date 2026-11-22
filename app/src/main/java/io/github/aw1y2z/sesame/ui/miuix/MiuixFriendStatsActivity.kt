@@ -1,5 +1,9 @@
 package io.github.aw1y2z.sesame.ui.miuix
 
+import androidx.compose.material3.MaterialTheme
+import io.github.aw1y2z.sesame.ui.theme.LocalUiStyle
+import io.github.aw1y2z.sesame.ui.theme.UiStyle
+import ui.feice.mochi.basic.MochiChip
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -17,8 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.aw1y2z.sesame.entity.FriendWatch
 import io.github.aw1y2z.sesame.ui.theme.SesameLazyDetailTitleScaffold
+import io.github.aw1y2z.sesame.ui.theme.SesameSearchField
 import io.github.aw1y2z.sesame.ui.theme.sesameSurface
 import io.github.aw1y2z.sesame.ui.theme.SesameEmptyState
 import io.github.aw1y2z.sesame.ui.theme.SesameListCard
@@ -42,9 +45,7 @@ import io.github.aw1y2z.sesame.util.Log
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** 待打开好友标记文件名，与宿主侧 ApplicationHook.PENDING_PROFILE_FILE 保持一致 */
@@ -162,37 +163,19 @@ fun FriendStatsScreen(
         item(key = "filter") {
             Column(Modifier.fillMaxWidth().background(sesameSurface())) {
             // ── 搜索框 ──────────────────────────────────────────────
+            // 组件走 SesameSearchField（MD 下= mochi 规范胶囊搜索栏），与日志页/选择编辑页同款。
+            // 水平内边距由脚手架的 contentPadding（16dp）提供，这里**不再叠加**，
+            // 否则搜索框会比同页其它内容缩进 32dp，两边对不齐。
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextField(
+                SesameSearchField(
                     value = query,
                     onValueChange = { query = it },
-                    label = "",
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = "搜索",
-                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(start = 12.dp)
-                        )
-                    },
-                    trailingIcon = {
-                        if (query.isNotEmpty()) {
-                            Text(
-                                "×",
-                                fontSize = 16.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier
-                                    .padding(end = 12.dp)
-                                    .clickable { query = "" }
-                            )
-                        }
-                    }
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -272,8 +255,14 @@ fun FriendStatsScreen(
                             fontSize = 12.sp
                         )
                         Spacer(Modifier.height(2.dp))
+                        // 两个统计值各自一行，不用 "·"/空格粘成一行
+                        // （mochi 规范明令：不要用 "·" 粘合两个事实）
                         SesameText(
-                            text = "周收: ${fw.weekGet} g   总收: ${fw.allGet} g",
+                            text = "周收 ${fw.weekGet} g",
+                            fontSize = 12.sp
+                        )
+                        SesameText(
+                            text = "总收 ${fw.allGet} g",
                             fontSize = 12.sp
                         )
                     }
@@ -288,9 +277,33 @@ private enum class FriendSort {
     WEEK, ALL
 }
 
-/** 排序芯片：箭头只在选中时出现，避免未选中的 chip 看起来已排好序 */
+/**
+ * 排序 chip：箭头只在选中时出现，避免未选中的 chip 看起来已排好序。
+ *
+ * MD 风格走 mochi 官方的 `MochiChip`（G2 药丸 + 弹簧按压 + 按压高光），
+ * 排序箭头放 `leadingIcon` 槽 —— 这样配色由 mochi 主题统一，
+ * 不会像手写药丸那样在 MD 下仍取 miuix 主题色（粉/蓝），与整页配色脱节。
+ * MIUIX 侧保持原有手写药丸。
+ */
 @Composable
 private fun SortChip(label: String, selected: Boolean, ascending: Boolean, onClick: () -> Unit) {
+    if (LocalUiStyle.current == UiStyle.MATERIAL3) {
+        MochiChip(
+            label = label,
+            selected = selected,
+            onClick = onClick,
+            leadingIcon = if (selected) {
+                {
+                    Text(
+                        text = if (ascending) "↑" else "↓",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            } else null
+        )
+        return
+    }
     val bg = if (selected) MiuixTheme.colorScheme.primaryContainer
     else MiuixTheme.colorScheme.surfaceContainer
     val fg = if (selected) MiuixTheme.colorScheme.onPrimaryContainer
@@ -339,7 +352,12 @@ private fun FriendRow(fw: FriendWatch, onClick: () -> Unit) {
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "周收: ${fw.weekGet} g   总收: ${fw.allGet} g",
+                text = "周收 ${fw.weekGet} g",
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            )
+            Text(
+                text = "总收 ${fw.allGet} g",
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary
             )

@@ -1,5 +1,7 @@
 package io.github.aw1y2z.sesame.ui.theme
 
+import io.github.aw1y2z.sesame.ui.theme.SesameIcons
+import io.github.aw1y2z.sesame.ui.theme.sesameIconHere
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -15,9 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.material3.Icon
@@ -179,7 +178,7 @@ fun SesameClickRow(
                         }
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        imageVector = sesameIconHere(SesameIcons.ChevronForward),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(M3ChildTrailingIconSize)
@@ -431,7 +430,7 @@ internal fun SesameSelectMenu(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Check,
+                            imageVector = sesameIconHere(SesameIcons.Check),
                             contentDescription = null,
                             tint = if (selected) {
                                 MaterialTheme.colorScheme.onPrimaryContainer
@@ -540,7 +539,7 @@ fun SesameSwitchRow(
             MiuixSwitch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
             if (showArrow) {
                 MiuixIcon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    imageVector = sesameIconHere(SesameIcons.ChevronForward),
                     contentDescription = null,
                     tint = sesameOnSurfaceVariant(),
                     modifier = Modifier
@@ -603,7 +602,7 @@ fun SesameSwitchRow(
                 if (showArrow) {
                     // 箭头留在最右缘，所有行的右边界因此对齐（开关只是排在箭头左边）
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        imageVector = sesameIconHere(SesameIcons.ChevronForward),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.let {
                             if (enabled) it else it.copy(alpha = M3DisabledContentAlpha)
