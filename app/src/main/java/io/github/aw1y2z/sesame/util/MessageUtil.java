@@ -228,6 +228,44 @@ public class MessageUtil {
     }
 
     /**
+     * 风控挑战（重载：从 RPC 异常的 cause 链识别）。
+     * <p>RPC 层直接抛 {@code RpcException} 时 responseString 为 null，走不到
+     * {@link #isRiskControl(String)}，导致全局风控暂停漏触发、同一接口反复空转刷屏。
+     * 典型形态：{@code Caused by: RpcException: RPCException: [1009] : 为了保障您的操作安全，请进行验证后继续。}
+     * <p>⚠️ 限流文案（"人气太旺"/"服务器正在开小差"）同样带 1009，必须先排除，避免误伤成风控。
+     */
+    public static boolean isRiskControl(Throwable t) {
+        if (t == null) {
+            return false;
+        }
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = t;
+        int guard = 0;
+        while (cur != null && guard++ < 8) {
+            String msg = cur.getMessage();
+            if (!StringUtil.isEmpty(msg)) {
+                sb.append(msg).append(' ');
+            }
+            cur = cur.getCause();
+        }
+        if (sb.length() == 0) {
+            return false;
+        }
+        String text = sb.toString();
+        for (String keyword : SERVER_BUSY_KEYWORDS) {
+            if (text.contains(keyword)) {
+                return false;
+            }
+        }
+        for (String keyword : RISK_CONTROL_KEYWORDS) {
+            if (text.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 是否应该对本次失败做重试（SmartRetryStrategy 分流）：网络/临时类可重试，
      * 风控(保护)类不可重试（自动过滑块不可用，重试只会加重风控）。
      */
