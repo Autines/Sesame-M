@@ -102,9 +102,16 @@ public class NewRpcBridge implements RpcBridge {
     public String requestString(RpcEntity rpcEntity, int tryCount, int retryInterval) {
         RpcEntity resRpcEntity = requestObject(rpcEntity, tryCount, retryInterval);
         if (resRpcEntity != null) {
-            return resRpcEntity.getResponseString();
+            String response = resRpcEntity.getResponseString();
+            if (response != null) {
+                return response;
+            }
         }
-        return null;
+        // P0 止血：风控/异常/离线时 requestObject 返回 null，下游直接 new JSONObject(null)
+        // 会对 null 调 String.length() 崩溃并打印 15 行堆栈。统一返回合法空 JSON，
+        // 下游 opt* 取默认值走失败分支，不改变任务成败判定。
+        Log.record("RPC响应为空，已用空JSON兜底避免解析异常");
+        return "{}";
     }
 
     @Override
