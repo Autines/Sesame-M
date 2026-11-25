@@ -1736,15 +1736,25 @@ public class AntMember extends BaseAntMember {
             if (!MessageUtil.checkSuccess(TAG, jsonObject)) {
                 return;
             }
-            if (!jsonObject.has("data")) {
+            // 字段可能缺失（账号无游戏中心任务 / 服务端裁剪），用 opt 安全取值，缺失即按「无任务」跳过，
+            // 不再让 get 抛 JSONException: No value for taskModuleList 刷 error.log。
+            JSONObject data = jsonObject.optJSONObject("data");
+            JSONArray taskModuleList = data == null ? null : data.optJSONArray("taskModuleList");
+            if (taskModuleList == null) {
+                Log.record("会员任务列表无 taskModuleList 字段，本轮跳过");
                 return;
             }
-            JSONArray taskModuleList = jsonObject.getJSONObject("data").getJSONArray("taskModuleList");
             for (int i = 0; i < taskModuleList.length(); i++) {
-                JSONObject moduleObj = taskModuleList.getJSONObject(i);
-                JSONArray taskList = moduleObj.getJSONArray("taskList");
+                JSONObject moduleObj = taskModuleList.optJSONObject(i);
+                JSONArray taskList = moduleObj == null ? null : moduleObj.optJSONArray("taskList");
+                if (taskList == null) {
+                    continue;
+                }
                 for (int j = 0; j < taskList.length(); j++) {
-                    processTask(taskList.getJSONObject(j));
+                    JSONObject taskObj = taskList.optJSONObject(j);
+                    if (taskObj != null) {
+                        processTask(taskObj);
+                    }
                 }
             }
             // 核对本轮 doFarmTask 的结果（响应不可信，以任务列表为准）

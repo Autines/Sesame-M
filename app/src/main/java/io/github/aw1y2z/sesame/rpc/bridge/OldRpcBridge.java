@@ -104,15 +104,16 @@ public class OldRpcBridge implements RpcBridge {
                     }
                 } catch (Throwable t) {
                     rpcEntity.setError();
-                    Log.error("old rpc request | id: " + id + " | method: " + method + " err:");
-                    Log.printStackTrace(t);
-                    // P0 修复：1009 风控在 RPC 层直接抛异常，此时 responseString 为 null，
-                    // 下面的字符串判定走不到。从异常 cause 链识别，命中即触发全局暂停并停止重试。
+                    // P0 降噪：1009 风控在 RPC 层直接抛异常，先判定。命中时只记一行摘要，
+                    // 不再打 Log.error + 完整堆栈（每次约13行），避免风控期 error.log 被刷爆。
+                    // 判定必须仍在 printStackTrace 之前，否则堆栈已经落盘。
                     if (MessageUtil.isRiskControl(t)) {
                         Status.markGlobalRiskControl();
                         Log.record("风控🚫[" + method + "]RPC异常命中1009风控，已触发全局暂停，不再重试");
                         return null;
                     }
+                    Log.error("old rpc request | id: " + id + " | method: " + method + " err:");
+                    Log.printStackTrace(t);
                     // P0 智能重试：风控类响应不再重试（其他异常按原策略返回）
                     if (rpcEntity.getResponseString() != null && MessageUtil.isRiskControl(rpcEntity.getResponseString())) {
                         Status.markGlobalRiskControl();
