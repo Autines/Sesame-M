@@ -104,6 +104,14 @@ public class AntFarm extends ModelTask {
 
     /** 投喂被服务端拒绝的「饲料槽已满」结果码（按码判据，不认文案） */
     private static final String CODE_FEED_TROUGH_FULL = "331";
+    /** 帮喂被服务端拒绝的「非好友」结果码：家庭成员关系已失效（对方删好友/退出家庭） */
+    private static final String CODE_NOT_FRIEND = "302";
+    /**
+     * 「非好友」成员当日跳过标记前缀，后缀为成员 farmId。
+     * <p>命中一次后当天不再对该成员发起帮喂/送麦子请求，跨天随 {@code Status.unload()} 自动失效，
+     * 给对方重新加好友留出重试机会。原实现在此场景每轮反复请求并把 memo 当异常写进 error.log。
+     */
+    private static final String FLAG_NOT_FRIEND_PREFIX = "farm::notFriend::";
     /** 小鸡所在空间标识：家庭空间。睡觉/起床靠它区分走家庭接口还是个人小屋接口 */
     private static final String SPACE_TYPE_CHICK_FAMILY = "ChickFamily";
 
@@ -2406,6 +2414,10 @@ public class AntFarm extends ModelTask {
             Log.record("今日帮喂次数已达上限🥣，跳过喂养");
             return;
         }
+        // 当日已确认该成员非好友：连「小鸡在挨饿」都不再记，更不发请求（跨天自动解禁）
+        if (Status.hasFlagToday(FLAG_NOT_FRIEND_PREFIX + friendFarmId)) {
+            return;
+        }
         try {
             String userId = AntFarmRpcCall.farmId2UserId(friendFarmId);
             String maskName = UserIdMap.getMaskName(userId);
@@ -2436,8 +2448,21 @@ public class AntFarm extends ModelTask {
     }
 
     private Boolean feedFriendAnimal(String friendFarmId, String groupId) {
+        String notFriendFlag = FLAG_NOT_FRIEND_PREFIX + friendFarmId;
+        // 当日已判定非好友：不再发请求
+        if (Status.hasFlagToday(notFriendFlag)) {
+            return false;
+        }
         try {
             JSONObject jo = new JSONObject(AntFarmRpcCall.feedFriendAnimal(friendFarmId, groupId));
+            // 302 非好友：家庭成员关系已失效（对方删好友/退出家庭）。属于预期内的业务状态，
+            // 必须在 checkMemo 之前拦截——否则 memo 会被当异常写进 error.log（原每次约 2 条）。
+            // 打上当日标记后，后续轮次连请求都不会再发。
+            if (CODE_NOT_FRIEND.equals(jo.optString("resultCode"))) {
+                Status.flagToday(notFriendFlag);
+                Log.record("亲密家庭🏠成员已非好友，今日跳过帮喂");
+                return false;
+            }
             if (!MessageUtil.checkMemo(TAG, jo)) {
                 if (Objects.equals("391", jo.optString("resultCode"))) {
                     Status.flagToday(Status.FLAG_FEED_FRIEND_ANIMAL_LIMIT);
